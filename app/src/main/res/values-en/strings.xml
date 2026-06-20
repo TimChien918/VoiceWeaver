@@ -1,0 +1,195 @@
+<resources>
+    <string name="app_name">VoiceWeaver</string>
+
+    <string name="nav_main">Reconstruct</string>
+    <string name="nav_rehab">Speech Rehab</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_aac">AAC</string>
+    <string name="nav_report">Report</string>
+
+    <string name="aac_title">▌ AAC Board</string>
+    <string name="aac_cat_products">Products</string>
+    <string name="aac_cat_food_drink">Food</string>
+    <string name="aac_cat_money">Money</string>
+    <string name="aac_cat_actions">Actions</string>
+    <string name="aac_cat_needs">Needs</string>
+    <string name="aac_cat_people">People</string>
+    <string name="aac_cat_places">Places</string>
+    <string name="aac_cat_medical">Medical</string>
+    <string name="aac_cat_time">Time</string>
+    <string name="aac_cat_questions">Questions</string>
+    <string name="aac_cat_emotions">Feelings</string>
+    <string name="aac_cat_emergency">Emergency</string>
+    <string name="aac_confirm">Correct</string>
+    <string name="aac_reject">Wrong</string>
+    <string name="aac_empty_hint">Tap cards below to build a sentence</string>
+    <string name="aac_alert_title">Rejected 3 times in a row</string>
+    <string name="aac_alert_body">For your safety, we recommend contacting family. Open Messages to send help?</string>
+    <string name="aac_alert_send_sms">Send help SMS</string>
+    <string name="aac_alert_cancel">Not now</string>
+    <string name="aac_ai_composing">AI is composing a natural sentence...</string>
+    <string name="aac_custom_amount">Custom amount</string>
+    <string name="aac_custom_amount_title">Enter amount</string>
+    <string name="aac_amount_label">Amount</string>
+    <string name="aac_currency_label">Currency</string>
+    <string name="aac_amount_add">Add to sentence</string>
+
+    <string name="title_settings">▌ Settings</string>
+    <string name="section_theme">Theme</string>
+    <string name="section_power">Power Mode</string>
+    <string name="section_ai_provider">AI Provider</string>
+    <string name="section_language">Language</string>
+    <string name="section_tts_rate">Speech Rate</string>
+    <string name="section_font_size">Font Size</string>
+    <string name="section_other">Other</string>
+    <string name="theme_tech">Tech</string>
+    <string name="theme_cute">Cute</string>
+    <string name="theme_anime">Anime</string>
+    <string name="theme_minimal">Minimal</string>
+    <string name="theme_blurb_tech">Dark neon · Professional (default)</string>
+    <string name="theme_blurb_cute">Cream candy · For children</string>
+    <string name="theme_blurb_anime">Vibrant glow · For teens</string>
+    <string name="theme_blurb_minimal">Clean white · High contrast</string>
+    <string name="power_saver">Saver</string>
+    <string name="power_balanced">Balanced</string>
+    <string name="power_performance">Performance</string>
+    <string name="power_desc_saver">Rule engine only · No camera · No continuous listening</string>
+    <string name="power_desc_balanced">Auto by hardware (recommended)</string>
+    <string name="power_desc_performance">LLM-first · Continuous listening allowed</string>
+    <string name="cloud_auto">Auto cloud-first</string>
+    <string name="cloud_local_only">Local Qwen only</string>
+    <string name="cloud_groq">Groq</string>
+    <string name="cloud_openrouter">OpenRouter</string>
+    <string name="cloud_cohere">Cohere</string>
+    <string name="cloud_desc_auto">Try configured cloud providers first; fall back locally on failure</string>
+    <string name="cloud_desc_local_only">No network requests; use on-device model or rules only</string>
+    <string name="cloud_desc_groq">Use Groq OpenAI-compatible API; fallback locally if unstable</string>
+    <string name="cloud_desc_openrouter">Use OpenRouter API; fallback locally on failure</string>
+    <string name="cloud_desc_cohere">Use Cohere Chat API; fallback locally on failure</string>
+    <string name="cloud_note">API keys are injected from .env into BuildConfig and are never shown on screen. Cloud failures fall back to local Qwen/rules.</string>
+    <string name="lang_zh_tw">繁體中文</string>
+    <string name="lang_en">English</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_ko">한국어</string>
+    <string name="language_note">(Architecture in place · Legacy screens migrating gradually)</string>
+    <string name="tts_rate_slow">Slow (0.5x)</string>
+    <string name="tts_rate_fast">Fast (1.5x)</string>
+    <string name="other_autosave_label">Auto-save rehab logs</string>
+    <string name="other_autosave_sub">Save scores to history automatically</string>
+
+    <string name="history_title">▌ Reconstruction History</string>
+    <string name="history_empty_title">No reconstructions yet</string>
+    <string name="history_empty_sub">Records are saved automatically after each reconstruction</string>
+    <string name="history_count">%1$d records total</string>
+    <string name="history_fragment_prefix">Fragments: %1$s</string>
+
+    <string name="rehab_title">▌ Speech Rehab Practice</string>
+    <string name="rehab_recent_practice">Recent Practice</string>
+    <string name="rehab_clear_all">Clear all</string>
+    <string name="rehab_choose_sentence">Choose a sentence to practice</string>
+    <string name="rehab_choose_hint">Type your own, or pick one from reconstruction history</string>
+    <string name="rehab_placeholder">e.g., I need to use the bathroom</string>
+    <string name="rehab_start_with_this">Practice with this sentence</string>
+    <string name="rehab_ai_section">AI Suggested (for your level)</string>
+    <string name="rehab_collapse">Collapse</string>
+    <string name="rehab_generating">Generating...</string>
+    <string name="rehab_ai_request">Let AI suggest practice sentences</string>
+    <string name="rehab_regenerate">Regenerate</string>
+    <string name="rehab_pick_from_history">Pick from history</string>
+    <string name="rehab_target_sentence">Target</string>
+    <string name="rehab_change">Change</string>
+    <string name="rehab_listen_step">① Listen — Tap to play the whole sentence, or tap a chip for that word</string>
+    <string name="rehab_play_sentence">Play whole sentence</string>
+    <string name="rehab_speak_step">② Speak — Read aloud, system scores in real time</string>
+    <string name="rehab_stop">Stop</string>
+    <string name="rehab_scoring">Scoring...</string>
+    <string name="rehab_start">Start</string>
+    <string name="rehab_preparing">Preparing...</string>
+    <string name="rehab_score_suffix">pts</string>
+    <string name="rehab_score_excellent">Excellent! Clear pronunciation</string>
+    <string name="rehab_score_good">Good, try again</string>
+    <string name="rehab_score_again">Try again, take your time</string>
+    <string name="rehab_heard">Heard: %1$s</string>
+    <string name="rehab_location_stats">Location Averages</string>
+    <string name="rehab_unmarked">(Unmarked)</string>
+    <string name="rehab_times_unit">times</string>
+
+    <string name="main_app_tagline">Aphasia Inclusion · Multimodal Edge AI</string>
+    <string name="main_sec_hardware">▌ Hardware Performance Monitor</string>
+    <string name="main_ram_label">Device RAM Detection</string>
+    <string name="main_ram_size">Total: %1$.2f GB RAM</string>
+    <string name="main_dl_downloading">Downloading Qwen2.5-1.5B...</string>
+    <string name="main_dl_cancel">Cancel</string>
+    <string name="main_dl_failed">Download failed</string>
+    <string name="main_dl_adb_title">Install via desktop command (no account needed)</string>
+    <string name="main_dl_retry">Retry</string>
+    <string name="main_rule_engine_running">Rule engine active</string>
+    <string name="main_upgrade_llm">Upgrade to LLM ↓</string>
+    <string name="main_dl_blurb">Auto-download Qwen2.5-1.5B INT8 (~1.6 GB)\nPublic model · No account · Just need Wi-Fi</string>
+    <string name="main_dl_button">Download AI model (~1.6 GB)</string>
+    <string name="main_llm_ready">LLM model ready (Qwen2.5-1.5B INT8)</string>
+    <string name="main_strategy_high_ready">Sufficient RAM (>=8GB). MediaPipe LLM loaded for high-accuracy on-device reconstruction.</string>
+    <string name="main_strategy_high_fallback">Sufficient RAM (>=8GB). AICore (Gemini Nano) unavailable; install a MediaPipe model to upgrade. Currently using rule engine.</string>
+    <string name="main_strategy_mid_ready">Mid-tier hardware (>=4GB). MediaPipe Qwen2.5-1.5B INT8 is ready, running offline on CPU.</string>
+    <string name="main_strategy_mid_fallback">Mid-tier hardware (>=4GB). Install a MediaPipe model to enable LLM inference. Currently using rule engine.</string>
+    <string name="main_strategy_low">This device has limited RAM (&lt;4GB). Zero-LLM safety rule engine enabled to prevent OOM.</string>
+    <string name="main_tier_simulator">Hardware tier simulator (for diagnostics):</string>
+    <string name="main_sec_context">▌ Your context</string>
+    <string name="main_gps_section">📍 Where am I</string>
+    <string name="main_gps_loading">Fast locating and reverse geocoding...</string>
+    <string name="main_gps_button">Physical GPS single-shot capture (JIT power-saving)</string>
+    <string name="main_perm_location">Grant location permission to enable GPS</string>
+    <string name="main_vision_section">📷 What I see</string>
+    <string name="main_camera_loading">Background capture and analysis (camera will unload)...</string>
+    <string name="main_camera_button">Silent single-frame capture &amp; on-device ML Kit detection</string>
+    <string name="main_perm_camera">Grant camera permission to enable AI detection</string>
+    <string name="main_sec_input">▌ What to say</string>
+    <string name="main_input_label">Enter fragmented words, mumbled syllables, or key voice features:</string>
+    <string name="main_input_placeholder">e.g., mumbled fragments: \'water... thirsty... pour\'</string>
+    <string name="main_stt_listening">Listening to your voice...</string>
+    <string name="main_stt_processing">Recognizing speech...</string>
+    <string name="main_stt_idle">Offline speech-to-text (Vosk AI)</string>
+    <string name="main_stt_listening_sub">Tap stop to finish</string>
+    <string name="main_stt_processing_sub">Recognition result will fill in shortly...</string>
+    <string name="main_stt_preparing_sub">First-time use needs model download (~44MB)</string>
+    <string name="main_stt_idle_sub">Pure on-device AI · No account · Auto-fills the fragment field</string>
+    <string name="main_stt_btn_stop">Stop</string>
+    <string name="main_stt_btn_processing">Scoring</string>
+    <string name="main_stt_btn_preparing">Preparing</string>
+    <string name="main_stt_btn_start">Start</string>
+    <string name="main_perm_microphone">Grant microphone permission to enable speech recognition</string>
+    <string name="main_quick_phrases_label">Quick assistive phrases (tap to append):</string>
+    <string name="main_btn_reset">Reset</string>
+    <string name="main_btn_reconstruct">✨ Complete my sentence</string>
+    <string name="main_sec_output">▌ Your sentence</string>
+    <string name="main_output_idle">Waiting for input · Tap Reconstruct to begin...</string>
+    <string name="main_output_loading">Edge inference core is reconstructing...</string>
+    <string name="main_output_running">Running %1$s...</string>
+    <string name="main_engine_gemini">Local Gemini</string>
+    <string name="main_engine_qwen">Qwen2.5 Token</string>
+    <string name="main_engine_rule">Rule-based templating</string>
+    <string name="main_latency">Latency: %1$dms</string>
+    <string name="main_conf_high">★ Very High Confidence</string>
+    <string name="main_conf_mid">☆ Medium Confidence</string>
+    <string name="main_conf_low">Template-locked match</string>
+    <string name="main_conf_label">Confidence: %1$d%%</string>
+    <string name="main_btn_tts">🔊 Say it</string>
+    <string name="main_btn_practice">Practice with this sentence →</string>
+
+    <string-array name="main_quick_home">
+        <item>Thirsty</item><item>Water please</item><item>Hungry</item><item>Sleepy</item><item>Need medicine</item>
+    </string-array>
+    <string-array name="main_quick_hospital">
+        <item>Doctor</item><item>Unwell</item><item>Chest pain</item><item>Dizzy</item><item>How many pills?</item>
+    </string-array>
+    <string-array name="main_quick_market">
+        <item>Buy milk</item><item>Pay</item><item>Shopping bag</item><item>Forgot wallet</item>
+    </string-array>
+    <string-array name="main_quick_restaurant">
+        <item>Hungry</item><item>Order rice</item><item>Water please</item><item>Too hot</item><item>Check please</item>
+    </string-array>
+    <string-array name="main_quick_default">
+        <item>Thirsty</item><item>Unwell</item><item>Need help</item>
+    </string-array>
+</resources>

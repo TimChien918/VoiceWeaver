@@ -1,0 +1,57 @@
+# Keep AI / rg searches focused on project code.
+# Heavy generated outputs
+build/
+app/build/
+.gradle/
+.kotlin/
+.idea/
+
+# OS / Python generated files
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Large app assets: search these only when specifically needed.
+app/src/main/assets/models/
+app/src/main/assets/poi/
+app/src/main/assets/backgrounds/
+app/src/main/assets/voices/
+
+# Local Python runtimes and dependency installs.
+tools/miniforge3/
+tools/gpt-sovits-env/
+
+# GPT-SoVITS large runtime assets and generated/downloaded data.
+tools/GPT-SoVITS/.git/
+tools/GPT-SoVITS/.cache/
+tools/GPT-SoVITS/GPT_SoVITS/pretrained_models/
+tools/GPT-SoVITS/GPT_weights_v2/
+tools/GPT-SoVITS/GPT_weights_v4/
+tools/GPT-SoVITS/SoVITS_weights_v2/
+tools/GPT-SoVITS/SoVITS_weights_v4/
+tools/GPT-SoVITS/ref_audio/
+tools/GPT-SoVITS/user_models/
+
+# GPT-SoVITS upstream training/web UI code is large and rarely needed for app work.
+# Directly open a file path when editing it.
+tools/GPT-SoVITS/GPT_SoVITS/
+tools/GPT-SoVITS/tools/
+tools/GPT-SoVITS/Docker/
+tools/GPT-SoVITS/.github/
+tools/GPT-SoVITS/api.py
+tools/GPT-SoVITS/webui.py
+tools/GPT-SoVITS/install.sh
+tools/GPT-SoVITS/install.ps1
+tools/GPT-SoVITS/go-webui.bat
+tools/GPT-SoVITS/go-webui.ps1
+tools/GPT-SoVITS/docker-compose.yaml
+tools/GPT-SoVITS/docker_build.sh
+tools/GPT-SoVITS/Dockerfile
+tools/GPT-SoVITS/requirements.txt
+tools/GPT-SoVITS/extra-req.txt
+tools/GPT-SoVITS/LICENSE
+tools/GPT-SoVITS/use_genshin_v2.sh

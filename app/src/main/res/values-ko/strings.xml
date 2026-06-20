@@ -1,0 +1,195 @@
+<resources>
+    <string name="app_name">VoiceWeaver</string>
+
+    <string name="nav_main">단편 재구성</string>
+    <string name="nav_rehab">음성 재활</string>
+    <string name="nav_history">기록</string>
+    <string name="nav_settings">설정</string>
+    <string name="nav_aac">AAC</string>
+    <string name="nav_report">보고서</string>
+
+    <string name="aac_title">▌ AAC 보드</string>
+    <string name="aac_cat_products">상품</string>
+    <string name="aac_cat_food_drink">음식</string>
+    <string name="aac_cat_money">금액</string>
+    <string name="aac_cat_actions">행동</string>
+    <string name="aac_cat_needs">필요</string>
+    <string name="aac_cat_people">사람</string>
+    <string name="aac_cat_places">장소</string>
+    <string name="aac_cat_medical">의료</string>
+    <string name="aac_cat_time">시간</string>
+    <string name="aac_cat_questions">질문</string>
+    <string name="aac_cat_emotions">감정</string>
+    <string name="aac_cat_emergency">긴급</string>
+    <string name="aac_confirm">맞아요</string>
+    <string name="aac_reject">아니요</string>
+    <string name="aac_empty_hint">아래 카드를 눌러 문장을 만드세요</string>
+    <string name="aac_alert_title">연속 3회 거부됨</string>
+    <string name="aac_alert_body">안전을 위해 가족에게 연락하시기 바랍니다. 메시지를 열어 도움을 요청할까요?</string>
+    <string name="aac_alert_send_sms">도움 SMS 보내기</string>
+    <string name="aac_alert_cancel">나중에</string>
+    <string name="aac_ai_composing">AI가 자연스러운 문장을 구성 중...</string>
+    <string name="aac_custom_amount">사용자 정의 금액</string>
+    <string name="aac_custom_amount_title">금액 입력</string>
+    <string name="aac_amount_label">금액</string>
+    <string name="aac_currency_label">통화</string>
+    <string name="aac_amount_add">문장에 추가</string>
+
+    <string name="title_settings">▌ 설정</string>
+    <string name="section_theme">테마</string>
+    <string name="section_power">절전 모드</string>
+    <string name="section_ai_provider">AI 제공자</string>
+    <string name="section_language">언어</string>
+    <string name="section_tts_rate">읽기 속도</string>
+    <string name="section_font_size">글자 크기</string>
+    <string name="section_other">기타</string>
+    <string name="theme_tech">테크</string>
+    <string name="theme_cute">큐트</string>
+    <string name="theme_anime">애니메</string>
+    <string name="theme_minimal">미니멀</string>
+    <string name="theme_blurb_tech">다크 네온 · 프로페셔널 (기본)</string>
+    <string name="theme_blurb_cute">크림 캔디 · 어린이용</string>
+    <string name="theme_blurb_anime">비비드 글로우 · 청소년용</string>
+    <string name="theme_blurb_minimal">화이트 베이스 · 고대비</string>
+    <string name="power_saver">절전</string>
+    <string name="power_balanced">균형</string>
+    <string name="power_performance">고성능</string>
+    <string name="power_desc_saver">규칙 엔진 전용 · 카메라 꺼짐 · 연속 감지 없음</string>
+    <string name="power_desc_balanced">하드웨어에 따라 자동 (권장)</string>
+    <string name="power_desc_performance">LLM 우선 · 연속 감지 허용</string>
+    <string name="cloud_auto">자동 클라우드 우선</string>
+    <string name="cloud_local_only">로컬 Qwen만 사용</string>
+    <string name="cloud_groq">Groq</string>
+    <string name="cloud_openrouter">OpenRouter</string>
+    <string name="cloud_cohere">Cohere</string>
+    <string name="cloud_desc_auto">설정된 클라우드를 먼저 시도하고 실패하면 로컬로 전환</string>
+    <string name="cloud_desc_local_only">네트워크 요청 없이 온디바이스 모델 또는 규칙만 사용</string>
+    <string name="cloud_desc_groq">Groq OpenAI 호환 API 사용, 불안정하면 로컬로 전환</string>
+    <string name="cloud_desc_openrouter">OpenRouter API 사용, 실패 시 로컬로 전환</string>
+    <string name="cloud_desc_cohere">Cohere Chat API 사용, 실패 시 로컬로 전환</string>
+    <string name="cloud_note">API 키는 .env에서 BuildConfig로 주입되며 화면에 표시되지 않습니다. 클라우드 실패 시 로컬 Qwen/규칙으로 전환됩니다.</string>
+    <string name="lang_zh_tw">繁體中文</string>
+    <string name="lang_en">English</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_ko">한국어</string>
+    <string name="language_note">(구조 구축 완료 · 기존 화면 문자열은 순차 이전 중)</string>
+    <string name="tts_rate_slow">느림 (0.5x)</string>
+    <string name="tts_rate_fast">빠름 (1.5x)</string>
+    <string name="other_autosave_label">재활 로그 자동 저장</string>
+    <string name="other_autosave_sub">점수를 기록에 자동 저장</string>
+
+    <string name="history_title">▌ 재구성 기록</string>
+    <string name="history_empty_title">기록이 없습니다</string>
+    <string name="history_empty_sub">재구성 완료 후 자동으로 저장됩니다</string>
+    <string name="history_count">총 %1$d건</string>
+    <string name="history_fragment_prefix">단편: %1$s</string>
+
+    <string name="rehab_title">▌ 음성 재활 연습</string>
+    <string name="rehab_recent_practice">최근 연습</string>
+    <string name="rehab_clear_all">모두 지우기</string>
+    <string name="rehab_choose_sentence">연습할 문장 선택</string>
+    <string name="rehab_choose_hint">직접 입력하거나 재구성 기록에서 선택</string>
+    <string name="rehab_placeholder">예: 화장실에 가고 싶어요</string>
+    <string name="rehab_start_with_this">이 문장으로 연습 시작</string>
+    <string name="rehab_ai_section">AI 추천 (수준에 맞춰)</string>
+    <string name="rehab_collapse">접기</string>
+    <string name="rehab_generating">생성 중...</string>
+    <string name="rehab_ai_request">AI에게 연습 문장 추천 받기</string>
+    <string name="rehab_regenerate">재생성</string>
+    <string name="rehab_pick_from_history">기록에서 선택</string>
+    <string name="rehab_target_sentence">목표 문장</string>
+    <string name="rehab_change">다른 문장</string>
+    <string name="rehab_listen_step">① 듣기 — 전체 재생 또는 자카드 개별 재생</string>
+    <string name="rehab_play_sentence">전체 재생</string>
+    <string name="rehab_speak_step">② 말하기 — 따라 읽으면 즉시 채점</string>
+    <string name="rehab_stop">중지</string>
+    <string name="rehab_scoring">채점 중...</string>
+    <string name="rehab_start">시작</string>
+    <string name="rehab_preparing">준비 중...</string>
+    <string name="rehab_score_suffix">점</string>
+    <string name="rehab_score_excellent">훌륭해요! 발음이 명확합니다</string>
+    <string name="rehab_score_good">좋아요, 다시 한번</string>
+    <string name="rehab_score_again">천천히 다시 시도</string>
+    <string name="rehab_heard">들림: %1$s</string>
+    <string name="rehab_location_stats">위치별 평균 점수</string>
+    <string name="rehab_unmarked">(미지정)</string>
+    <string name="rehab_times_unit">회</string>
+
+    <string name="main_app_tagline">실어증 포용 · 멀티모달 엣지 AI</string>
+    <string name="main_sec_hardware">▌ 하드웨어 성능 모니터</string>
+    <string name="main_ram_label">기기 메모리 감지</string>
+    <string name="main_ram_size">총: %1$.2f GB RAM</string>
+    <string name="main_dl_downloading">Qwen2.5-1.5B 다운로드 중...</string>
+    <string name="main_dl_cancel">취소</string>
+    <string name="main_dl_failed">다운로드 실패</string>
+    <string name="main_dl_adb_title">PC 명령어로 설치 (계정 불필요)</string>
+    <string name="main_dl_retry">재시도</string>
+    <string name="main_rule_engine_running">규칙 엔진 실행 중</string>
+    <string name="main_upgrade_llm">LLM 업그레이드 ↓</string>
+    <string name="main_dl_blurb">Qwen2.5-1.5B INT8 자동 다운로드 (~1.6 GB)\n공개 모델 · 계정 불필요 · Wi-Fi만 필요</string>
+    <string name="main_dl_button">AI 모델 다운로드 (~1.6 GB)</string>
+    <string name="main_llm_ready">LLM 모델 준비 완료 (Qwen2.5-1.5B INT8)</string>
+    <string name="main_strategy_high_ready">메모리 충분 (>=8GB). MediaPipe LLM 로드됨, 기기에서 고정밀 재구성.</string>
+    <string name="main_strategy_high_fallback">메모리 충분 (>=8GB). AICore 사용 불가, MediaPipe 모델로 업그레이드 가능. 현재 규칙 엔진 사용.</string>
+    <string name="main_strategy_mid_ready">중급 하드웨어 (>=4GB). MediaPipe Qwen2.5-1.5B INT8 준비됨, CPU에서 오프라인 추론.</string>
+    <string name="main_strategy_mid_fallback">중급 하드웨어 (>=4GB). MediaPipe 모델을 설치하여 LLM 활성화. 현재 규칙 엔진 사용.</string>
+    <string name="main_strategy_low">메모리 부족 (&lt;4GB). OOM 방지를 위해 규칙 엔진만 사용.</string>
+    <string name="main_tier_simulator">하드웨어 등급 시뮬레이터 (진단용):</string>
+    <string name="main_sec_context">▌ 스마트 상황 융합</string>
+    <string name="main_gps_section">1. 현재 GPS 위치 감지</string>
+    <string name="main_gps_loading">고속 측위 및 역지오코딩 중...</string>
+    <string name="main_gps_button">물리 GPS 단발 캡처 (JIT 절전)</string>
+    <string name="main_perm_location">GPS를 활성화하려면 위치 권한 필요</string>
+    <string name="main_vision_section">2. 카메라 스냅샷 비전 태그</string>
+    <string name="main_camera_loading">백그라운드 캡처 및 분석 중 (카메라 곧 해제)...</string>
+    <string name="main_camera_button">무음 단일 프레임 캡처 &amp; 온디바이스 ML Kit 인식</string>
+    <string name="main_perm_camera">AI 인식을 활성화하려면 카메라 권한 필요</string>
+    <string name="main_sec_input">▌ 실어증 단편 입력</string>
+    <string name="main_input_label">불연속 단편 단어, 음조 전사, 주요 음성 특징 입력:</string>
+    <string name="main_input_placeholder">예: 단편 발화 \"물… 목 마름… 따라\"</string>
+    <string name="main_stt_listening">음성 청취 중...</string>
+    <string name="main_stt_processing">음성 인식 처리 중...</string>
+    <string name="main_stt_idle">오프라인 음성 인식 (Vosk AI)</string>
+    <string name="main_stt_listening_sub">탭하여 중지</string>
+    <string name="main_stt_processing_sub">인식 결과가 곧 입력됩니다...</string>
+    <string name="main_stt_preparing_sub">최초 사용 시 모델 다운로드 (~44MB)</string>
+    <string name="main_stt_idle_sub">순수 온디바이스 AI · 계정 불필요 오프라인 · 단편 필드에 자동 입력</string>
+    <string name="main_stt_btn_stop">중지</string>
+    <string name="main_stt_btn_processing">인식 중</string>
+    <string name="main_stt_btn_preparing">준비 중</string>
+    <string name="main_stt_btn_start">시작</string>
+    <string name="main_perm_microphone">음성 인식을 활성화하려면 마이크 권한 필요</string>
+    <string name="main_quick_phrases_label">자주 쓰는 보조 어휘 (탭하여 추가):</string>
+    <string name="main_btn_reset">초기화</string>
+    <string name="main_btn_reconstruct">엣지 재구성 실행</string>
+    <string name="main_sec_output">▌ 추론 결과</string>
+    <string name="main_output_idle">단편을 입력하고 재구성 버튼을 누르세요...</string>
+    <string name="main_output_loading">엣지 추론 코어가 교정 중...</string>
+    <string name="main_output_running">%1$s 실행 중...</string>
+    <string name="main_engine_gemini">Local Gemini</string>
+    <string name="main_engine_qwen">Qwen2.5 Token</string>
+    <string name="main_engine_rule">규칙 템플릿</string>
+    <string name="main_latency">지연: %1$d ms</string>
+    <string name="main_conf_high">★ 신뢰도 매우 높음</string>
+    <string name="main_conf_mid">☆ 신뢰도 중간</string>
+    <string name="main_conf_low">템플릿 매치</string>
+    <string name="main_conf_label">신뢰도: %1$d%%</string>
+    <string name="main_btn_tts">읽어주기 (TTS)</string>
+    <string name="main_btn_practice">이 문장으로 발음 연습 →</string>
+
+    <string-array name="main_quick_home">
+        <item>목말라요</item><item>물 주세요</item><item>배고파요</item><item>졸려요</item><item>약 필요해요</item>
+    </string-array>
+    <string-array name="main_quick_hospital">
+        <item>의사</item><item>불편해요</item><item>가슴 통증</item><item>어지러워요</item><item>몇 알?</item>
+    </string-array>
+    <string-array name="main_quick_market">
+        <item>우유 사기</item><item>계산</item><item>장바구니</item><item>지갑 놓고 옴</item>
+    </string-array>
+    <string-array name="main_quick_restaurant">
+        <item>배고파요</item><item>밥 주문</item><item>물 주세요</item><item>뜨거워요</item><item>계산서</item>
+    </string-array>
+    <string-array name="main_quick_default">
+        <item>목말라요</item><item>불편해요</item><item>도와주세요</item>
+    </string-array>
+</resources>

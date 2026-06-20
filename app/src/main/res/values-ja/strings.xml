@@ -1,0 +1,195 @@
+<resources>
+    <string name="app_name">VoiceWeaver</string>
+
+    <string name="nav_main">文字再構成</string>
+    <string name="nav_rehab">音声リハビリ</string>
+    <string name="nav_history">履歴</string>
+    <string name="nav_settings">設定</string>
+    <string name="nav_aac">AAC</string>
+    <string name="nav_report">レポート</string>
+
+    <string name="aac_title">▌ AAC 会話ボード</string>
+    <string name="aac_cat_products">商品</string>
+    <string name="aac_cat_food_drink">飲食</string>
+    <string name="aac_cat_money">金額</string>
+    <string name="aac_cat_actions">動作</string>
+    <string name="aac_cat_needs">要望</string>
+    <string name="aac_cat_people">人物</string>
+    <string name="aac_cat_places">場所</string>
+    <string name="aac_cat_medical">医療</string>
+    <string name="aac_cat_time">時間</string>
+    <string name="aac_cat_questions">質問</string>
+    <string name="aac_cat_emotions">気持ち</string>
+    <string name="aac_cat_emergency">緊急</string>
+    <string name="aac_confirm">正しい</string>
+    <string name="aac_reject">違う</string>
+    <string name="aac_empty_hint">下のカードをタップして文を組み立ててください</string>
+    <string name="aac_alert_title">3 回連続で拒否</string>
+    <string name="aac_alert_body">安全のためご家族へ連絡をお勧めします。メッセージを開いてヘルプを送信しますか？</string>
+    <string name="aac_alert_send_sms">ヘルプ SMS を送信</string>
+    <string name="aac_alert_cancel">後で</string>
+    <string name="aac_ai_composing">AI が自然な文を組み立て中...</string>
+    <string name="aac_custom_amount">カスタム金額</string>
+    <string name="aac_custom_amount_title">金額を入力</string>
+    <string name="aac_amount_label">金額</string>
+    <string name="aac_currency_label">通貨</string>
+    <string name="aac_amount_add">文に追加</string>
+
+    <string name="title_settings">▌ 設定</string>
+    <string name="section_theme">テーマ</string>
+    <string name="section_power">省電モード</string>
+    <string name="section_ai_provider">AI 推論元</string>
+    <string name="section_language">言語</string>
+    <string name="section_tts_rate">読み上げ速度</string>
+    <string name="section_font_size">文字サイズ</string>
+    <string name="section_other">その他</string>
+    <string name="theme_tech">テック</string>
+    <string name="theme_cute">かわいい</string>
+    <string name="theme_anime">アニメ</string>
+    <string name="theme_minimal">ミニマル</string>
+    <string name="theme_blurb_tech">ダークネオン・プロ仕様（既定）</string>
+    <string name="theme_blurb_cute">クリームキャンディ・お子様向け</string>
+    <string name="theme_blurb_anime">鮮やかな夜光・若者向け</string>
+    <string name="theme_blurb_minimal">白基調・高コントラスト</string>
+    <string name="power_saver">省電</string>
+    <string name="power_balanced">標準</string>
+    <string name="power_performance">高性能</string>
+    <string name="power_desc_saver">ルールエンジンのみ・カメラ無効・連続監視なし</string>
+    <string name="power_desc_balanced">ハードウェアに応じて自動（推奨）</string>
+    <string name="power_desc_performance">LLM 優先・連続監視可</string>
+    <string name="cloud_auto">自動（クラウド優先）</string>
+    <string name="cloud_local_only">ローカル Qwen のみ</string>
+    <string name="cloud_groq">Groq</string>
+    <string name="cloud_openrouter">OpenRouter</string>
+    <string name="cloud_cohere">Cohere</string>
+    <string name="cloud_desc_auto">設定済みクラウドを優先し、失敗時はローカルへ</string>
+    <string name="cloud_desc_local_only">ネットワーク送信なし、端末内モデルまたはルールのみ</string>
+    <string name="cloud_desc_groq">Groq OpenAI 互換 API を使用、失敗時はローカルへ</string>
+    <string name="cloud_desc_openrouter">OpenRouter API を使用、失敗時はローカルへ</string>
+    <string name="cloud_desc_cohere">Cohere Chat API を使用、失敗時はローカルへ</string>
+    <string name="cloud_note">API キーは .env から BuildConfig に注入され、画面には表示されません。クラウド失敗時はローカル Qwen/ルールへ戻ります。</string>
+    <string name="lang_zh_tw">繁體中文</string>
+    <string name="lang_en">English</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_ko">한국어</string>
+    <string name="language_note">（基盤構築済み・既存画面の文字列は順次移行中）</string>
+    <string name="tts_rate_slow">遅い (0.5x)</string>
+    <string name="tts_rate_fast">速い (1.5x)</string>
+    <string name="other_autosave_label">リハビリログを自動保存</string>
+    <string name="other_autosave_sub">スコアを履歴に自動保存</string>
+
+    <string name="history_title">▌ 再構成履歴</string>
+    <string name="history_empty_title">履歴がありません</string>
+    <string name="history_empty_sub">再構成完了後に自動保存されます</string>
+    <string name="history_count">合計 %1$d 件</string>
+    <string name="history_fragment_prefix">断片：%1$s</string>
+
+    <string name="rehab_title">▌ 音声リハビリ練習</string>
+    <string name="rehab_recent_practice">最近の練習</string>
+    <string name="rehab_clear_all">すべて削除</string>
+    <string name="rehab_choose_sentence">練習する文を選ぶ</string>
+    <string name="rehab_choose_hint">自由入力、または再構成履歴から選択</string>
+    <string name="rehab_placeholder">例：トイレに行きたいです</string>
+    <string name="rehab_start_with_this">この文で練習を開始</string>
+    <string name="rehab_ai_section">AI おすすめ（あなたのレベルに合わせて）</string>
+    <string name="rehab_collapse">閉じる</string>
+    <string name="rehab_generating">生成中...</string>
+    <string name="rehab_ai_request">AI に提案させる</string>
+    <string name="rehab_regenerate">再生成</string>
+    <string name="rehab_pick_from_history">履歴から選択</string>
+    <string name="rehab_target_sentence">目標文</string>
+    <string name="rehab_change">別の文</string>
+    <string name="rehab_listen_step">① 聞く — 全文を再生、または字カードを個別に</string>
+    <string name="rehab_play_sentence">全文を再生</string>
+    <string name="rehab_speak_step">② 話す — 復唱でリアルタイム採点</string>
+    <string name="rehab_stop">停止</string>
+    <string name="rehab_scoring">採点中...</string>
+    <string name="rehab_start">開始</string>
+    <string name="rehab_preparing">準備中...</string>
+    <string name="rehab_score_suffix">点</string>
+    <string name="rehab_score_excellent">素晴らしい！発音がクリアです</string>
+    <string name="rehab_score_good">いいですね、もう一度</string>
+    <string name="rehab_score_again">ゆっくりもう一度</string>
+    <string name="rehab_heard">聞こえた：%1$s</string>
+    <string name="rehab_location_stats">場所別の平均点</string>
+    <string name="rehab_unmarked">(未指定)</string>
+    <string name="rehab_times_unit">回</string>
+
+    <string name="main_app_tagline">失語症コミュニケーション・マルチモーダルエッジAI</string>
+    <string name="main_sec_hardware">▌ ハードウェア性能モニター</string>
+    <string name="main_ram_label">デバイス物理メモリ検出</string>
+    <string name="main_ram_size">合計: %1$.2f GB RAM</string>
+    <string name="main_dl_downloading">Qwen2.5-1.5B をダウンロード中...</string>
+    <string name="main_dl_cancel">キャンセル</string>
+    <string name="main_dl_failed">ダウンロード失敗</string>
+    <string name="main_dl_adb_title">PC コマンドでインストール（アカウント不要）</string>
+    <string name="main_dl_retry">再試行</string>
+    <string name="main_rule_engine_running">ルールエンジン稼働中</string>
+    <string name="main_upgrade_llm">LLM にアップグレード ↓</string>
+    <string name="main_dl_blurb">Qwen2.5-1.5B INT8 を自動ダウンロード（約 1.6 GB）\n公開モデル・アカウント不要・Wi-Fi のみ必要</string>
+    <string name="main_dl_button">AI モデルをダウンロード（~1.6 GB）</string>
+    <string name="main_llm_ready">LLM モデル準備完了（Qwen2.5-1.5B INT8）</string>
+    <string name="main_strategy_high_ready">メモリ十分 (>=8GB)・MediaPipe LLM 読み込み済み、端末上で高精度再構成。</string>
+    <string name="main_strategy_high_fallback">メモリ十分 (>=8GB)・AICore 利用不可・MediaPipe モデル配置で拡張可能。現在はルールエンジン。</string>
+    <string name="main_strategy_mid_ready">中位ハードウェア (>=4GB)・MediaPipe Qwen2.5-1.5B INT8 準備完了、CPU でオフライン推論。</string>
+    <string name="main_strategy_mid_fallback">中位ハードウェア (>=4GB)・MediaPipe モデルを配置して LLM を有効化。現在はルールエンジン。</string>
+    <string name="main_strategy_low">このデバイスはメモリが少なめ (&lt;4GB)・OOM 防止のためルールエンジン専用。</string>
+    <string name="main_tier_simulator">ハードウェア階層シミュレータ（診断用）：</string>
+    <string name="main_sec_context">▌ スマートコンテキスト融合</string>
+    <string name="main_gps_section">1. 現在の GPS 位置を取得</string>
+    <string name="main_gps_loading">高速測位・逆ジオコーディング中...</string>
+    <string name="main_gps_button">物理 GPS 単発取得（JIT 省電モード）</string>
+    <string name="main_perm_location">GPS を有効にするには位置情報の許可が必要</string>
+    <string name="main_vision_section">2. カメラスナップショット視覚タグ</string>
+    <string name="main_camera_loading">バックグラウンドで撮影・解析中（カメラはすぐ解放）...</string>
+    <string name="main_camera_button">サイレント単一フレーム &amp; 端末 ML Kit 認識</string>
+    <string name="main_perm_camera">AI 認識を有効にするにはカメラ許可が必要</string>
+    <string name="main_sec_input">▌ 失語症の断片入力</string>
+    <string name="main_input_label">不連続な断片語・声調転写・キー音声特徴を入力：</string>
+    <string name="main_input_placeholder">例：「みず… のどが… 注ぐ」</string>
+    <string name="main_stt_listening">音声を聞き取り中...</string>
+    <string name="main_stt_processing">音声認識処理中...</string>
+    <string name="main_stt_idle">オフライン音声認識 (Vosk AI)</string>
+    <string name="main_stt_listening_sub">タップで停止</string>
+    <string name="main_stt_processing_sub">認識結果がまもなく入力されます...</string>
+    <string name="main_stt_preparing_sub">初回はモデルダウンロード（約 44MB）</string>
+    <string name="main_stt_idle_sub">完全端末 AI・アカウント不要オフライン・自動で断片欄に入力</string>
+    <string name="main_stt_btn_stop">停止</string>
+    <string name="main_stt_btn_processing">認識中</string>
+    <string name="main_stt_btn_preparing">準備中</string>
+    <string name="main_stt_btn_start">開始</string>
+    <string name="main_perm_microphone">音声認識を有効にするにはマイク許可が必要</string>
+    <string name="main_quick_phrases_label">よく使う補助語彙（タップで追加）：</string>
+    <string name="main_btn_reset">リセット</string>
+    <string name="main_btn_reconstruct">エッジ再構成を実行</string>
+    <string name="main_sec_output">▌ 推論結果</string>
+    <string name="main_output_idle">断片を入力して再構成ボタンを押してください...</string>
+    <string name="main_output_loading">エッジ推論コアが校正中...</string>
+    <string name="main_output_running">%1$s で実行中...</string>
+    <string name="main_engine_gemini">Local Gemini</string>
+    <string name="main_engine_qwen">Qwen2.5 Token</string>
+    <string name="main_engine_rule">ルールテンプレート</string>
+    <string name="main_latency">遅延: %1$d ms</string>
+    <string name="main_conf_high">★ 信頼度: 非常に高い</string>
+    <string name="main_conf_mid">☆ 信頼度: 中程度</string>
+    <string name="main_conf_low">テンプレートマッチ</string>
+    <string name="main_conf_label">信頼度: %1$d%%</string>
+    <string name="main_btn_tts">読み上げ (TTS)</string>
+    <string name="main_btn_practice">この文で発音練習 →</string>
+
+    <string-array name="main_quick_home">
+        <item>のど渇いた</item><item>水ください</item><item>お腹すいた</item><item>眠い</item><item>薬が必要</item>
+    </string-array>
+    <string-array name="main_quick_hospital">
+        <item>先生</item><item>具合が悪い</item><item>胸が痛い</item><item>めまい</item><item>何錠？</item>
+    </string-array>
+    <string-array name="main_quick_market">
+        <item>牛乳を買う</item><item>支払い</item><item>袋ください</item><item>財布忘れた</item>
+    </string-array>
+    <string-array name="main_quick_restaurant">
+        <item>お腹すいた</item><item>ご飯を注文</item><item>水ください</item><item>熱い</item><item>会計</item>
+    </string-array>
+    <string-array name="main_quick_default">
+        <item>のど渇いた</item><item>具合が悪い</item><item>助けて</item>
+    </string-array>
+</resources>

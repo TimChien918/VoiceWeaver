@@ -1,0 +1,52 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.env
+.env.local
+*.env.secret
+
+# Keystores & signing secrets — never commit
+debug.keystore
+debug.keystore.base64
+*.jks
+release.keystore
+
+# Generated Android outputs
+app/build/
+.kotlin/
+
+# Python/generated cache files
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local GPT-SoVITS runtimes, model weights, caches, and imports
+tools/miniforge3/
+tools/gpt-sovits-env/
+tools/GPT-SoVITS/.cache/
+tools/GPT-SoVITS/GPT_weights_v2/
+tools/GPT-SoVITS/GPT_weights_v4/
+tools/GPT-SoVITS/SoVITS_weights_v2/
+tools/GPT-SoVITS/SoVITS_weights_v4/
+tools/GPT-SoVITS/GPT_SoVITS/pretrained_models/
+tools/GPT-SoVITS/ref_audio/
+tools/GPT-SoVITS/user_models/
+
+# Large app runtime assets
+app/src/main/assets/models/
+app/src/main/assets/poi/
