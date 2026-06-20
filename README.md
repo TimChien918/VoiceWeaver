@@ -6,13 +6,6 @@ VoiceWeaver 是一款協助溝通的 Android App，專為**失語症、語言復
 > 把碎詞（例：`水、休息、現在`）＋ 目前地點 ＋ 相機看到的物品，
 > 一起送進 AI 重組成自然句（例：「我口渴了，請給我一杯水，我想休息一下。」），再用 TTS / GPT-SoVITS 朗讀出來。
 
-> 📦 **電腦端元件已搬出本專案（2026-06）**
-> GPT-SoVITS、本機生圖、文字推論等「需要電腦才能跑」的服務，已移到 `~/VoiceWeaver-電腦端/`，
-> 與 Android 程式碼完全分離。本專案 `tools/GPT-SoVITS/`、`tools/gpt-sovits-env/`、`tools/miniforge3/`
-> 等舊路徑，請改讀為 `~/VoiceWeaver-電腦端/` 下的同名資料夾。
-> App 只透過 HTTP 連這些服務，搬移**不影響 App 編譯與執行**。
-> 最簡單的啟動方式：雙擊 `~/Downloads/VoiceWeaver語音中心.app`。詳見 [`tools/電腦端已搬移.md`](tools/電腦端已搬移.md)。
-
 ---
 
 ## 功能總覽
@@ -102,21 +95,28 @@ VoiceWeaver 是一款協助溝通的 Android App，專為**失語症、語言復
 GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行 `.pth` 權重，因此採「電腦跑 API server，手機連線」的架構。
 > Termux 無法安裝官方 PyTorch wheel（會卡在 `No matching distribution found for torch`），這是平台不相容、非操作錯誤。
 
-### 啟動電腦端
-最簡單：雙擊 `~/Downloads/VoiceWeaver語音中心.app`，會啟動控制中心(9890)、語音(9880)、生圖(9881)、文字推論(9882) 並自動 `adb reverse`。
+### 電腦端語音中心（一鍵啟動）
 
-手動啟動語音 API（在 **Mac 終端機**，非 Termux）：
+`tools/` 內提供自帶環境的「語音中心」啟動器，會啟動本機服務（語音 9880 / 生圖 9881 / 文字 9882），
+並自動 `adb reverse`、顯示手機連線位址、同步聲音模型；關閉視窗即停止所有服務。
+
+| 平台 | 打包工具 | 啟動方式 |
+| --- | --- | --- |
+| **macOS** | `tools/dmg/build_dmg.sh` → `.dmg` | 雙擊 `VoiceWeaver語音中心.app` |
+| **Windows** | `tools/win/build_win.ps1` → `.zip` | 雙擊 `VoiceWeaver語音中心.cmd`（見 [`tools/win/README_WINDOWS.md`](tools/win/README_WINDOWS.md)） |
+
+手動啟動語音 API（開發用）：
+
 ```bash
-cd ~/VoiceWeaver-電腦端/GPT-SoVITS
-./start_api.sh        # 語音 API（9880）
+./tools/GPT-SoVITS/start_api.sh        # 語音 API（9880）
 ```
 
 ### 手機連線方式
 | 方式 | 設定 | 備註 |
 | --- | --- | --- |
-| **有線 USB**（推薦） | Mac 跑 `adb reverse tcp:9880 tcp:9880`，App 切「有線」chip（自動填 `http://127.0.0.1:9880`） | 最穩、延遲低，出門復健可直接接線 |
-| **無線 Wi-Fi** | 手機與 Mac 同網段，API 位址填 `http://<Mac IP>:9880`（`ipconfig getifaddr en0` 查 IP） | 注意：URL 不要加 `/tts`，App 會自動呼叫 |
-| **Tailscale** | 填 `100.x` 位址 | 跨網段，控制中心頁會顯示三種位址 |
+| **有線 USB**（推薦） | 電腦跑 `adb reverse tcp:9880 tcp:9880`，App 切「有線」chip（自動填 `http://127.0.0.1:9880`） | 最穩、延遲低，出門復健可直接接線 |
+| **無線 Wi-Fi** | 手機與電腦同網段，API 位址填 `http://<電腦 IP>:9880`（Mac 用 `ipconfig getifaddr en0` 查） | 注意：URL 不要加 `/tts`，App 會自動呼叫 |
+| **Tailscale** | 填 `100.x` 位址 | 跨網段，控制中心會顯示三種位址 |
 
 設定路徑：**設定 → 開發者模式 → GPT-SoVITS**，切連線方式 → 「測試連線」綠燈 → 「🎤 合成測試（中英連跑）」。
 
@@ -223,6 +223,11 @@ app/src/main/assets/
 ├── voices/      預設參考音檔
 ├── backgrounds/ 預設背景
 └── models/      本地模型資源
+
+tools/
+├── GPT-SoVITS/  桌面版 GPT-SoVITS 工具與測試環境
+├── dmg/         macOS 語音中心打包（.dmg）
+└── win/         Windows 語音中心打包（.zip）
 ```
 
 Room 實體：`SpeechRecord`（重組歷史）、`RehabLog`（復健）、`AacComboLog`（AAC 組合 / 評分）、`StoryTrainingLog`（故事訓練）。
