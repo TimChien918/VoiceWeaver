@@ -191,7 +191,7 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 | `autoLocalAiCleanup` | true | 推理後清理本地 AI 快取 |
 | `developerMode` | false | 開發者功能 |
 | `defaultCurrency` | 新台幣 | AAC 自訂金額預設幣別 |
-| `emergencyChatId` | 測試 ID | Telegram 緊急通報接收者 |
+| `emergencyChatId` | 空白 | Telegram 緊急通報接收者（由使用者自行填寫） |
 | `homeRadiusMeters` | 150 | 住家命中半徑 |
 
 ---

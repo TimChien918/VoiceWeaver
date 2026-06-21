@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Spec #1 要求的「完整設定頁面」：緊急聯絡 Chat ID（預設 8372934436）、
+ * Spec #1 要求的「完整設定頁面」：緊急聯絡 Chat ID（預設空白，由使用者填）、
  * 一鍵刪歷史 / 重置、JSON/CSV 語料庫匯入。
  *
  * 設計選擇：
@@ -61,7 +61,7 @@ fun ExtendedSettingsScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // === DataStore：緊急聯絡 Chat ID === ※ 預設值 8372934436 來自 AppSettings.DEFAULT_EMERGENCY_CHAT_ID
+    // === DataStore：緊急聯絡 Chat ID === ※ 預設空白（AppSettings.DEFAULT_EMERGENCY_CHAT_ID），由使用者填
     val settings by settingsRepo.settings.collectAsState(initial = AppSettings())
     var chatIdDraft by remember(settings.emergencyChatId) {
         mutableStateOf(settings.emergencyChatId)
