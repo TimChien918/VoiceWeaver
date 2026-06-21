@@ -480,6 +480,21 @@ fun SettingsScreen(
                             p = p
                         )
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = { viewModel.recenterEyeControl() },
+                            colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.CenterFocusStrong, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("👁 置中校準（注視螢幕中央再按）", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(
+                            "校準：把臉擺正、注視螢幕中央，按下此鍵把目前視線設為中心，游標會更準。",
+                            fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                     IosToggleRow(
                         title = "本地端 AI 安全清理",

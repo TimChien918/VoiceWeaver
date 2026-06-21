@@ -20,6 +20,40 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.math.abs
+import kotlin.math.PI
+
+/**
+ * 1‑Euro 濾波器：靜止時很穩（抖動小），移動時很跟手（延遲低）。
+ * 比固定 EMA 更適合眼控游標——這是讓「義眼滑鼠」實用的關鍵之一。
+ */
+private class OneEuroFilter(
+    var minCutoff: Float = 1.2f,
+    var beta: Float = 0.015f,
+    var dCutoff: Float = 1.0f
+) {
+    private var xPrev = Float.NaN
+    private var dxPrev = 0f
+    private var tPrev = 0L
+    private fun alpha(cutoff: Float, dt: Float): Float {
+        val r = 2.0 * PI * cutoff * dt
+        return (r / (r + 1.0)).toFloat()
+    }
+    fun filter(x: Float, tNanos: Long): Float {
+        if (xPrev.isNaN()) { xPrev = x; tPrev = tNanos; return x }
+        val dt = ((tNanos - tPrev).coerceAtLeast(1L)) / 1e9f
+        tPrev = tNanos
+        val dx = (x - xPrev) / dt
+        val aD = alpha(dCutoff, dt)
+        val dxHat = aD * dx + (1 - aD) * dxPrev
+        dxPrev = dxHat
+        val cutoff = minCutoff + beta * abs(dxHat)
+        val a = alpha(cutoff, dt)
+        val xHat = a * x + (1 - a) * xPrev
+        xPrev = xHat
+        return xHat
+    }
+    fun reset() { xPrev = Float.NaN; dxPrev = 0f }
+}
 
 enum class EyeInteractionMode {
     GAZE_DWELL,
@@ -48,9 +82,23 @@ class EyeControlManager(
     private var faceLandmarker: FaceLandmarker? = null
     private var cameraProvider: ProcessCameraProvider? = null
     @Volatile private var isRunning = false
+
+    // ── 凝視濾波 / 校準狀態 ───────────────────────────────────────
+    private val euroX = OneEuroFilter()
+    private val euroY = OneEuroFilter()
+    // 中性中心（隱式校準）：使用者平均視線約等於螢幕中央 → 用很慢的 EMA 追蹤，
+    // 之後以「相對中性中心的偏移」對應到螢幕，免除每人/相機位置的系統性偏差。
+    private var neutralX = Float.NaN
+    private var neutralY = Float.NaN
+    @Volatile private var recenterRequested = false
+    // X/Y 靈敏度可不同（垂直眼動幅度較小，給高一點）
+    @Volatile var sensitivityX = 2.4f
+    @Volatile var sensitivityY = 3.0f
+
+    // ── 眨眼偵測狀態（以個人睜眼基線為準，避免向下看被誤判）─────────
+    private var openBaseline = 0.30f      // 睜眼時的眼高比基線（持續學習）
+    private var eyesClosed = false        // 需「先睜開再閉」才算一次眨眼
     private var lastBlinkAt = 0L
-    private var smoothedGazeX = 0.5f
-    private var smoothedGazeY = 0.5f
 
     suspend fun start(): Result<Unit> = withContext(Dispatchers.Default) {
         if (isRunning) return@withContext Result.success(Unit)
@@ -108,27 +156,56 @@ class EyeControlManager(
         onStatus("眼動控制已停止")
     }
 
+    /** 使用者請求「置中校準」：下一個睜眼影格的視線會被設為螢幕中央。 */
+    fun recenter() { recenterRequested = true }
+
     private fun analyze(proxy: ImageProxy) {
         try {
             val bitmap = proxy.toBitmap()
             val mpImage = BitmapImageBuilder(bitmap).build()
             val result = faceLandmarker?.detect(mpImage)
             val face = result?.faceLandmarks()?.firstOrNull()
-            if (face != null) {
-                estimateGaze(face)?.let { (x, y) ->
-                    smoothedGazeX = smooth(smoothedGazeX, x)
-                    smoothedGazeY = smooth(smoothedGazeY, y)
-                    onGaze(smoothedGazeX, smoothedGazeY)
-                }
-                if (isBlink(face)) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastBlinkAt > 900L) {
-                        lastBlinkAt = now
-                        onStatus("偵測到眨眼確認")
-                        onBlink()
-                    }
-                }
+            if (face == null || face.size <= 477) {
+                // 沒偵測到臉 → 不動游標、重置濾波，避免亂跳
+                euroX.reset(); euroY.reset()
+                return
             }
+            val raw = estimateGazeRaw(face) ?: return
+            val (rawX, rawY, openness) = raw
+
+            // 持續學習睜眼基線（只在「明顯睜開」時往上修，向下看也不會降太多）
+            if (openness > openBaseline) openBaseline += (openness - openBaseline) * 0.05f
+            else openBaseline += (openness - openBaseline) * 0.005f
+            openBaseline = openBaseline.coerceIn(0.12f, 0.5f)
+
+            val closedNow = openness < openBaseline * 0.45f       // 低於基線 45% 視為閉眼
+            val openEnough = openness > openBaseline * 0.70f      // 高於 70% 視為睜開
+
+            // ── 眨眼（確認鍵）：需「先睜開→閉上」一個完整循環，避免向下凝視被誤判 ──
+            val now = System.currentTimeMillis()
+            if (closedNow && !eyesClosed && openEnoughRecently && now - lastBlinkAt > 700L) {
+                eyesClosed = true
+                lastBlinkAt = now
+                onStatus("偵測到眨眼確認")
+                onBlink()
+            }
+            if (openEnough) { eyesClosed = false; openEnoughRecently = true }
+
+            // ── 凝視游標：閉眼/半閉時「凍結」游標（gating），不更新位置避免跳動 ──
+            if (closedNow) { euroX.reset(); euroY.reset(); return }
+
+            // 隱式校準：用很慢的 EMA 追蹤中性中心；或使用者按了置中。
+            if (recenterRequested || neutralX.isNaN()) {
+                neutralX = rawX; neutralY = rawY; recenterRequested = false
+            } else {
+                neutralX += (rawX - neutralX) * 0.004f
+                neutralY += (rawY - neutralY) * 0.004f
+            }
+
+            val cx = ((rawX - neutralX) * sensitivityX + 0.5f).coerceIn(0f, 1f)
+            val cy = ((rawY - neutralY) * sensitivityY + 0.5f).coerceIn(0f, 1f)
+            val t = System.nanoTime()
+            onGaze(euroX.filter(cx, t), euroY.filter(cy, t))
         } catch (e: Exception) {
             Log.w(TAG, "Eye analysis failed: ${e.message}")
         } finally {
@@ -136,22 +213,24 @@ class EyeControlManager(
         }
     }
 
-    private fun isBlink(face: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>): Boolean {
-        fun eyeRatio(top: Int, bottom: Int, left: Int, right: Int): Float {
+    @Volatile private var openEnoughRecently = false
+
+    private fun eyeOpenness(
+        face: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>
+    ): Float {
+        fun ratio(top: Int, bottom: Int, left: Int, right: Int): Float {
             val vertical = abs(face[top].y() - face[bottom].y())
             val horizontal = abs(face[left].x() - face[right].x()).coerceAtLeast(0.001f)
             return vertical / horizontal
         }
-        val left = eyeRatio(159, 145, 33, 133)
-        val right = eyeRatio(386, 374, 362, 263)
-        return left < 0.18f && right < 0.18f
+        return (ratio(159, 145, 33, 133) + ratio(386, 374, 362, 263)) / 2f
     }
 
-    private fun estimateGaze(
+    /** 回傳 (rawX, rawY, openness)。rawX/rawY 為虹膜在眼角內的比例（對頭部平移免疫）。 */
+    private fun estimateGazeRaw(
         face: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>
-    ): Pair<Float, Float>? {
+    ): Triple<Float, Float, Float>? {
         if (face.size <= 477) return null
-
         fun avgX(indices: IntArray): Float = indices.map { face[it].x() }.average().toFloat()
         fun avgY(indices: IntArray): Float = indices.map { face[it].y() }.average().toFloat()
         fun ratio(value: Float, min: Float, max: Float): Float =
@@ -167,16 +246,11 @@ class EyeControlManager(
         val leftEyeY = ratio(leftIrisY, face[159].y(), face[145].y())
         val rightEyeY = ratio(rightIrisY, face[386].y(), face[374].y())
 
-        // 前鏡頭畫面通常左右鏡像；反轉 X 比較接近使用者眼睛往右看、游標也往右。
+        // 前鏡頭左右鏡像 → 反轉 X，使用者往右看游標也往右。
         val rawX = 1f - ((leftEyeX + rightEyeX) / 2f)
         val rawY = (leftEyeY + rightEyeY) / 2f
-        val sensitivity = 1.55f
-        val x = ((rawX - 0.5f) * sensitivity + 0.5f).coerceIn(0f, 1f)
-        val y = ((rawY - 0.5f) * sensitivity + 0.5f).coerceIn(0f, 1f)
-        return x to y
+        return Triple(rawX, rawY, eyeOpenness(face))
     }
-
-    private fun smooth(old: Float, new: Float): Float = old * 0.72f + new * 0.28f
 
     private suspend fun getCameraProvider(): ProcessCameraProvider =
         suspendCancellableCoroutine { continuation ->
