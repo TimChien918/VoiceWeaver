@@ -1,12 +1,45 @@
-# VoiceWeaver
+<div align="center">
 
-VoiceWeaver 是一款協助溝通的 Android App，專為**失語症、語言復健或臨場表達困難**的使用者設計。
-目標是用最少的操作，幫使用者完成「我在哪裡、我想要什麼、我要怎麼說」：
+# 🗣️ VoiceWeaver
 
-> 把碎詞（例：`水、休息、現在`）＋ 目前地點 ＋ 相機看到的物品，
-> 一起送進 AI 重組成自然句（例：「我口渴了，請給我一杯水，我想休息一下。」），再用 TTS / GPT-SoVITS 朗讀出來。
+**為失語症、語言復健與臨場表達困難者打造的 AI 溝通輔助 App**
+
+把零碎的詞 ＋ 所在地點 ＋ 相機看到的東西，交給 AI 重組成一句自然的話，再用 TTS／自訂語音念出來。
+
+![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-3DDC84?logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
+![minSdk](https://img.shields.io/badge/minSdk-24-blue)
+![Web companion](https://img.shields.io/badge/網頁版-Live-0a84ff)
+
+[🌐 網頁版 Live Demo](https://timchien918.github.io/VoiceWeaver-Web/) ·
+[網頁版原始碼](https://github.com/TimChien918/VoiceWeaver-Web) ·
+[GPT-SoVITS 模型手冊](docs/GPT_SOVITS_MODEL_GUIDE.md)
+
+</div>
 
 ---
+
+> 把碎詞（例：`水、休息、現在`）＋ 目前地點 ＋ 相機看到的物品，
+> 一起送進 AI 重組成自然句（例：「我口渴了，請給我一杯水，我想休息一下。」），再用 TTS／GPT-SoVITS 朗讀出來。
+
+VoiceWeaver 有兩個版本，用同一個 Google 帳號登入即可雙向同步 API 金鑰與設定：
+
+| 版本 | 說明 | 連結 |
+| --- | --- | --- |
+| **Android App**（本專案） | 完整功能：離線推理、相機、定位、眼動、語音復健、GPT-SoVITS | — |
+| **網頁輕量版** | 純瀏覽器／API，免安裝，可直接用 | [Live Demo](https://timchien918.github.io/VoiceWeaver-Web/) |
+
+## 目錄
+
+- [功能總覽](#功能總覽)
+- [快速開始](#快速開始)
+- [技術架構](#技術架構)
+- [核心流程](#核心流程)
+- [GPT-SoVITS 自訂語音（電腦端）](#gpt-sovits-自訂語音電腦端)
+- [設定項目](#設定項目)
+- [權限](#權限)
+- [專案結構](#專案結構)
+- [隱私與授權](#隱私與授權)
 
 ## 功能總覽
 
@@ -18,19 +51,43 @@ VoiceWeaver 是一款協助溝通的 Android App，專為**失語症、語言復
 | **相機辨識** | 前／後／前後一起拍、獨立預覽、單次辨識、橫直向支援 |
 | **語音復健** | 自訂或歷史目標句、AI 建議、跟讀錄音、發音評分、依場景統計 |
 | **歷史紀錄** | 重組紀錄、收藏、刪除、清空、地點標籤 |
-| **無障礙** | 字體倍率、TTS 語速、眼動凝視 / 眨眼掃描 |
+| **雲端同步** | Firebase 登入後，API 金鑰／供應商清單／Telegram 設定與網頁版即時互通 |
+| **無障礙** | 字體倍率、TTS 語速、眼動凝視／眨眼掃描 |
 | **主題與語言** | 科技／可愛／動漫／簡約風；繁中、English、日本語、한국어 |
 | **GPT-SoVITS** | 開發者模式專屬：自訂語音、中英自動切換、模型匯入、合成測試 |
 | **安全通報** | 緊急關鍵字偵測、GPS 通報、Telegram 通知、文字安全清理 |
 
----
+## 快速開始
+
+```bash
+# 1. 取得原始碼
+git clone https://github.com/TimChien918/VoiceWeaver.git
+cd VoiceWeaver
+
+# 2. 金鑰：複製範例並填入自己的金鑰（.env 已被 gitignore，切勿提交）
+cp .env.example .env
+#    GEMINI_API_KEY / GEMINI_IMAGE_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY
+#    COHERE_API_KEY / GOOGLE_PLACES_API_KEY / TELEGRAM_BOT_TOKEN / TELEGRAM_DEFAULT_CHAT_ID
+
+# 3. 雲端同步（選用）：到 Firebase Console 下載 google-services.json 放進 app/
+#    （已被 gitignore，含 client 設定，不入版控）
+
+# 4. 建置（用 Android Studio 內建 JBR；系統只有 JDK 8 時必須指定）
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+./gradlew :app:assembleDebug      # 打包 Debug APK
+./gradlew :app:installDebug       # 安裝到已連線裝置（先開 USB 偵錯）
+./gradlew :app:testDebugUnitTest  # 單元測試
+```
+
+> **需要 JDK 17+**。Android Studio 內建的 JBR（21）最方便；用其他 JDK 8 會出現 `Gradle requires JVM 17 or later`。
 
 ## 技術架構
 
 - **語言／UI**：Kotlin + Jetpack Compose
-- **資料**：Room（歷史 / 復健 / AAC / 故事訓練）、DataStore（設定）
-- **感測**：CameraX + ML Kit（影像標籤）、FusedLocation（GPS）、SpeechRecognizer（語音轉文字）
-- **網路**：Retrofit / OkHttp → 雲端 LLM、Overpass、Google Places、Telegram
+- **資料**：Room（歷史／復健／AAC／故事訓練）、DataStore（設定）
+- **雲端**：Firebase Auth（Google／匿名）+ Firestore（金鑰／供應商／Telegram 與網頁版共用結構）
+- **感測**：CameraX + ML Kit（影像標籤）、FusedLocation（GPS）、SpeechRecognizer／Vosk（語音轉文字）
+- **網路**：Retrofit／OkHttp → 雲端 LLM、Overpass、Google Places、Telegram
 - **推理分層**（依裝置能力自動選擇）：
 
   | 裝置等級 | 推理引擎 |
@@ -39,20 +96,7 @@ VoiceWeaver 是一款協助溝通的 Android App，專為**失語症、語言復
   | 中高階 | 本地推理或雲端 LLM |
   | 雲端自動 | 有網路走雲端，失敗自動回退本地 |
 
-- **雲端提供者**：自動 / 僅本地 / Groq · Llama 3.3 70B / OpenRouter · Gemini Flash / Cohere · Command-R
-
----
-
-## 主要畫面
-
-| 分頁 | 職責 |
-| --- | --- |
-| **主畫面** | 輸入碎詞、選地點、相機辨識、重組、朗讀；可展開 AAC 圖卡直接組句 |
-| **復健** | 選目標句 → 播放示範 → 跟讀錄音 → 發音評分 → 寫入紀錄並依地點統計 |
-| **歷史** | 檢視 / 收藏 / 刪除 / 清空所有重組句，附時間與地點標籤 |
-| **設定** | 主題、語言、耗能模式、AI 提供者、字體、無障礙、相機、背景、緊急通報、住家、開發者模式 |
-
----
+- **雲端提供者**：自動／僅本地／Groq · Llama 3.3 70B／OpenRouter · Gemini Flash／Cohere · Command-R
 
 ## 核心流程
 
@@ -64,40 +108,35 @@ VoiceWeaver 是一款協助溝通的 Android App，專為**失語症、語言復
 5. TTS 或 GPT-SoVITS 朗讀，結果寫入歷史。
 
 ### AAC 圖卡
-- 不方便打字／說話時，用圖卡快速組句：搜尋 → 選分類 → 點圖卡加入組合區 → 朗讀 / 重組 / 保存。
+- 不方便打字／說話時，用圖卡快速組句：搜尋 → 選分類 → 點圖卡加入組合區 → 朗讀／重組／保存。
 - 分類涵蓋：商品、飲食、金額、動作、需求、人物、地點、醫療、時間、問句、心情、緊急。
-- **設計原則**：具體需求不會被誤判成翻譯指令（「一杯水」保留為飲水需求）；強意圖項目會進入安全判斷；自訂金額支援多幣別（NT$ / US$ / ¥ / ₩ / RMB / €）。
+- **設計原則**：具體需求不會被誤判成翻譯指令（「一杯水」保留為飲水需求）；強意圖項目會進入安全判斷；自訂金額支援多幣別（NT$／US$／¥／₩／RMB／€）。
 
 ### 定位情境
 回退順序：**手動選擇 → 住家半徑命中 → GPS + Geocoder → Overpass 附近 POI → 離線 POI → 規則分類 → 未知地點**。
 - 住家錨點：可把目前 GPS 設為住家、設定地址與半徑（預設 150m），避免住家附近店家被誤判。
 - 離線 POI 內含大量台灣與美國座標，無網路時仍可運作。
 
-### 相機辨識
-- 鏡頭模式：後 / 前 / 前後一起拍（依序拍攝後合併標籤）。
-- 預覽與單次辨識共用鏡頭設定；單次辨識拍一張後自動釋放 CameraX，省電。
-
 ### 語音復健
-1. 選目標句（手動 / 歷史 / AI 建議 / 主畫面重組結果）。
+1. 選目標句（手動／歷史／AI 建議／主畫面重組結果）。
 2. 播放示範 → 使用者跟讀 → App 錄音轉文字。
-3. 發音評估模組比對目標與辨識結果，產生 0–100 分並寫入紀錄。
+3. 發音評估模組用 Levenshtein 比對目標與辨識結果，產生 0–100 分並寫入紀錄。
 4. 統計最近練習與各地點平均分。開發者模式可進入「故事訓練」。
 
 ### 安全與緊急通報
 - 偵測危機關鍵字 → 嘗試取得 GPS（失敗也會送出「位置未知」）→ 透過 Telegram Chat ID 通知。
 - 文字進 LLM 前先攔截、LLM 輸出後 TTS 前再清理。
-- ⚠️ 預設 Chat ID 僅供測試，**正式使用務必改成家屬或照護者的 Chat ID**。
+- ⚠️ Telegram Chat ID 由使用者自行填寫（**正式使用請填家屬或照護者的 Chat ID**），不內建任何預設值。
 
----
+## GPT-SoVITS 自訂語音（電腦端）
 
-## GPT-SoVITS 語音（開發者模式）
+GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行 `.pth` 權重，因此採「**電腦跑 API server、手機連線**」的架構。
 
-GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行 `.pth` 權重，因此採「電腦跑 API server，手機連線」的架構。
-> Termux 無法安裝官方 PyTorch wheel（會卡在 `No matching distribution found for torch`），這是平台不相容、非操作錯誤。
+> **App 與安裝檔不內建任何語音模型或角色音色**——一律由使用者自行匯入有權使用的聲音；檔案存在手機，可在電腦間同步。
 
-### 電腦端語音中心（一鍵啟動）
+### 電腦端語音中心
 
-`tools/` 內提供自帶環境的「語音中心」啟動器，會啟動本機服務（語音 9880 / 生圖 9881 / 文字 9882），
+`tools/` 內提供自帶環境的「語音中心」啟動器，會啟動本機服務（語音 9880／生圖 9881／文字 9882），
 並自動 `adb reverse`、顯示手機連線位址、同步聲音模型；關閉視窗即停止所有服務。
 
 | 平台 | 打包工具 | 啟動方式 |
@@ -105,87 +144,52 @@ GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行 `.pth` 權
 | **macOS** | `tools/dmg/build_dmg.sh` → `.dmg` | 雙擊 `VoiceWeaver語音中心.app` |
 | **Windows** | `tools/win/build_win.ps1` → `.zip` | 雙擊 `VoiceWeaver語音中心.cmd`（見 [`tools/win/README_WINDOWS.md`](tools/win/README_WINDOWS.md)） |
 
-手動啟動語音 API（開發用）：
-
-```bash
-./tools/GPT-SoVITS/start_api.sh        # 語音 API（9880）
-```
+> 兩個 build 腳本都把安裝檔輸出到同一個資料夾 `~/VoiceWeaver-安裝檔`（可用環境變數 `VW_DIST` 覆寫）。
 
 ### 手機連線方式
+
 | 方式 | 設定 | 備註 |
 | --- | --- | --- |
-| **有線 USB**（推薦） | 電腦跑 `adb reverse tcp:9880 tcp:9880`，App 切「有線」chip（自動填 `http://127.0.0.1:9880`） | 最穩、延遲低，出門復健可直接接線 |
-| **無線 Wi-Fi** | 手機與電腦同網段，API 位址填 `http://<電腦 IP>:9880`（Mac 用 `ipconfig getifaddr en0` 查） | 注意：URL 不要加 `/tts`，App 會自動呼叫 |
-| **Tailscale** | 填 `100.x` 位址 | 跨網段，控制中心會顯示三種位址 |
+| **有線 USB**（推薦） | 電腦跑 `adb reverse tcp:9880 tcp:9880`，App 切「有線」（自動填 `http://127.0.0.1:9880`） | 最穩、延遲低 |
+| **無線 Wi-Fi** | 手機與電腦同網段，API 位址填 `http://<電腦 IP>:9880` | URL 不要加 `/tts`，App 會自動呼叫 |
+| **Tailscale** | 填 `100.x` 位址 | 跨網段 |
 
-設定路徑：**設定 → 開發者模式 → GPT-SoVITS**，切連線方式 → 「測試連線」綠燈 → 「🎤 合成測試（中英連跑）」。
+### 語音模型同步（手機 ↔ 電腦，免雲端）
 
-### 自訂語音
-- 換模型完整手冊見 [`docs/GPT_SOVITS_MODEL_GUIDE.md`](docs/GPT_SOVITS_MODEL_GUIDE.md)。
-- **App 不內建任何語音模型或參考音檔**——由使用者自行匯入自己有權使用的聲音（在「設定 → GPT-SoVITS」匯入；檔案存在手機，換機可同步）。
-- 匯入後，參考音檔與逐字稿一起帶入；App 發 `/tts` 時會把手機 URI 自動翻譯成電腦端絕對路徑（`LocalSovitsHelper.kt`）。
-- 建議乾淨 3–10 秒、16kHz 以上 PCM WAV，逐字稿需與音檔逐字一致。
-- ⚠️ 語音模型與參考音檔請務必確認**授權**（自行錄製或取得授權）。`.ckpt` / `.pth` 若只有 100 多 bytes 通常是 Git LFS pointer，不是完整權重。
-
----
-
-## 環境變數
-
-複製 `.env.example` 為 `.env` 並填入自己的金鑰（**切勿提交 `.env`**）：
-
-```
-GEMINI_API_KEY / GEMINI_IMAGE_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY
-COHERE_API_KEY / GOOGLE_PLACES_API_KEY / TELEGRAM_BOT_TOKEN / TELEGRAM_DEFAULT_CHAT_ID
-```
-
----
-
-## 建置與安裝
-
-使用 Android Studio 內建 JBR：
+聲音模型用無線 ADB 同步，像 USB 但走 Wi-Fi、不經任何雲端伺服器：
 
 ```bash
-# 編譯
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:compileDebugKotlin
-
-# 打包 Debug APK
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
-
-# 單元測試
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:testDebugUnitTest
-
-# 安裝到已連線裝置（先開 USB 偵錯）
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:installDebug
+# Android 11+ 無線偵錯：首次配對 + 連線
+python tools/GPT-SoVITS/sync_voice_models.py --pair <ip:port> <配對碼> --wifi <ip:port>
+# 之後每次：
+python tools/GPT-SoVITS/sync_voice_models.py --wifi <手機IP>
 ```
 
----
+換模型完整手冊見 [`docs/GPT_SOVITS_MODEL_GUIDE.md`](docs/GPT_SOVITS_MODEL_GUIDE.md)。建議參考音檔為乾淨 3–10 秒、16kHz 以上 PCM WAV，逐字稿需與音檔逐字一致。
 
 ## 設定項目
 
 | 設定 | 預設 | 說明 |
 | --- | --- | --- |
-| `theme` | 科技風 | 視覺風格（科技 / 可愛 / 動漫 / 簡約） |
-| `language` | 繁體中文 | 介面語言（繁中 / EN / 日 / 韓） |
-| `powerMode` | 標準 | 省電 / 標準 / 高效能 |
+| `theme` | 科技風 | 視覺風格（科技／可愛／動漫／簡約） |
+| `language` | 繁體中文 | 介面語言（繁中／EN／日／韓） |
+| `powerMode` | 標準 | 省電／標準／高效能 |
 | `cloudProvider` | 自動 | 雲端或本地 AI 路由 |
 | `ttsRate` | 0.85 | 朗讀速度（0.5–1.5） |
 | `fontScale` | 1.0 | 全域字體倍率（0.8–1.8） |
 | `autoSaveRehab` | true | 自動保存復健紀錄 |
 | `eyeControlEnabled` | false | 眼動控制 |
-| `eyeControlMode` | 凝視停留 | 凝視停留 / 眨眼掃描 |
+| `eyeControlMode` | 凝視停留 | 凝視停留／眨眼掃描 |
 | `eyeScanIntervalMs` | 1200 | 眨眼掃描速度（600–2200ms） |
-| `cameraLens` | 後攝影機 | 後 / 前 / 前後一起拍 |
+| `cameraLens` | 後攝影機 | 後／前／前後一起拍 |
 | `gptSovitEnabled` | false | GPT-SoVITS 實驗語音 |
-| `gptSovitVoiceMode` | 自動切換 | 中文 / 英文 / 自動 |
+| `gptSovitVoiceMode` | 自動切換 | 中文／英文／自動 |
 | `gptSovitApiBaseUrl` | 空 | SoVITS API 位址 |
-| `customBackgroundUri` | 空 | 自訂背景 |
-| `autoLocalAiCleanup` | true | 推理後清理本地 AI 快取 |
+| `customBackgroundUri` | 空 | 自訂背景（使用者自選） |
 | `developerMode` | false | 開發者功能 |
 | `defaultCurrency` | 新台幣 | AAC 自訂金額預設幣別 |
-| `emergencyChatId` | 空白 | Telegram 緊急通報接收者（由使用者自行填寫） |
+| `emergencyChatId` | 空白 | Telegram 緊急通報接收者（使用者自行填寫） |
 | `homeRadiusMeters` | 150 | 住家命中半徑 |
-
----
 
 ## 權限
 
@@ -197,52 +201,33 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 | 網路 | 雲端 AI、Overpass、Google Places、模型下載、Telegram |
 | 儲存／媒體 | 匯入參考音檔、模型資料夾、自訂背景 |
 
----
-
 ## 專案結構
 
 ```text
 app/src/main/java/com/example/
-├── ui/        Compose 畫面與 UI 元件（VoiceWeaverScreen、AacScreen、SettingsScreen…）
-├── ai/        語音、定位、視覺辨識、推理、TTS、GPT-SoVITS、ViewModel
+├── ui/        Compose 畫面與 UI 元件（VoiceWeaverScreen、AacScreen、RehabScreen、SettingsScreen…）
+├── ai/        語音、定位、視覺辨識、推理、TTS、GPT-SoVITS、雲端同步、ViewModel
 ├── data/      Room、DataStore、AAC 資料、設定模型
 ├── safety/    安全檢查與緊急通報
 └── net/       Telegram API
 
 app/src/main/assets/
-├── poi/         離線 POI
-├── voices/      預設參考音檔
-├── backgrounds/ 預設背景
-└── models/      本地模型資源
+├── poi/         離線 POI（台灣／美國座標）
+├── models/      本地模型資源
+└── t2s_map.txt  繁→簡對照（送 GPT-SoVITS 前轉換）
 
 tools/
-├── GPT-SoVITS/  桌面版 GPT-SoVITS 工具與測試環境
+├── GPT-SoVITS/  電腦端語音中心、API server、無線同步腳本
 ├── dmg/         macOS 語音中心打包（.dmg）
 └── win/         Windows 語音中心打包（.zip）
 ```
 
-Room 實體：`SpeechRecord`（重組歷史）、`RehabLog`（復健）、`AacComboLog`（AAC 組合 / 評分）、`StoryTrainingLog`（故事訓練）。
+Room 實體：`SpeechRecord`（重組歷史）、`RehabLog`（復健）、`AacComboLog`（AAC 組合／評分）、`StoryTrainingLog`（故事訓練）。更詳細的檔案地圖見 [`AGENTS.md`](AGENTS.md)。
 
-更詳細的檔案地圖與搜尋規則見 [`AGENTS.md`](AGENTS.md)。
+## 隱私與授權
 
----
-
-## 使用建議
-
-| 情境 | 建議設定 |
-| --- | --- |
-| 一般使用 | 耗能 `標準`、AI `自動` |
-| 長時間外出 | 耗能 `省電`、相機用單次辨識 |
-| 低視力 / 長輩 | 字體調到 `大` 或 `特大` |
-| 需要眼動操作 | 開啟眼動控制並調整掃描間隔 |
-| 使用 GPT-SoVITS | 先在電腦跑 API server，再按「測試連線」 |
-| 正式緊急通報 | **務必更換 Telegram Chat ID** |
-
----
-
-## 開發注意
-
-- 不要提交 API key、Telegram token、正式醫療資料或私人 Chat ID。
-- 定位無網路時會回退離線 POI 與規則分類；AAC 項目避免把具體需求誤分類成翻譯指令。
-- GPT-SoVITS 的角色音色、參考音檔與模型權重必須確認授權。
-- 大型模型 / runtime 資料夾（`tools/miniforge3/`、`*weights*/`、`assets/models/`…）預設不要瀏覽，搜尋已用 `.ignore` 排除。
+- **不內建任何語音模型／角色音色**：聲音由使用者自行匯入有權使用的素材；安裝檔與原始碼皆不含第三方語音資產。
+- **金鑰不入版控**：`.env` 與 `app/google-services.json` 已被 `.gitignore`；API 金鑰只存在使用者裝置與其個人 Firestore。
+- **聲紋屬生物特徵**：啟用 GPT-SoVITS／匯入錄音前需勾選知情同意。
+- **第三方授權**：電腦端使用的 [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) 為 **AGPL-3.0**；打包 `.dmg`／`.zip` 散布時會一併附上其 `LICENSE`。
+- 本專案程式碼本身尚未公開授權（保留所有權利）；如需重用請先聯絡作者。
