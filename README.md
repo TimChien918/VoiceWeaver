@@ -97,13 +97,17 @@ GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行 `.pth` 權
 
 ### 電腦端語音中心（一鍵啟動）
 
-`tools/` 內提供自帶環境的「語音中心」啟動器，會啟動本機服務（語音 9880 / 生圖 9881 / 文字 9882），
-並自動 `adb reverse`、顯示手機連線位址、同步聲音模型；關閉視窗即停止所有服務。
+`tools/` 內提供「語音中心」啟動器，會啟動本機服務（語音 9880 / 生圖 9881 / 文字 9882），
+並自動 `adb reverse`、顯示手機連線位址、雙向同步聲音模型；關閉視窗即停止所有服務。
 
 | 平台 | 打包工具 | 啟動方式 |
 | --- | --- | --- |
-| **macOS** | `tools/dmg/build_dmg.sh` → `.dmg` | 雙擊 `VoiceWeaver語音中心.app` |
-| **Windows** | `tools/win/build_win.ps1` → `.zip` | 雙擊 `VoiceWeaver語音中心.cmd`（見 [`tools/win/README_WINDOWS.md`](tools/win/README_WINDOWS.md)） |
+| **macOS** | `tools/dmg/build_dmg.sh` → `.dmg`（自帶環境） | 雙擊 `VoiceWeaver語音中心.app` |
+| **Windows** | `tools/win/build_win_exe.ps1` → `.exe`（小檔，首次自動安裝） | 雙擊 `VoiceWeaver語音中心.exe`（見 [`tools/win/README_WINDOWS.md`](tools/win/README_WINDOWS.md)） |
+
+> **Windows 版是「小安裝包 + 首次自動安裝」**：約 11MB 的 exe，第一次開啟才自動從公開來源裝好
+> 約 2GB 的 AI 環境（Miniforge → 依賴 → 官方上游 GPT-SoVITS 引擎），之後秒開。有支援的 NVIDIA
+> 顯卡會自動裝 CUDA 版加速，否則 CPU 版。完整說明見 [`tools/win/README_WINDOWS.md`](tools/win/README_WINDOWS.md)。
 
 手動啟動語音 API（開發用）：
 

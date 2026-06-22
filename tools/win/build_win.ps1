@@ -1,4 +1,4 @@
-<#
+﻿<#
   打包 VoiceWeaver 語音中心為可下載的 Windows 安裝包（自帶 Python 環境 + 後端程式碼）。
   與 macOS 的 tools/dmg/build_dmg.sh 同邏輯，只是產物是 .zip 資料夾而非 .dmg。
 

@@ -21,6 +21,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -35,12 +36,31 @@ _ADB_BIN = "adb.exe" if _IS_WIN else "adb"
 _NOWIN = {"creationflags": 0x08000000} if _IS_WIN else {}   # CREATE_NO_WINDOW
 
 
-ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = ROOT.parents[1]
-CONFIG_PATH = ROOT / "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
-REF_DIR = ROOT / "ref_audio/voiceweaver_custom"
-HISTORY_PATH = ROOT / "user_models/model_history.json"
-TEST_WAV_PATH = Path("/private/tmp/voiceweaver_model_setup_test.wav")
+# 凍結版(PyInstaller)時，本檔被解壓到暫存目錄，__file__ 不是真正的安裝根目錄。
+# 由控制程式透過 VOICEWEAVER_ROOT 指定真正的根（含 user_models / 設定 / 權重）。
+ROOT = Path(os.environ.get("VOICEWEAVER_ROOT") or Path(__file__).resolve().parent).resolve()
+def _derive_paths():
+    global PROJECT_ROOT, CONFIG_PATH, REF_DIR, HISTORY_PATH
+    try:
+        PROJECT_ROOT = ROOT.parents[1]
+    except IndexError:
+        PROJECT_ROOT = ROOT
+    CONFIG_PATH = ROOT / "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
+    REF_DIR = ROOT / "ref_audio/voiceweaver_custom"
+    HISTORY_PATH = ROOT / "user_models/model_history.json"
+_derive_paths()
+
+def set_root(path) -> None:
+    """讓控制程式在啟動/安裝完成後把根目錄指到真正的安裝位置。"""
+    global ROOT
+    ROOT = Path(path).resolve()
+    _derive_paths()
+# Windows 用 %TEMP%；macOS 用 /private/tmp（afplay 需要真實路徑，不能用 symlink）
+TEST_WAV_PATH = (
+    Path(tempfile.gettempdir()) / "voiceweaver_model_setup_test.wav"
+    if _IS_WIN
+    else Path("/private/tmp/voiceweaver_model_setup_test.wav")
+)
 PORT = int(os.environ.get("VOICEWEAVER_MODEL_SETUP_PORT", "9890"))
 API_BASE = os.environ.get("GPT_SOVITS_API", "http://127.0.0.1:9880").rstrip("/")
 SUPPORTED_VERSIONS = {"v1", "v2", "v3", "v4", "v2Pro", "v2ProPlus"}
@@ -50,7 +70,7 @@ MIN_MODEL_BYTES = 1024 * 1024
 
 def safe_filename(name: str, default: str) -> str:
     clean = Path(name or default).name
-    clean = re.sub(r"[^A-Za-z0-9._\-\u4e00-\u9fff]+", "_", clean).strip("._")
+    clean = re.sub(r"[^A-Za-z0-9._\-一-鿿]+", "_", clean).strip("._")
     return clean or default
 
 
@@ -117,7 +137,6 @@ def scan_model_folder(folder: Path) -> dict:
     """自動辨識模型資料夾，回傳可帶入表單的欄位。
     結構例：胡桃_ZH/{胡桃_ZH-e10.ckpt, 胡桃_ZH_e10_s860_l32.pth, reference_audios/中文/emotions/【默认】…wav}
     """
-    # GPT .ckpt / SoVITS .pth：取資料夾內最大的（排除 train log 等）
     ckpts = sorted(folder.rglob("*.ckpt"), key=lambda p: p.stat().st_size, reverse=True)
     pths = sorted(folder.rglob("*.pth"), key=lambda p: p.stat().st_size, reverse=True)
     wavs = list(folder.rglob("*.wav"))
@@ -127,17 +146,13 @@ def scan_model_folder(folder: Path) -> dict:
         return {"ok": False, "error": "資料夾內找不到 SoVITS 模型 (.pth)"}
     gpt = ckpts[0]
     sovits = pths[0]
-    # 參考音檔：優先「默认/默認/default」，否則第一個
     ref = next((w for w in wavs if any(k in w.name for k in ("默认", "默認", "default", "默"))), None) \
           or (wavs[0] if wavs else None)
-    # 逐字稿：從 wav 檔名取，去掉副檔名與開頭的【情緒】標記。
-    # macOS 檔名是分解形(NFD)，韓/日會被拆成 jamo/組字 → 正規化成 NFC 才正確顯示與合成。
     prompt = ""
     if ref is not None:
         stem = unicodedata.normalize("NFC", ref.stem)
-        stem = re.sub(r"^[【\[〖（(][^】\]〗）)]*[】\]〗）)]\s*", "", stem)  # 去開頭【默认】等
+        stem = re.sub(r"^[【\[〖（(][^】\]〗）)]*[】\]〗）)]\s*", "", stem)
         prompt = stem.strip()
-    # 名稱與語言：資料夾名（如 胡桃_ZH），NFC 正規化；版本：上層資料夾名（v4…）
     folder_name = unicodedata.normalize("NFC", folder.name)
     lang = "_ZH"
     for tag in ("_ZH", "_CN", "_EN", "_JA", "_JP", "_KO", "_KR"):
@@ -303,73 +318,6 @@ def ensure_current_model_in_history() -> None:
     remember_model(name, version, gpt_rel, sovits_rel, ref_path, prompt)
 
 
-def history_html() -> str:
-    ensure_current_model_in_history()
-    records = load_history()
-    runtime_version, runtime_gpt, runtime_sovits = api_health_weights()
-    config_version, config_gpt, config_sovits = get_current_config()
-    cur_version = runtime_version or config_version
-    cur_gpt = runtime_gpt or config_gpt
-    cur_sovits = runtime_sovits or config_sovits
-    if not records:
-        return """
-  <div class="panel">
-    <b>已使用模型</b>
-    <p>還沒有記錄。第一次套用模型成功後，這裡會自動出現一鍵切換清單。</p>
-  </div>"""
-    rows: list[str] = []
-    for item in records:
-        gpt_rel = clean_stored_text(item.get("gpt_rel", ""))
-        sovits_rel = clean_stored_text(item.get("sovits_rel", ""))
-        ref_path = clean_stored_text(item.get("ref_path", ""))
-        active = (
-            item.get("version") == cur_version
-            and gpt_rel == cur_gpt
-            and sovits_rel == cur_sovits
-        )
-        badge = '<span class="badge active">API 使用中</span>' if active and runtime_gpt else ('<span class="badge active">設定中</span>' if active else '<span class="badge">已記住</span>')
-        rows.append(
-            f"""
-      <div class="model-card">
-        <div style="flex:1">
-          <div class="model-title">{html.escape(item.get("name", "未命名模型"))} {badge}</div>
-          <div class="model-meta">版本：{html.escape(item.get("version", ""))}</div>
-          <div class="model-meta">GPT：<code>{html.escape(display_file(gpt_rel))}</code></div>
-          <div class="model-meta">SoVITS：<code>{html.escape(display_file(sovits_rel))}</code></div>
-          <div class="model-meta">參考音檔：<code>{html.escape(display_file(ref_path))}</code></div>
-          <div class="model-meta">上次使用：{html.escape(item.get("last_used_at", item.get("updated_at", "")))}</div>
-          <details class="edit-box">
-            <summary>編輯</summary>
-            <form method="post" action="/edit">
-              <input type="hidden" name="id" value="{html.escape(item.get("id", ""))}" />
-              <label>模型名稱</label>
-              <input name="name" value="{html.escape(item.get("name", ""))}" />
-              <label>參考音檔逐字稿（prompt）</label>
-              <textarea name="prompt" rows="2">{html.escape(clean_stored_text(item.get("prompt", "")))}</textarea>
-              <button type="submit">儲存</button>
-            </form>
-          </details>
-        </div>
-        <div class="card-actions">
-          <form class="inline-form" method="post" action="/switch">
-            <input type="hidden" name="id" value="{html.escape(item.get("id", ""))}" />
-            <button type="submit" {'disabled' if active else ''}>切換</button>
-          </form>
-          <form class="inline-form" method="post" action="/delete" onsubmit="return confirm('確定刪除？會一併刪除權重檔 .ckpt/.pth/.wav（無法復原）。其他模型仍在用的共用檔會自動保留。');">
-            <input type="hidden" name="id" value="{html.escape(item.get("id", ""))}" />
-            <button type="submit" class="danger">刪除</button>
-          </form>
-        </div>
-      </div>"""
-        )
-    return f"""
-  <div class="panel">
-    <b>已使用模型</b>
-    <p>套用成功的模型會自動記住。之後按「切換」即可更新設定與 GPT-SoVITS API，不需要重新選檔。</p>
-    <div class="model-list">{''.join(rows)}</div>
-  </div>"""
-
-
 def save_upload(field, destination: Path) -> int:
     with destination.open("wb") as out:
         shutil.copyfileobj(field.file, out)
@@ -395,7 +343,7 @@ def copy_upload_or_local_path(form: cgi.FieldStorage, upload_name: str, path_nam
 
     raw_path = form.getfirst(path_name, "").strip()
     if not raw_path:
-        raise ValueError(f"請選擇 {suffix} 檔案，或貼上 Mac 本機檔案路徑")
+        raise ValueError(f"請選擇 {suffix} 檔案，或貼上本機檔案路徑")
     source = Path(os.path.expanduser(raw_path)).resolve()
     if not source.exists() or not source.is_file():
         raise ValueError(f"找不到檔案：{source}")
@@ -410,12 +358,15 @@ def copy_upload_or_local_path(form: cgi.FieldStorage, upload_name: str, path_nam
 
 def update_config(version: str, gpt_rel: str, sovits_rel: str) -> None:
     text = CONFIG_PATH.read_text(encoding="utf-8")
+    # 由控制程式偵測：有支援的 NVIDIA GPU 時走 cuda + 半精度（快很多），否則 cpu。
+    device = os.environ.get("VOICEWEAVER_DEVICE", "cpu")
+    is_half = "true" if device == "cuda" else "false"
     replacement = (
         "custom:\n"
         "  bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large\n"
         "  cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base\n"
-        "  device: cpu\n"
-        "  is_half: false\n"
+        f"  device: {device}\n"
+        f"  is_half: {is_half}\n"
         f"  t2s_weights_path: {gpt_rel}\n"
         f"  version: {version}\n"
         f"  vits_weights_path: {sovits_rel}\n"
@@ -442,7 +393,6 @@ def update_config(version: str, gpt_rel: str, sovits_rel: str) -> None:
 def patch_local_helper(prompt: str, ref_path: Path) -> None:
     helper = PROJECT_ROOT / "app/src/main/java/com/example/ai/LocalSovitsHelper.kt"
     if not helper.exists():
-        # 發行版（.dmg 安裝）沒有 Android 原始碼，跳過即可
         return
     text = helper.read_text(encoding="utf-8")
     escaped_prompt = (
@@ -614,7 +564,7 @@ def reveal_test_wav() -> tuple[bool, str]:
         return False, f"找不到測試音檔：{TEST_WAV_PATH}"
     try:
         if _IS_WIN:
-            subprocess.Popen(["explorer", "/select,", str(TEST_WAV_PATH)])
+            subprocess.Popen(["explorer", "/select,", str(TEST_WAV_PATH)], **_NOWIN)
             return True, f"已在檔案總管顯示：{TEST_WAV_PATH}"
         opener = ["/usr/bin/open", "-R"] if _IS_MAC else ["xdg-open"]
         target = [str(TEST_WAV_PATH)] if _IS_MAC else [str(TEST_WAV_PATH.parent)]
@@ -670,7 +620,6 @@ def find_adb() -> str:
 
 def lan_ips() -> list[str]:
     ips: list[str] = []
-    # 跨平台：UDP「假連線」取對外網卡 IP。
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -682,7 +631,7 @@ def lan_ips() -> list[str]:
             ips.append(ip)
     except Exception:
         pass
-    if not _IS_WIN:                          # mac/linux 後援列舉介面
+    if not _IS_WIN:
         for iface in ("en0", "en1", "en2"):
             try:
                 r = subprocess.run(["ipconfig", "getifaddr", iface],
@@ -699,7 +648,6 @@ TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download"
 
 
 def find_tailscale() -> str:
-    """找 Tailscale CLI（Windows / macOS App Store / 獨立版 / Homebrew 版）。"""
     cands = (
         ("tailscale.exe",
          os.path.expandvars(r"%ProgramFiles%\Tailscale\tailscale.exe"))
@@ -720,8 +668,6 @@ def find_tailscale() -> str:
 
 
 def tailscale_status() -> dict:
-    """Tailscale 狀態：讓手機可不靠區網、用全域網（4G/5G/外網）連回電腦。
-    回傳是否安裝、是否登入(取得 100.x IP)、IP、官方下載網址。"""
     ts = find_tailscale()
     if not ts:
         return {"installed": False, "running": False, "ip": "", "download_url": TAILSCALE_DOWNLOAD_URL}
@@ -747,7 +693,6 @@ def adb_status() -> dict:
     adb = find_adb()
     if not adb:
         return {"adb": False, "devices": [], "reverse": False}
-    # 同一支手機可能同時有 USB + 無線兩個 transport，必須用 -s 指定，否則 adb 會報多裝置錯誤
     devices = adb_devices(adb)
     reverse = False
     for d in devices:
@@ -762,7 +707,6 @@ def adb_status() -> dict:
 
 
 def setup_adb_reverse() -> tuple[bool, str]:
-    """有線/無線 adb：對每個 transport 都設定 reverse 9880，手機用 localhost:9880 連回 Mac。"""
     adb = find_adb()
     if not adb:
         return False, "找不到 adb（請確認已安裝 Android platform-tools）"
@@ -783,7 +727,6 @@ def setup_adb_reverse() -> tuple[bool, str]:
 
 
 def sync_voice_models_action() -> tuple[bool, str]:
-    """手動觸發聲音模型雙向同步（電腦 ↔ 手機固定資料夾）。"""
     script = ROOT / "sync_voice_models.py"
     if not script.exists():
         return False, "找不到 sync_voice_models.py"
@@ -798,7 +741,6 @@ def sync_voice_models_action() -> tuple[bool, str]:
 
 
 def image_server_status() -> dict:
-    """本機生圖伺服器(9881)狀態，給控制中心顯示「合成進度」。"""
     try:
         with urllib.request.urlopen("http://127.0.0.1:9881/health", timeout=2.0) as resp:
             data = json.loads(resp.read().decode("utf-8", "replace"))
@@ -816,7 +758,6 @@ def image_server_status() -> dict:
 
 
 def text_server_status() -> dict:
-    """本機文字推論伺服器(9882)狀態：連線夠快時電腦接手句子重組。"""
     try:
         with urllib.request.urlopen("http://127.0.0.1:9882/health", timeout=2.0) as resp:
             data = json.loads(resp.read().decode("utf-8", "replace"))
@@ -843,10 +784,6 @@ def conn_state() -> dict:
 
 
 # ── 網頁控制中心已移除（2026-06-20）────────────────────────────────────────
-# 原本這裡有 page()/Handler/main()，會在 9890 提供網頁。功能已全部搬進原生
-# App（voice_center_app.py 的「模型 / 進階」分頁）。本檔現在只當「後端函式庫」
-# 供 App import 重用（load_history / scan_model_folder / apply_runtime_model /
-# run_tts_test / play_test_wav / setup_adb_reverse / conn_state … ）。
-# 直接執行本檔不會再啟動任何網頁伺服器。
+# 本檔現在只當「後端函式庫」供 voice_center_app.py import 重用。
 if __name__ == "__main__":
-    print("此檔已改為後端函式庫；網頁控制中心已移除，請改用 VoiceWeaver 語音中心 App。")
+    print("此檔已改為後端函式庫；請改用 VoiceWeaver 語音中心 App（voice_center_app.py）。")
