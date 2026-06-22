@@ -16,6 +16,8 @@ local.properties
 .env
 .env.local
 *.env.secret
+# Firebase 設定檔含 client api key / OAuth client，不要推上 GitHub
+app/google-services.json
 
 # Keystores & signing secrets — never commit
 debug.keystore

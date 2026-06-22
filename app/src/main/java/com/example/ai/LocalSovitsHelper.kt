@@ -188,7 +188,7 @@ object LocalSovitsHelper {
     }
 
     /**
-     * 從模型名稱/檔名解析語言標籤。容忍底線或空格分隔（「胡桃_ZH」「胡桃 ZH」皆可）。
+     * 從模型名稱/檔名解析語言標籤。容忍底線或空格分隔（「我的聲音_ZH」「我的聲音 ZH」皆可）。
      * _ZH/_CN→中、_EN→英、_JA/_JP→日、_KO/_KR→韓。
      */
     fun langFromModelName(name: String): VoiceLang? {
@@ -253,7 +253,7 @@ object LocalSovitsHelper {
         val gptWeights: String,
         val sovitsWeights: String
     ) {
-        /** UI 顯示：角色名 + 語言標籤，例「胡桃_ZH」 */
+        /** UI 顯示：模型名 + 語言標籤，例「我的聲音_ZH」 */
         val displayLabel: String get() = "$character${lang.tag}"
     }
 
@@ -291,7 +291,7 @@ object LocalSovitsHelper {
                     val sovits = o.optString("sovits_rel").trim()
                     if (name.isBlank() || gpt.isBlank() || sovits.isBlank()) continue
                     val lang = langFromModelName(name) ?: VoiceLang.ZH
-                    // 去掉名稱結尾的語言標籤（容忍底線或空格，例「胡桃 ZH」「胡桃_ZH」→「胡桃」）
+                    // 去掉名稱結尾的語言標籤（容忍底線或空格，例「我的聲音 ZH」「我的聲音_ZH」→「我的聲音」）
                     val character = name
                         .replace(Regex("[ _](ZH|CN|EN|JA|JP|KO|KR)\\b", RegexOption.IGNORE_CASE), "")
                         .trim('_', ' ').ifBlank { name }
@@ -355,14 +355,14 @@ object LocalSovitsHelper {
     /**
      * **自動語言切換**：合成前確保 server 載入的模型語言 == 要講的語言。
      * 一致就不動（省下數十秒的權重重載）；不一致才切到該語言的預設聲音
-     * （中文會優先回到使用者上次選的角色，例切到英文再切回中文仍是胡桃/钟离）。
+     * （中文會優先回到使用者上次選的模型，例切到英文再切回中文仍是同一個中文模型）。
      *
      * @return 切換後實際使用的聲音；切換失敗回 null（呼叫端 fallback 用目前聲音）。
      */
     suspend fun ensureLanguageModel(baseUrl: String, lang: VoiceLang): MacRefVoice? {
         val cur = currentModel
         if (cur != null && cur.lang == lang) return cur   // 已是對的語言，免切
-        // 該語言沒有可用聲音（例如英文 Furina_EN 已移除）→ 不切，沿用目前模型
+        // 該語言沒有可用聲音（例如使用者沒匯入英文模型）→ 不切，沿用目前模型
         val target = when (lang) {
             VoiceLang.ZH -> voicesFor(VoiceLang.ZH).firstOrNull { it.character == lastZhCharacter }
                 ?: voicesFor(VoiceLang.ZH).firstOrNull()

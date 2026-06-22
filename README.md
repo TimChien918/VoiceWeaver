@@ -122,19 +122,10 @@ GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行 `.pth` 權
 
 ### 自訂語音
 - 換模型完整手冊見 [`docs/GPT_SOVITS_MODEL_GUIDE.md`](docs/GPT_SOVITS_MODEL_GUIDE.md)。
-- 參考音檔放在手機 `…/VoiceWeaver/voices/furina/ref_zh.wav`、`ref_en.wav`；App 發 `/tts` 時會把手機 URI 自動翻譯成電腦端絕對路徑（`LocalSovitsHelper.kt`）。
-- 替換 ref 音檔時，逐字稿 `PROMPT_ZH` / `PROMPT_EN` 也要同步改，否則 clone 品質會掉。建議乾淨 3–10 秒、16kHz 以上 PCM WAV。
-- ⚠️ 角色音色與模型權重請務必確認**授權**。`.ckpt` / `.pth` 若只有 100 多 bytes 通常是 Git LFS pointer，不是完整權重。
-
----
-
-## 預設資源
-
-App 首次啟動會把 assets 解壓到 `/sdcard/Android/media/<package>/VoiceWeaver/`：
-- `voices/furina/`：中英參考音檔 + 逐字稿
-- `backgrounds/furina/bg.png`：預設動漫背景（可改自訂背景，永久保存、可預覽 / 刪除）
-
-替換方式：取代 `app/src/main/assets/` 下同名檔 → 重新 build → 下次啟動重新複製。
+- **App 不內建任何語音模型或參考音檔**——由使用者自行匯入自己有權使用的聲音（在「設定 → GPT-SoVITS」匯入；檔案存在手機，換機可同步）。
+- 匯入後，參考音檔與逐字稿一起帶入；App 發 `/tts` 時會把手機 URI 自動翻譯成電腦端絕對路徑（`LocalSovitsHelper.kt`）。
+- 建議乾淨 3–10 秒、16kHz 以上 PCM WAV，逐字稿需與音檔逐字一致。
+- ⚠️ 語音模型與參考音檔請務必確認**授權**（自行錄製或取得授權）。`.ckpt` / `.pth` 若只有 100 多 bytes 通常是 Git LFS pointer，不是完整權重。
 
 ---
 

@@ -57,9 +57,12 @@ except Exception as _e:  # noqa: BLE001
 
 VOICE_CFG = "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
 
+# 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 VOICEWEAVER_BIND=127.0.0.1 鎖本機。
+_BIND = os.environ.get("VOICEWEAVER_BIND", "0.0.0.0")
+
 SERVICES = [
     ("9880", "語音合成（GPT-SoVITS）",
-     [PY, "api_v2.py", "-a", "0.0.0.0", "-p", "9880", "-c", VOICE_CFG], True),
+     [PY, "api_v2.py", "-a", _BIND, "-p", "9880", "-c", VOICE_CFG], True),
     ("9881", "本機生圖（SD-Turbo）", [PY, "image_gen_server.py"], False),
     ("9882", "文字推論（Qwen）", [PY, "text_infer_server.py"], False),
 ]
@@ -241,7 +244,7 @@ def resolve_existing(path: str) -> str:
     for f in files:
         if unicodedata.normalize("NFC", f) == tb:
             return os.path.join(d, f)
-    # 尾段比對：如 「納西妲_ZH_e10_s1400_l32.pth」→ 用「_ZH_e10_s1400_l32.pth」找到「纳西妲_…」
+    # 尾段比對：如 「我的聲音_ZH_e10_s1400_l32.pth」→ 用「_ZH_e10_s1400_l32.pth」找到 NFD/NFC 變體
     if "_" in base:
         suffix = base[base.index("_"):]
         cands = [f for f in files if f.endswith(suffix)]

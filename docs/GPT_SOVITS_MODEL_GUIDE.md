@@ -24,8 +24,8 @@ VoiceWeaver 的 GPT-SoVITS 分成兩邊：
 | `tools/GPT-SoVITS/start_api.sh` | 啟動 GPT-SoVITS API |
 | `tools/GPT-SoVITS/stop_api.sh` | 停止 9880 port 上的 API |
 | `tools/GPT-SoVITS/GPT_SoVITS/configs/voiceweaver_tts_infer.yaml` | VoiceWeaver 預設載入模型 |
-| `tools/GPT-SoVITS/ref_audio/furina/ref_zh.wav` | 中文參考音檔槽位 |
-| `tools/GPT-SoVITS/ref_audio/furina/ref_en.wav` | 英文參考音檔槽位 |
+| `tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav` | 中文參考音檔槽位 |
+| `tools/GPT-SoVITS/ref_audio/myvoice/ref_en.wav` | 英文參考音檔槽位 |
 | `app/src/main/java/com/example/ai/LocalSovitsHelper.kt` | App 端參考音檔路徑與 prompt 文字 |
 
 ## 模型需要哪些檔案
@@ -74,8 +74,11 @@ version: v2
 如果模型壞掉、聲音怪、或 server log 出現大量錯誤，先切回官方底模：
 
 ```bash
-cd /Users/timchien/AndroidStudioProjects/VoiceWeaver
-./tools/GPT-SoVITS/use_genshin_v2.sh base
+# 用 api_v2 的熱切換 API 切回 GPT-SoVITS 官方 v2 底模（無任何角色音色）
+curl -s -G --data-urlencode "weights_path=GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth" \
+  http://127.0.0.1:9880/set_sovits_weights
+curl -s -G --data-urlencode "weights_path=GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt" \
+  http://127.0.0.1:9880/set_gpt_weights
 ```
 
 確認：
@@ -301,7 +304,7 @@ curl -sS -X POST http://127.0.0.1:9880/tts \
   -d '{
     "text": "你好，這是自訂模型測試。",
     "text_lang": "zh",
-    "ref_audio_path": "/Users/timchien/AndroidStudioProjects/VoiceWeaver/tools/GPT-SoVITS/ref_audio/furina/ref_zh.wav",
+    "ref_audio_path": "/Users/timchien/AndroidStudioProjects/VoiceWeaver/tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav",
     "prompt_text": "我的耳目曾经遍及整个大陆，为我探查情报。",
     "prompt_lang": "zh",
     "media_type": "wav",
@@ -330,15 +333,15 @@ ls -lh /private/tmp/voiceweaver_model_test.wav
 Mac 端參考音檔槽位：
 
 ```text
-tools/GPT-SoVITS/ref_audio/furina/ref_zh.wav
-tools/GPT-SoVITS/ref_audio/furina/ref_en.wav
+tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav
+tools/GPT-SoVITS/ref_audio/myvoice/ref_en.wav
 ```
 
 替換中文參考音檔：
 
 ```bash
 cp tools/GPT-SoVITS/user_models/MyVoice/ref_audio/ref_zh.wav \
-  tools/GPT-SoVITS/ref_audio/furina/ref_zh.wav
+  tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav
 ```
 
 然後修改 App 內 prompt：

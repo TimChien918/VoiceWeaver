@@ -115,7 +115,7 @@ def ensure_dirs(version: str) -> tuple[Path, Path]:
 
 def scan_model_folder(folder: Path) -> dict:
     """自動辨識模型資料夾，回傳可帶入表單的欄位。
-    結構例：胡桃_ZH/{胡桃_ZH-e10.ckpt, 胡桃_ZH_e10_s860_l32.pth, reference_audios/中文/emotions/【默认】…wav}
+    結構例：我的聲音_ZH/{我的聲音_ZH-e10.ckpt, 我的聲音_ZH_e10_s860_l32.pth, reference_audios/中文/emotions/【默认】…wav}
     """
     # GPT .ckpt / SoVITS .pth：取資料夾內最大的（排除 train log 等）
     ckpts = sorted(folder.rglob("*.ckpt"), key=lambda p: p.stat().st_size, reverse=True)
@@ -137,7 +137,7 @@ def scan_model_folder(folder: Path) -> dict:
         stem = unicodedata.normalize("NFC", ref.stem)
         stem = re.sub(r"^[【\[〖（(][^】\]〗）)]*[】\]〗）)]\s*", "", stem)  # 去開頭【默认】等
         prompt = stem.strip()
-    # 名稱與語言：資料夾名（如 胡桃_ZH），NFC 正規化；版本：上層資料夾名（v4…）
+    # 名稱與語言：資料夾名（如 我的聲音_ZH），NFC 正規化；版本：上層資料夾名（v4…）
     folder_name = unicodedata.normalize("NFC", folder.name)
     lang = "_ZH"
     for tag in ("_ZH", "_CN", "_EN", "_JA", "_JP", "_KO", "_KR"):

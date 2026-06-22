@@ -5,6 +5,7 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
   alias(libs.plugins.kotlin.serialization)
+  id("com.google.gms.google-services")
 }
 
 android {
@@ -99,6 +100,9 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
+  implementation("com.google.firebase:firebase-auth")
+  implementation("com.google.firebase:firebase-firestore")
+  implementation("com.google.android.gms:play-services-auth:21.2.0")
   implementation(libs.mediapipe.tasks.genai)
   implementation(libs.mediapipe.tasks.vision)
   implementation(libs.kotlinx.coroutines.android)
