@@ -1220,6 +1220,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun setAutoSaveRehab(on: Boolean) = viewModelScope.launch { settingsRepo.setAutoSaveRehab(on) }
     fun setDeveloperMode(on: Boolean) = viewModelScope.launch { settingsRepo.setDeveloperMode(on) }
     fun setAutoLocalAiCleanup(on: Boolean) = viewModelScope.launch { settingsRepo.setAutoLocalAiCleanup(on) }
+    /** 眼控置中校準：請使用者注視螢幕中央後呼叫，把當前視線設為中心。 */
+    fun recenterEyeControl() {
+        eyeControlManager.recenter()
+        _eyeControlState.value = _eyeControlState.value.copy(message = "已置中校準：請從中央開始凝視")
+    }
     fun setEyeControlEnabled(on: Boolean) = viewModelScope.launch { settingsRepo.setEyeControlEnabled(on) }
     fun setEyeControlMode(mode: EyeControlMode) = viewModelScope.launch { settingsRepo.setEyeControlMode(mode) }
     fun setEyeScanIntervalMs(ms: Float) = viewModelScope.launch { settingsRepo.setEyeScanIntervalMs(ms) }
