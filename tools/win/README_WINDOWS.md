@@ -1,94 +1,114 @@
 # VoiceWeaver 語音中心 — Windows 版
 
-這是 macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作，**邏輯完全相同**：
-發行包自帶一份 conda 打包好的 Python 環境與後端程式碼，使用者雙擊啟動器後，第一次會自動把環境
-解壓到使用者資料夾並完成重定位（conda-unpack），之後就秒開一個原生控制視窗，負責啟動／停止
-三個本機服務、顯示手機連線位址、`adb reverse` 轉接與聲音模型同步。
+macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制視窗本體
+（`tools/GPT-SoVITS/voice_center_app.py`）與後端（`model_setup_server.py`、`sync_voice_models.py`）
+皆為**跨平台**：深色模式偵測、`adb`/Tailscale 路徑、區網 IP、結束服務（`netstat`+`taskkill`）、
+試聽／檔案總管顯示都依作業系統自動切換。
 
-| 對照 | macOS (`tools/dmg/`) | Windows (`tools/win/`) |
+> **設計理念：使用者打開急用。** 所以 Windows 版是「**小安裝包 + 首次自動安裝**」——
+> 安裝包本身只有幾 MB / 幾十 KB，第一次開啟時才自動把約 2GB 的 AI 環境從**公開來源**裝好，
+> 不需要任何人預先打包、上傳 2GB 檔案。之後每次都是秒開。
+
+控制視窗負責啟動／停止三個本機服務（語音 9880 / 生圖 9881 / 文字 9882）、顯示手機連線位址、
+`adb reverse` 轉接與聲音模型雙向同步；關閉視窗即停止所有服務。
+
+---
+
+## 兩種發行格式（擇一）
+
+| | 單一 exe（推薦） | 小 zip 安裝包 |
 | --- | --- | --- |
-| 啟動器 | `launch.sh` | `launch.ps1` + `VoiceWeaver語音中心.cmd` |
-| 打包腳本 | `build_dmg.sh` | `build_win.ps1` |
-| 圖示產生器 | `make_icon.py`（`.icns`） | `make_ico.py`（`.ico`） |
-| 安裝資料夾 | `~/Library/Application Support/VoiceWeaver` | `%LOCALAPPDATA%\VoiceWeaver` |
-| 環境 python | `gpt-sovits-env/bin/python` | `gpt-sovits-env\python.exe` |
-| 重定位 | `bin/conda-unpack` | `Scripts\conda-unpack.exe` |
-| 解壓工具 | `tar`（系統內建） | `tar.exe`（Win10 1803+ 內建） |
-| 程式碼更新 | `rsync`（不 `--delete`） | `robocopy`（不 `/MIR`） |
-| 發行格式 | `.dmg`（拖到應用程式） | `.zip`（解壓到任意位置） |
-| 服務埠 | 9880 語音 / 9881 生圖 / 9882 文字 | 同左 |
+| 產物 | `VoiceWeaver語音中心.exe`（約 11 MB） | `VoiceWeaver-語音中心-安裝包.zip`（約 60 KB） |
+| 打包腳本 | `tools/win/build_win_exe.ps1` | 把 `tools/win/*` ＋ 控制程式壓成 zip |
+| 使用者操作 | 雙擊 `.exe` | 解壓 → 雙擊 `VoiceWeaver語音中心.cmd` |
+| 首次安裝畫面 | 內建 tkinter 進度視窗 | WinForms 進度視窗（`launch.ps1`） |
 
-控制視窗本體（`voice_center_app.py`）與後端（`model_setup_server.py`）已改為**跨平台**：
-深色模式偵測、`adb`/Tailscale 路徑、區網 IP、結束服務（`netstat`+`taskkill`）、試聽／檔案總管顯示
-都會依作業系統自動切換。這些檔案位於 `~/VoiceWeaver-電腦端/GPT-SoVITS/`（已搬出 Android 專案）。
+兩者首次安裝的內容完全一樣，只是進入點不同。exe 自帶後端程式碼；zip 由 `launch.ps1`
+搭配同資料夾的後端檔。
 
 ---
 
-## ⚠️ 重要：conda 環境不可跨平台
+## 首次安裝會自動做什麼
 
-conda 環境是**平台相依**的——macOS 上打包的 `gpt-sovits-env.tar.gz` 不能拿到 Windows 跑（torch、
-原生 `.so`/`.dll`、`python.exe` 都不同）。因此 **Windows 安裝包必須在一台 Windows 電腦上重建環境後再打包**。
+全程有進度視窗，安裝紀錄寫在 `%LOCALAPPDATA%\VoiceWeaver\logs\install.log`。
 
-GPU 注意：macOS 走 Apple **MPS**；Windows 上 `pip install torch` 預設是 **CPU 版**（語音/生圖會較慢）。
-若有 NVIDIA 顯卡，請改裝 CUDA 版 torch（見 <https://pytorch.org/get-started/locally/>）。
+1. **Miniforge**（官方 conda-forge 發行版，含 Python 3.10）→ `%LOCALAPPDATA%\VoiceWeaver\tools\miniforge3`
+2. **建立 `gpt-sovits-env` 環境**並 pip 安裝依賴（見下方「相依版本」）
+3. **後端程式碼**（`api_v2.py` / `image_gen_server.py` / `text_infer_server.py` / 設定）— 自帶在安裝包內
+4. **GPT-SoVITS 推論引擎**（`GPT_SoVITS/` + `tools/`）— 取自官方上游 `RVC-Boss/GPT-SoVITS`
 
----
+模型則隨需下載：SD-Turbo（生圖）與 Qwen（文字）第一次使用時自動從 HuggingFace 抓（免金鑰）；
+聲音模型(9880) 由使用者在手機端錄製／訓練後，透過 USB **自動雙向同步**或在「模型 / 進階」分頁匯入。
 
-## A. 在 Windows 上直接執行（開發 / 已有環境）
+### 快速路徑（選用）：自帶或下載既成環境
 
-若該 Windows 機器已有 `%USERPROFILE%\VoiceWeaver-電腦端\`（含 `GPT-SoVITS\` 與 `gpt-sovits-env\`）：
+若想跳過 pip、直接解壓一份 conda-pack 好的環境（最快最穩）：
 
-```powershell
-& "$env:USERPROFILE\VoiceWeaver-電腦端\gpt-sovits-env\python.exe" `
-  "$env:USERPROFILE\VoiceWeaver-電腦端\GPT-SoVITS\voice_center_app.py"
-```
+- 安裝包資料夾放一份 `gpt-sovits-env.tar.gz`，或
+- 設定環境變數 `VW_ENV_URL` 指向該檔的下載網址。
 
-控制視窗會自動啟動三個服務並嘗試 `adb reverse`。語音(9880) 需先在「模型 / 進階」分頁匯入聲音模型。
-
----
-
-## B. 打包成可下載安裝包（給沒有環境的使用者）
-
-### 1) 在 Windows 上建立並打包 conda 環境
-
-```powershell
-# 假設已用 Miniforge 在 Windows 建好 gpt-sovits-env（裝好 torch / diffusers / fastapi…）
-conda activate gpt-sovits-env
-pip install conda-pack
-$Stage = "$env:TEMP\vwwin"
-New-Item -ItemType Directory -Force "$Stage" | Out-Null
-conda pack -n gpt-sovits-env -o "$Stage\gpt-sovits-env.tar.gz" --format tar.gz
-```
-
-### 2) 備妥精簡後端 payload（不含任何權重）
-
-```powershell
-robocopy "$env:USERPROFILE\VoiceWeaver-電腦端\GPT-SoVITS" "$Stage\payload\GPT-SoVITS" /E `
-  /XD pretrained_models user_models ref_audio G2PWModel .cache __pycache__ .git
-# *weights* 目錄不要複製；build_win.ps1 還有一道安全網會強制清除並在偵測到時中止。
-```
-
-### 3) 打包
-
-```powershell
-tools\win\build_win.ps1
-# 產出：%USERPROFILE%\Downloads\VoiceWeaver-語音中心-Windows.zip
-```
-
-可用環境變數覆寫：`VW_WIN_STAGE`（素材目錄）、`VW_ENV_PY`（產圖示用的 python）、`VW_VERSION`。
+`launch.ps1` / exe 偵測到就會改用「下載／解壓既成環境 + `conda-unpack` 重定位」，而非 pip 自建。
+（conda 環境平台相依，此檔必須在 **Windows** 上用 `conda pack` 產生。）
 
 ---
 
-## C. 使用者端安裝與啟動
+## 相依版本（為何要釘選）
 
-1. 解壓 `VoiceWeaver-語音中心-Windows.zip` 到任意位置（例：桌面）。
-2. 雙擊資料夾內的 **`VoiceWeaver語音中心.cmd`**。
-3. 首次會解壓 AI 環境（約 1~3 分鐘）→ 自動開啟控制視窗；之後秒開。
-4. 想要桌面捷徑：對 `.cmd` 按右鍵 →「傳送到」→「桌面（建立捷徑）」，再到捷徑內容把圖示換成
-   同資料夾的 `AppIcon.ico`。
+三個服務共用同一個 Python 環境，所以版本必須**互相相容**。以下組合是踩過雷後確認可用的：
 
-> 若 Windows SmartScreen 攔截，按「更多資訊」→「仍要執行」。`.cmd` 只是用隱藏視窗呼叫
-> `launch.ps1`（`-ExecutionPolicy Bypass`），不會更動系統 PowerShell 原則。
+| 套件 | 版本 | 原因 |
+| --- | --- | --- |
+| `torch` / `torchaudio` | `2.4.1` | 更新版 torchaudio 會強制改用 `torchcodec`（需 FFmpeg DLL，Windows 沒有）。 |
+| `diffusers` | `0.31.0` | 更新版需要 torch ≥ 2.5 的 op schema，與上面衝突。 |
+| `transformers` | `>=4.43,<=4.50` | GPT-SoVITS 依賴的 `peft` 會 `import HybridCache`，新版 transformers 已移除。 |
+| `jieba_fast` | **shim** | 中文前端直接 `import jieba_fast`，但 Windows 無預編譯輪子（需 C 編譯器）。安裝時建立一個把 `jieba_fast` 轉接到純 Python `jieba` 的相容 shim。 |
+| `pyopenjtalk` | 選用 | 只用於**日語**前端，Windows 無預編譯輪子；裝不起來會自動略過，不影響生圖／文字／中文語音。 |
+
+### GPU / CUDA 自動偵測
+
+安裝時用 `nvidia-smi --query-gpu=compute_cap` 偵測 GPU 運算能力：
+
+- **compute capability ≥ 5.0（Maxwell 以後）** → 裝 **CUDA 版** torch（cu121，約 2.5GB），三服務皆 GPU 加速。
+- 否則（含 Kepler 等老卡、或舊驅動查不到）→ 裝 **CPU 版**。
+  > 現代 PyTorch 的 CUDA 輪子已放棄支援 Kepler（compute 3.x，如 GTX 7xx）；硬裝 CUDA 版在這些卡上會
+  > 直接跑不起來，所以門檻會讓它們正確退回 CPU。
+
+生圖／文字服務以 `torch.cuda.is_available()` 自動選裝置；語音(9880) 需在設定檔寫入 `device: cuda`，
+控制視窗啟動時會偵測並設定 `VOICEWEAVER_DEVICE=cuda`，切換模型時 `update_config` 即寫成 GPU（半精度）。
+
+---
+
+## 打包（給開發者）
+
+### 單一 exe（推薦）
+
+```powershell
+# 任何系統 Python 皆可（不需 AI 環境），先裝打包工具：
+python -m pip install pyinstaller pillow
+# 打包：
+pwsh tools\win\build_win_exe.ps1
+# 產出：dist\VoiceWeaver語音中心.exe
+```
+
+`build_win_exe.ps1` 會即時把正規的後端檔（`api_v2.py`、各 server、`GPT_SoVITS/configs`）塞進 exe，
+不需在 repo 提交重複的 `backend/` 目錄。
+
+### 既成環境 zip（快速路徑用）
+
+`tools/win/build_win.ps1` 仍可把「自帶 conda-pack 環境」打包成 zip（需先在 Windows 上
+`conda pack` 出 `gpt-sovits-env.tar.gz` 與後端 payload）。詳見該腳本檔頭。
+
+---
+
+## 使用者端安裝與啟動
+
+1. 取得 `VoiceWeaver語音中心.exe`（或解壓 zip）。
+2. 雙擊執行。第一次會跳出安裝進度視窗，自動下載安裝 AI 環境（約 2GB，視網速 10–30 分鐘），
+   完成後自動開啟控制台；**之後秒開**。
+3. 想要桌面捷徑：直接把 exe 放桌面即可（zip 版可對 `.cmd` 右鍵 →「傳送到」→「桌面（建立捷徑）」）。
+
+> 若 Windows SmartScreen 攔截，按「更多資訊」→「仍要執行」。安裝若中途失敗，視窗會顯示
+> 「重試安裝」與「開啟安裝紀錄」（`install.log`）。
 
 ---
 
@@ -96,10 +116,24 @@ tools\win\build_win.ps1
 
 控制視窗「控制台」分頁會即時顯示三種位址，擇一填到 App 的伺服器位址欄：
 
-- **有線 USB**（推薦）：手機填 `http://127.0.0.1:9880`；接上 USB 後控制視窗會自動 `adb reverse`。
-  找不到 `adb` 時會自動下載 Google 官方 platform-tools（Windows 版）。
+- **有線 USB**（推薦）：手機填 `http://127.0.0.1:9880`；接上 USB 後控制視窗會自動 `adb reverse`，
+  找不到 `adb` 時自動下載 Google 官方 platform-tools（Windows 版）。接上 USB 也會**自動雙向同步聲音模型**。
 - **無線 Wi-Fi**：填電腦區網 IP，例 `http://192.168.x.x:9880`（手機與電腦同網段）。
-- **全域網 Tailscale**：電腦與手機都裝並登入同帳號後，填 `http://100.x.x.x:9880`
-  （4G/5G/外網皆可，下載 <https://tailscale.com/download>）。
+- **全域網 Tailscale**：兩端都裝並登入同帳號後，填 `http://100.x.x.x:9880`（4G/5G/外網皆可）。
 
 關閉控制視窗 → 自動停止所有服務（含語音合成）。
+
+---
+
+## 安裝位置與疑難排解
+
+| 項目 | 路徑 |
+| --- | --- |
+| AI 環境 / 後端 / 引擎 | `%LOCALAPPDATA%\VoiceWeaver\tools\` |
+| 安裝紀錄 | `%LOCALAPPDATA%\VoiceWeaver\logs\install.log` |
+| 模型快取（HF） | `%LOCALAPPDATA%\VoiceWeaver\.cache\huggingface` |
+
+- **語音 9880 起不來**：先確認「模型 / 進階」分頁看得到聲音模型（USB 同步後應有）。看 `install.log`
+  確認 GPT-SoVITS 引擎與依賴是否裝好；引擎若上次安裝缺漏，控制視窗下次開啟會背景自動補裝。
+- **想重裝**：刪掉整個 `%LOCALAPPDATA%\VoiceWeaver` 資料夾，再開一次即可全新安裝。
+- **`.ps1` 中文亂碼 / 解析失敗**：PowerShell 5.1 需 UTF-8 **with BOM** 才能正確解析含中文的 `.ps1`。

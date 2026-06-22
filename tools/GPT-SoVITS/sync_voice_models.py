@@ -26,6 +26,14 @@ import os
 import subprocess
 import sys
 
+# Windows 主控台預設 cp950（Big5）：print 含 ↔ → ⚠ 等字元會 UnicodeEncodeError 崩潰。
+# 強制 UTF-8 輸出（standalone 執行時的保險；由 App 啟動時 env 也已設 PYTHONUTF8）。
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 LOCAL_ROOT = os.path.dirname(os.path.abspath(__file__))
 PHONE_ROOT = "/sdcard/VoiceWeaver/voice_models"
 STATE_FILE = os.path.join(LOCAL_ROOT, ".sync_state.json")   # 本機基準快照（每台電腦各自一份）
