@@ -751,6 +751,52 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // ── 雲端同步（Firebase，與網頁版共用 users/{uid}）──────────────
+    private val _cloudUser = MutableStateFlow(CloudSync.displayName)
+    val cloudUser: StateFlow<String?> = _cloudUser.asStateFlow()
+    private val _cloudStatus = MutableStateFlow(if (CloudSync.isSignedIn) "已登入" else "未登入")
+    val cloudStatus: StateFlow<String> = _cloudStatus.asStateFlow()
+    @Volatile private var suppressPushUntil = 0L
+
+    fun cloudSignInWithGoogle(idToken: String?, errorCode: Int? = null) {
+        if (idToken.isNullOrBlank()) {
+            _cloudStatus.value = when (errorCode) {
+                12501, 12502 -> "Google 登入取消"          // 使用者自己取消
+                10 -> "登入設定錯誤（10）：SHA-1 未註冊或 google-services.json 過舊，請重新下載設定檔並重建"
+                7 -> "網路錯誤（7）：請檢查連線後再試"
+                null -> "Google 登入取消"
+                else -> "Google 登入失敗（錯誤碼 $errorCode）"
+            }
+            return
+        }
+        CloudSync.signInWithGoogle(idToken) { ok, msg ->
+            _cloudStatus.value = msg
+            if (ok) { _cloudUser.value = CloudSync.displayName; pullCloud() }
+        }
+    }
+    fun cloudSignInAnon() {
+        CloudSync.signInAnon { ok, msg ->
+            _cloudStatus.value = msg
+            if (ok) { _cloudUser.value = CloudSync.displayName; pullCloud() }
+        }
+    }
+    fun cloudSignOut() {
+        CloudSync.signOut(getApplication())
+        _cloudUser.value = null; _cloudStatus.value = "已登出"
+    }
+    private fun pullCloud() {
+        CloudSync.pull { llm, img, tg, chat ->
+            viewModelScope.launch {
+                suppressPushUntil = System.currentTimeMillis() + 4000L   // 拉下來後短暫不要又推回去
+                if (!llm.isNullOrBlank()) settingsRepo.setLlmApis(llm)
+                if (!img.isNullOrBlank()) settingsRepo.setImageApis(img)
+                if (!tg.isNullOrBlank()) settingsRepo.setApiKeyTelegramBotToken(tg)
+                if (!chat.isNullOrBlank()) settingsRepo.setEmergencyChatId(chat)
+                _cloudStatus.value = "已從雲端同步金鑰/供應商"
+            }
+        }
+    }
+
     /** 一次性硬體資訊（SoC / GPU 名稱 / CPU 核數），給效能監控標題列用。
      *  不放 StateFlow 因為它不會改變；UI 直接讀取即可。 */
     val deviceHardware: DeviceHardwareInfo by lazy { telemetryMonitor.readHardwareInfo() }
@@ -777,25 +823,29 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 kotlinx.coroutines.delay(25_000)
             }
         }
-        // **Furina 預設語音 / 背景圖**：第一次啟動把 bundled assets 解到外部儲存區，
-        // 並把 SoVITS 中英參考音檔 URI、背景 URI 寫進 settings — 使用者完全不需手動匯入。
-        // 設計：只在「使用者還沒有設定任何 SoVITS URI」時做（first-launch）；之後使用者自己改的設定不會被覆蓋。
+        // 登入時自動把雲端的金鑰/供應商拉下來
+        if (CloudSync.isSignedIn) pullCloud()
+        // 金鑰/供應商/Telegram 變動 → 防抖 1.5 秒後自動推上雲（登入時才推）
+        viewModelScope.launch {
+            var key = ""
+            while (true) {
+                val s = settings.value
+                val cur = s.llmApis + "" + s.imageApis + "" + s.apiKeyTelegramBotToken + "" + s.emergencyChatId
+                if (cur != key && CloudSync.isSignedIn && System.currentTimeMillis() > suppressPushUntil) {
+                    key = cur
+                    runCatching { CloudSync.push(s.llmApis, s.imageApis, s.apiKeyTelegramBotToken, s.emergencyChatId) }
+                } else if (cur != key) {
+                    key = cur   // 未登入也記住，避免登入後一次大量推送舊狀態
+                }
+                kotlinx.coroutines.delay(1500)
+            }
+        }
+        // 第一次啟動：設定 SoVITS 預設 API 位址 + 從 .env(BuildConfig) 種入 API 金鑰。
+        // 註：App 不內建任何語音/角色資產 — 聲音模型與參考音皆由使用者自行匯入（手機留檔）。
         viewModelScope.launch {
             runCatching {
-                FurinaAssetProvider.ensureExtracted(application)
-                val zhUri = FurinaAssetProvider.chineseRefAudioUri(application)
-                val enUri = FurinaAssetProvider.englishRefAudioUri(application)
-                val bgUri = FurinaAssetProvider.backgroundImageUri(application)
                 val snapshot = settings.firstOrNull() ?: AppSettings()
-                val isFirstLaunch =
-                    snapshot.gptSovitChineseVoiceUri.isBlank() &&
-                    snapshot.gptSovitEnglishVoiceUri.isBlank()
-                if (snapshot.gptSovitChineseVoiceUri.isBlank()) settingsRepo.setGptSovitChineseVoiceUri(zhUri)
-                if (snapshot.gptSovitEnglishVoiceUri.isBlank()) settingsRepo.setGptSovitEnglishVoiceUri(enUri)
-                if (snapshot.customBackgroundUri.isBlank())     settingsRepo.setCustomBackgroundUri(bgUri)
-                // 只在第一次啟動才預設打開，避免使用者明確關掉之後又被自動開回來
-                if (isFirstLaunch && !snapshot.gptSovitEnabled) settingsRepo.setGptSovitEnabled(true)
-                // 預設 API URL 指向本機 127.0.0.1:9880 — 配合 Termux 內跑的 api_v2.py。
+                // 預設 API URL 指向本機 127.0.0.1:9880 — 配合電腦端 api_v2.py。
                 // 沒在跑 → TtsModule 會 fallback 到系統 TTS，不會出錯。
                 if (snapshot.gptSovitApiBaseUrl.isBlank()) {
                     settingsRepo.setGptSovitApiBaseUrl(LocalSovitsHelper.DEFAULT_LOCAL_URL)
@@ -817,10 +867,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                     seedKey(snapshot.apiKeyGooglePlaces, com.example.BuildConfig.GOOGLE_PLACES_API_KEY) { settingsRepo.setApiKeyGooglePlaces(it) }
                     seedKey(snapshot.apiKeyTelegramBotToken, com.example.BuildConfig.TELEGRAM_BOT_TOKEN) { settingsRepo.setApiKeyTelegramBotToken(it) }
                 }
-            }.onFailure { android.util.Log.w("VoiceWeaverViewModel", "Furina asset bootstrap failed: ${it.message}") }
+            }.onFailure { android.util.Log.w("VoiceWeaverViewModel", "first-launch bootstrap failed: ${it.message}") }
         }
-        // 啟動時同步 server 目前載入的角色（detectedZhCharacter 是行程內狀態，
-        // App 重啟後會掉回預設胡桃 — 若 server 其實載著鍾離，ref/prompt 會配錯角色）。
+        // 啟動時偵測 server 目前載入的語音模型（detectedZhCharacter 是行程內狀態，
+        // App 重啟後會掉回預設值 — 偵測後 ref/prompt 才會對上使用者匯入的模型）。
         viewModelScope.launch {
             val s = settings.firstOrNull() ?: return@launch
             if (s.gptSovitEnabled && s.gptSovitApiBaseUrl.isNotBlank()) {

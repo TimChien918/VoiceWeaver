@@ -135,8 +135,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     threading.Thread(target=load_model, daemon=True).start()
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"VoiceWeaver text server: http://0.0.0.0:{PORT} (model {MODEL})", flush=True)
+    # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 VOICEWEAVER_BIND=127.0.0.1 鎖本機。
+    bind = os.environ.get("VOICEWEAVER_BIND", "0.0.0.0")
+    server = ThreadingHTTPServer((bind, PORT), Handler)
+    print(f"VoiceWeaver text server: http://{bind}:{PORT} (model {MODEL})", flush=True)
     server.serve_forever()
 
 

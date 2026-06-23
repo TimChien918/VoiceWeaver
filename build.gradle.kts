@@ -6,4 +6,5 @@ plugins {
   alias(libs.plugins.roborazzi) apply false
   alias(libs.plugins.secrets) apply false
   alias(libs.plugins.kotlin.serialization) apply false
+  id("com.google.gms.google-services") version "4.4.2" apply false
 }

@@ -88,6 +88,23 @@ fun SettingsScreen(
         }
     }
 
+    // 雲端同步（Firebase）：Google 登入 launcher + 狀態
+    val cloudUser by viewModel.cloudUser.collectAsState()
+    val cloudStatus by viewModel.cloudStatus.collectAsState()
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { res ->
+        runCatching {
+            val acct = com.google.android.gms.auth.api.signin.GoogleSignIn
+                .getSignedInAccountFromIntent(res.data)
+                .getResult(com.google.android.gms.common.api.ApiException::class.java)
+            viewModel.cloudSignInWithGoogle(acct.idToken)
+        }.onFailure { e ->
+            val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+            viewModel.cloudSignInWithGoogle(null, code)
+        }
+    }
+
     // API 金鑰管理浮動視窗
     var showApiKeys by remember { mutableStateOf(false) }
     if (showApiKeys) {
@@ -189,6 +206,43 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // 雲端同步（Firebase）：與網頁版用同一個 Google 帳號共用金鑰/供應商
+            item {
+                Section(title = "雲端同步（與網頁共用）", icon = Icons.Default.Cloud, p = p) {
+                    Text(
+                        cloudUser?.let { "已登入：$it" } ?: "未登入",
+                        fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold
+                    )
+                    if (cloudStatus.isNotBlank()) {
+                        Text(cloudStatus, fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (cloudUser == null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { googleLauncher.launch(com.example.ai.CloudSync.googleClient(context).signInIntent) },
+                                colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Google 登入", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                            OutlinedButton(onClick = { viewModel.cloudSignInAnon() }, modifier = Modifier.weight(1f)) {
+                                Text("匿名", fontSize = 12.sp)
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { viewModel.cloudSignOut() },
+                            border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("登出", fontSize = 12.sp, color = p.dangerRose) }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "用同一個 Google 帳號登入手機與網頁，API 金鑰／供應商清單／Telegram 會自動雙向同步。",
+                        fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
+                    )
                 }
             }
 

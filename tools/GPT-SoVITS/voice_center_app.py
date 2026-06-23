@@ -389,8 +389,11 @@ def _write_mark(v: str):
         pass
 
 
+# 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 VOICEWEAVER_BIND=127.0.0.1 鎖本機。
+_BIND = os.environ.get("VOICEWEAVER_BIND", "0.0.0.0")
+
 SERVICES = [
-    ("9880", "語音合成 (GPT-SoVITS)",  "api_v2.py",           ["-a", "0.0.0.0", "-p", "9880", "-c", VOICE_CFG], True),
+    ("9880", "語音合成 (GPT-SoVITS)",  "api_v2.py",           ["-a", _BIND, "-p", "9880", "-c", VOICE_CFG], True),
     ("9881", "本機生圖 (SD-Turbo)",     "image_gen_server.py", [], False),
     ("9882", "文字推論 (Qwen)",          "text_infer_server.py",[], False),
 ]
@@ -1202,7 +1205,7 @@ class App:
         script_path = os.path.join(ROOT, row["script"])
         py = get_py() or sys.executable
         if port == "9880":
-            return [py, script_path, "-a", "0.0.0.0", "-p", "9880",
+            return [py, script_path, "-a", _BIND, "-p", "9880",
                     "-c", os.path.join(ROOT, VOICE_CFG)]
         return [py, script_path] + row["args"]
 

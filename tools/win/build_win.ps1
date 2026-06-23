@@ -23,7 +23,9 @@ $Version = if ($env:VW_VERSION) { $env:VW_VERSION } else { Get-Date -Format 'yyy
 
 $Build   = Join-Path $Stage 'build'
 $Dist    = Join-Path $Build $AppName
-$OutZip  = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads\VoiceWeaver-語音中心-Windows.zip'
+# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 VW_DIST 覆寫。
+$DistDir = if ($env:VW_DIST) { $env:VW_DIST } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-安裝檔' }
+$OutZip  = Join-Path $DistDir 'VoiceWeaver-語音中心-Windows.zip'
 $WinDir  = $PSScriptRoot
 $EnvPy   = if ($env:VW_ENV_PY) { $env:VW_ENV_PY } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-電腦端\gpt-sovits-env\python.exe' }
 

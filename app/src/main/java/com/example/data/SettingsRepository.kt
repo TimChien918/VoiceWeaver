@@ -179,8 +179,8 @@ data class AppSettings(
     /** AAC 自訂金額預設貨幣（記住上次使用）*/
     val defaultCurrency: Currency = Currency.NTD,
     /**
-     * 緊急通報的 Telegram Chat ID。**預設值 `8372934436`** 為實機測試接收者（Tim Chien）；
-     * 正式部署時請改為家屬或診所的 Chat ID。空字串時 [com.example.net.TelegramClient]
+     * 緊急通報的 Telegram Chat ID。**預設為空字串**——不內建任何真實接收者；
+     * 使用者需於設定頁自行填入家屬或診所的 Chat ID。空字串時 [com.example.net.TelegramClient]
      * 會 fallback 到 BuildConfig 預設值。
      */
     val emergencyChatId: String = DEFAULT_EMERGENCY_CHAT_ID,
@@ -197,7 +197,7 @@ data class AppSettings(
         !homeLatitude.isNaN() && !homeLongitude.isNaN()
 
     companion object {
-        const val DEFAULT_EMERGENCY_CHAT_ID = "8372934436"
+        const val DEFAULT_EMERGENCY_CHAT_ID = ""   // 不內建真實 chat id，由使用者自行填寫
         /** Gemini 生圖預設端點（base，不含 model）。實際呼叫：{endpoint}/{model}:generateContent */
         const val DEFAULT_CUSTOM_API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
         // 支援 generateContent 的生圖模型（gemini-2.0-flash-preview-image-generation 已下架）。

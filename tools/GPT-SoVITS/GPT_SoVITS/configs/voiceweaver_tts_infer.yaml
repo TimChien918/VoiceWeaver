@@ -3,9 +3,9 @@ custom:
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
   device: cpu
   is_half: false
-  t2s_weights_path: "GPT_weights_v4/\u7EB3\u897F\u59B2_ZH-e10.ckpt"
+  t2s_weights_path: GPT_SoVITS/pretrained_models/s1v3.ckpt
   version: v4
-  vits_weights_path: "SoVITS_weights_v4/\u7EB3\u897F\u59B2_ZH_e10_s1400_l32.pth"
+  vits_weights_path: GPT_SoVITS/pretrained_models/gsv-v4-pretrained/s2Gv4.pth
 v1:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base

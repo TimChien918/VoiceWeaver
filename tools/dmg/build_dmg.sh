@@ -20,7 +20,10 @@ VERSION="${VW_VERSION:-$(date +%Y%m%d%H%M%S)}"     # 每次打包唯一 → 安�
 BUILD="$STAGE/build"
 APP="$BUILD/$APP_NAME.app"
 DMG_ROOT="$STAGE/dmgroot"
-OUT_DMG="$HOME/Downloads/VoiceWeaver-語音中心.dmg"
+# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 VW_DIST 覆寫。
+DIST="${VW_DIST:-$HOME/VoiceWeaver-安裝檔}"
+mkdir -p "$DIST"
+OUT_DMG="$DIST/VoiceWeaver-語音中心.dmg"
 
 echo "==> 檢查素材"
 [ -f "$ENV_TAR" ] || { echo "缺少 $ENV_TAR（請先跑 conda-pack）"; exit 1; }

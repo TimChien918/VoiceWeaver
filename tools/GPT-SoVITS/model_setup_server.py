@@ -135,7 +135,7 @@ def ensure_dirs(version: str) -> tuple[Path, Path]:
 
 def scan_model_folder(folder: Path) -> dict:
     """自動辨識模型資料夾，回傳可帶入表單的欄位。
-    結構例：胡桃_ZH/{胡桃_ZH-e10.ckpt, 胡桃_ZH_e10_s860_l32.pth, reference_audios/中文/emotions/【默认】…wav}
+    結構例：我的聲音_ZH/{我的聲音_ZH-e10.ckpt, 我的聲音_ZH_e10_s860_l32.pth, reference_audios/中文/emotions/【默认】…wav}
     """
     ckpts = sorted(folder.rglob("*.ckpt"), key=lambda p: p.stat().st_size, reverse=True)
     pths = sorted(folder.rglob("*.pth"), key=lambda p: p.stat().st_size, reverse=True)

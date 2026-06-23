@@ -54,4 +54,3 @@ tools/GPT-SoVITS/Dockerfile
 tools/GPT-SoVITS/requirements.txt
 tools/GPT-SoVITS/extra-req.txt
 tools/GPT-SoVITS/LICENSE
-tools/GPT-SoVITS/use_genshin_v2.sh

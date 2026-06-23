@@ -15,9 +15,18 @@
   - 多 transport（USB+無線）自動優先選 USB。
 
 用法：
-  python sync_voice_models.py            # 自動選裝置
-  python sync_voice_models.py -s SERIAL  # 指定裝置
+  python sync_voice_models.py                     # 自動選裝置（USB 優先）
+  python sync_voice_models.py -s SERIAL           # 指定裝置
+  python sync_voice_models.py --wifi 192.168.1.50 # 無線：像 USB 但走 Wi-Fi（埠預設 5555）
+  python sync_voice_models.py --pair 192.168.1.50:37000 123456 --wifi 192.168.1.50:40000
+                                                  # Android 11+ 首次：先配對再連線
   ADB=/path/to/adb python sync_voice_models.py
+
+無線（Wi-Fi）連線怎麼開：
+  方式 A（Android 11+，免插線）：手機「開發者選項 → 無線偵錯」開啟 → 進去看「IP 位址與埠」
+    和「使用配對碼配對裝置」。第一次用 --pair <配對IP:埠> <配對碼>，之後用 --wifi <IP:連線埠>。
+  方式 B（先插一次 USB）：`adb tcpip 5555` 後拔線，再 `--wifi <手機IP>` 即可（重開機需重來）。
+  原理：和 USB 同一套雙向同步邏輯，只是 transport 換成 TCP/IP——不經任何雲端、不需常開伺服器。
 """
 from __future__ import annotations
 
@@ -210,6 +219,28 @@ def phone_reachable(adb: str, serial: str) -> bool:
     return adb_sh(adb, serial, "echo OK").strip() == "OK"
 
 
+def adb_pair(adb: str, target: str, code: str) -> None:
+    """Android 11+ 無線偵錯首次配對。target=HOST:PORT（「無線偵錯」頁的配對 IP:埠），code=6 位配對碼。"""
+    try:
+        out = subprocess.run([adb, "pair", target, code], capture_output=True, text=True, timeout=25, **POPEN_KW).stdout
+        print(f"[sync] 無線配對 {target}：{out.strip()}", flush=True)
+    except Exception as e:
+        print(f"[sync] 無線配對失敗：{e}", flush=True)
+
+
+def adb_connect(adb: str, target: str) -> str:
+    """以 Wi-Fi 連上手機（像 USB 但走無線）。target=HOST 或 HOST:PORT，無埠預設 5555。
+    成功回傳實際 serial（HOST:PORT），失敗回傳空字串。"""
+    if ":" not in target:
+        target += ":5555"
+    try:
+        out = subprocess.run([adb, "connect", target], capture_output=True, text=True, timeout=12, **POPEN_KW).stdout
+    except Exception:
+        return ""
+    print(f"[sync] 無線連線 {target}：{out.strip()}", flush=True)
+    return target if ("connected to" in out or "already connected" in out) else ""
+
+
 def main() -> int:
     override = None
     if "-s" in sys.argv:
@@ -221,6 +252,19 @@ def main() -> int:
     if not adb:
         print("[sync] 找不到 adb，略過聲音模型同步", flush=True)
         return 0
+
+    # ── 無線（Wi-Fi）連線：像 USB 但走無線，不需雲端、不需常開伺服器 ──
+    if "--pair" in sys.argv:
+        i = sys.argv.index("--pair")
+        if i + 2 < len(sys.argv):
+            adb_pair(adb, sys.argv[i + 1], sys.argv[i + 2])
+    if "--wifi" in sys.argv:
+        i = sys.argv.index("--wifi")
+        if i + 1 < len(sys.argv):
+            tgt = adb_connect(adb, sys.argv[i + 1])
+            if tgt and not override:
+                override = tgt   # 直接鎖定這台無線裝置
+
     serial = pick_device(adb, override)
     if not serial:
         print("[sync] 沒有可用裝置，略過聲音模型同步", flush=True)
