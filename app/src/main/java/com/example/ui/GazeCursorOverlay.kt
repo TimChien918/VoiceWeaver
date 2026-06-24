@@ -14,6 +14,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
 import com.example.ai.EyeControlUiState
+import com.example.ai.EyeInteractionMode
 import kotlinx.coroutines.delay
 
 /**
@@ -29,7 +30,9 @@ fun GazeCursorOverlay(
     activity: Activity,
     dwellMs: Long = 1200L
 ) {
+    // 眨眼掃描模式不需要游標（只看高亮標籤）
     if (!eyeState.enabled || !eyeState.running) return
+    if (eyeState.mode == EyeInteractionMode.BLINK_SCAN) return
 
     var size by remember { mutableStateOf(IntSize.Zero) }
     var dwellProgress by remember { mutableFloatStateOf(0f) }

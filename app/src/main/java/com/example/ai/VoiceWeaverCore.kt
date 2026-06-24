@@ -302,7 +302,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var autoModelRepairStarted = false
     val eyeControlManager = EyeControlManager(
         context = application,
-        onBlink = { selectCurrentEyeScanChip() },
+        onBlink = {
+            if (settings.value.eyeControlMode == com.example.data.EyeControlMode.BlinkScan)
+                globalBlink()
+            else selectCurrentEyeScanChip()
+        },
         onGaze = { x, y ->
             _eyeControlState.value = _eyeControlState.value.copy(gazeX = x, gazeY = y)
         },
@@ -805,6 +809,31 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     val eyeControlState: StateFlow<EyeControlUiState> = _eyeControlState.asStateFlow()
     private var rehabScreenVisible = false
     private var aacScreenVisible = false
+
+    // ── 全域眨眼掃描目標（由各畫面注入，眨眼時執行目前 target）──
+    data class ScanTarget(val label: String, val action: () -> Unit)
+    private val _globalScanTargets = MutableStateFlow<List<ScanTarget>>(emptyList())
+    val globalScanTargets: StateFlow<List<ScanTarget>> = _globalScanTargets.asStateFlow()
+    private val _globalScanIndex = MutableStateFlow(0)
+    val globalScanIndex: StateFlow<Int> = _globalScanIndex.asStateFlow()
+
+    fun registerScanTargets(targets: List<ScanTarget>) {
+        _globalScanTargets.value = targets
+        _globalScanIndex.value = 0
+    }
+    fun clearScanTargets() { _globalScanTargets.value = emptyList() }
+    fun advanceScan() {
+        val n = _globalScanTargets.value.size
+        if (n == 0) return
+        _globalScanIndex.value = (_globalScanIndex.value + 1) % n
+    }
+    fun globalBlink() {
+        val targets = _globalScanTargets.value
+        if (targets.isEmpty()) return
+        val idx = _globalScanIndex.value.coerceIn(0, targets.lastIndex)
+        targets[idx].action()
+        _eyeControlState.value = _eyeControlState.value.copy(lastBlinkAt = System.currentTimeMillis())
+    }
     private var gazeTargetIndex = -1
     private var gazeTargetStartedAt = 0L
     private var lastGazeSelectAt = 0L

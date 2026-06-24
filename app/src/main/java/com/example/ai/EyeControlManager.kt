@@ -153,15 +153,15 @@ class EyeControlManager(
     @Volatile private var isRunning = false
 
     // ── 凝視濾波 / 校準狀態 ───────────────────────────────────────
-    private val euroX = OneEuroFilter()
-    private val euroY = OneEuroFilter()
+    private val euroX = OneEuroFilter(minCutoff = 0.5f, beta = 0.008f)
+    private val euroY = OneEuroFilter(minCutoff = 0.5f, beta = 0.008f)
     // 仿射校準（5 點），未校準前用 EMA 隱式中心備援
     val calibration = GazeCalibration()
     private var neutralX = Float.NaN
     private var neutralY = Float.NaN
     @Volatile private var recenterRequested = false
-    @Volatile var sensitivityX = 2.4f
-    @Volatile var sensitivityY = 3.0f
+    @Volatile var sensitivityX = 1.6f   // 降低靈敏度，減少抖動感
+    @Volatile var sensitivityY = 2.0f
     // ── 校準採樣（校準畫面呼叫 beginCalibSample/endCalibSample）─
     @Volatile private var calibSampling = false
     private val calibSampleBuf = mutableListOf<Pair<Float,Float>>()  // (eyeX, eyeY)
@@ -302,8 +302,8 @@ class EyeControlManager(
                 if (recenterRequested || neutralX.isNaN()) {
                     neutralX = rawX; neutralY = rawY; recenterRequested = false
                 } else {
-                    neutralX += (rawX - neutralX) * 0.004f
-                    neutralY += (rawY - neutralY) * 0.004f
+                    neutralX += (rawX - neutralX) * 0.015f
+                    neutralY += (rawY - neutralY) * 0.015f
                 }
                 cx = ((rawX - neutralX) * sensitivityX + 0.5f).coerceIn(0f, 1f)
                 cy = ((rawY - neutralY) * sensitivityY + 0.5f).coerceIn(0f, 1f)

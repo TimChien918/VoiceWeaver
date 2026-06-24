@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.ai.VoiceWeaverViewModel
 import com.example.ui.AacScreen
+import com.example.ui.BlinkScanOverlay
 import com.example.ui.EyeCalibrationScreen
 import com.example.ui.GazeCursorOverlay
 import com.example.ui.HistoryScreen
@@ -56,6 +58,22 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
+
+                    // 眨眼掃描：路由改變時更新全域 scan targets（導覽列 5 個 tab）
+                    val eyeSettings by viewModel.settings.collectAsState()
+                    LaunchedEffect(currentRoute, eyeSettings.eyeControlEnabled, eyeSettings.eyeControlMode) {
+                        if (!eyeSettings.eyeControlEnabled) return@LaunchedEffect
+                        val tabs = listOf(
+                            "重組" to "home",
+                            "AAC 圖卡" to "aac",
+                            "語音復健" to "rehab",
+                            "歷史" to "history",
+                            "設定" to "settings"
+                        )
+                        viewModel.registerScanTargets(tabs.map { (label, route) ->
+                            com.example.ai.VoiceWeaverViewModel.ScanTarget(label) { navController.go(route) }
+                        })
+                    }
                     val palette = LocalAppPalette.current
                     val hasCustomBackground = settings.customBackgroundUri.isNotBlank()
 
@@ -196,12 +214,13 @@ class MainActivity : ComponentActivity() {
                         }
                         // 危機介入「與家人對話」視窗：偵測到危機詞語時覆蓋所有畫面（Dialog 獨立 Window）
                         com.example.ui.CrisisConversationWindow(viewModel = viewModel)
-                        // 全域凝視游標：浮在所有畫面最上層，凝視停留自動注入觸控事件
+                        // 全域眼控 overlay（校準畫面時兩者都隱藏）
                         val eyeState by viewModel.eyeControlState.collectAsState()
-                        GazeCursorOverlay(
-                            eyeState = eyeState,
-                            activity = this@MainActivity
-                        )
+                        val isCalibrating = currentRoute == "eye_calibration"
+                        if (!isCalibrating) {
+                            GazeCursorOverlay(eyeState = eyeState, activity = this@MainActivity)
+                            BlinkScanOverlay(viewModel = viewModel, eyeState = eyeState)
+                        }
                     }
                 }
             }
