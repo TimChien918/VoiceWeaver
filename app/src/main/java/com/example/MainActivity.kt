@@ -9,7 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
@@ -213,24 +214,27 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        // 危機介入「與家人對話」視窗
+                        // 危機介入「與家人對話」視窗（Dialog 自成 window）
                         com.example.ui.CrisisConversationWindow(viewModel = viewModel)
+                        }
 
-                        // EyeGestures 隱藏 WebView（1×1 dp，背景持續追蹤）
+                        // ── 全螢幕 overlay：放在 Scaffold 之外的最外層 Box，
+                        //    才能蓋過底部導覽列，讓鼻控游標可以點到底部分頁。 ──
+                        // 鼻子頭控背景 WebView：保持 VISIBLE 但縮到極小且近乎透明，確保 rAF 持續送幀。
                         val eyeState by viewModel.eyeControlState.collectAsState()
                         EyeGesturesOverlay(
                             enabled = eyeSettings.eyeControlEnabled,
                             onGaze = { x, y, cal -> viewModel.updateGazeFromEyeGestures(x, y, cal) },
                             onBlink = { viewModel.notifyEyeGesturesBlink() },
-                            onStatus = { msg -> /* logged inside overlay */ },
-                            modifier = Modifier.size(1.dp)
+                            onStatus = { /* NoseTrackerOverlay already logs */ },
+                            modifier = Modifier
+                                .requiredSize(2.dp)
+                                .alpha(0.01f)
                         )
-
-                        // 凝視游標 + 眨眼掃描 overlay（眨眼掃描模式下游標自動隱藏）
+                        // 鼻控游標（覆蓋整個畫面，含底部導覽列）
                         GazeCursorOverlay(eyeState = eyeState, activity = this@MainActivity)
                         BlinkScanOverlay(viewModel = viewModel, eyeState = eyeState)
                     }
-                }
             }
         }
     }

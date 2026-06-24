@@ -479,8 +479,8 @@ fun SettingsScreen(
                         onChange = { viewModel.setAutoSaveRehab(it) }
                     )
                     IosToggleRow(
-                        title = "眼動控制",
-                        sub = "前鏡頭估算凝視位置；停留選取，像 iPhone 眼動控制。",
+                        title = "鼻子頭控",
+                        sub = "前鏡頭追蹤鼻子／頭部方向移動游標；轉頭瞄準、停留即選取（Camera Mouse 式頭控）。",
                         checked = settings.eyeControlEnabled,
                         onChange = { on ->
                             if (on && !cameraPerm.status.isGranted) {
@@ -494,67 +494,12 @@ fun SettingsScreen(
                     )
                     if (settings.eyeControlEnabled) {
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            FilterChip(
-                                selected = settings.eyeControlMode == EyeControlMode.GazeDwell,
-                                onClick = { viewModel.setEyeControlMode(EyeControlMode.GazeDwell) },
-                                label = { Text("凝視停留", fontSize = 11.sp) },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Visibility, null, modifier = Modifier.size(14.dp))
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = p.neonCyan.copy(alpha = 0.18f),
-                                    selectedLabelColor = p.textLight,
-                                    labelColor = p.textMuted
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = settings.eyeControlMode == EyeControlMode.GazeDwell,
-                                    borderColor = p.textMuted.copy(alpha = 0.25f),
-                                    selectedBorderColor = p.neonCyan
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = settings.eyeControlMode == EyeControlMode.BlinkScan,
-                                onClick = { viewModel.setEyeControlMode(EyeControlMode.BlinkScan) },
-                                label = { Text("眨眼掃描", fontSize = 11.sp) },
-                                leadingIcon = {
-                                    Icon(Icons.Default.RemoveRedEye, null, modifier = Modifier.size(14.dp))
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = p.neonCyan.copy(alpha = 0.18f),
-                                    selectedLabelColor = p.textLight,
-                                    labelColor = p.textMuted
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = settings.eyeControlMode == EyeControlMode.BlinkScan,
-                                    borderColor = p.textMuted.copy(alpha = 0.25f),
-                                    selectedBorderColor = p.neonCyan
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
                         Text(
-                            if (settings.eyeControlMode == EyeControlMode.GazeDwell)
-                                "看向字卡並停留約 1 秒，自動選取。"
-                            else
-                                "高亮框自動移動，刻意眨眼確認目前字卡。",
+                            "轉頭移動游標，停在按鈕上約 1 秒會自動點擊（MediaPipe 鼻尖追蹤）。",
                             fontSize = 10.sp,
                             color = p.textMuted,
                             modifier = Modifier.padding(top = 6.dp)
                         )
-                        if (settings.eyeControlMode == EyeControlMode.BlinkScan) {
-                        SliderRow(
-                            valueLabel = "${settings.eyeScanIntervalMs.toInt()}ms",
-                            value = settings.eyeScanIntervalMs,
-                            valueRange = 600f..2200f,
-                            steps = 7,
-                            onChange = { viewModel.setEyeScanIntervalMs(it) },
-                            p = p
-                        )
-                        }
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = onStartCalibration,
@@ -563,10 +508,10 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("重新校準 EyeGestures", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("重新置中（頭部歸零）", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                         Text(
-                            "EyeGestures 使用 Rust WASM + MediaPipe，會隨使用自動累積校準；按此鍵立即重置重學。",
+                            "先用自然舒適的姿勢正對螢幕，再按此鍵把目前頭部方向設為中央；之後轉頭即可移動游標。",
                             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )

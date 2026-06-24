@@ -302,7 +302,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var telemetryJob: Job? = null
     private var eyeScanJob: Job? = null
     private var autoModelRepairStarted = false
-    /** EyeGestures WebView 橋接：EyeGesturesOverlay 在 Compose 層呼叫這兩個 fun */
+    /** 鼻子頭控 WebView 橋接：nose_tracker.html 透過 EyeGesturesOverlay 在 Compose 層呼叫 */
     fun updateGazeFromEyeGestures(x: Float, y: Float, calibrated: Boolean) {
         if (!settings.value.eyeControlEnabled) return
         _eyeControlState.value = _eyeControlState.value.copy(
@@ -310,22 +310,17 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             running = true,
             gazeX = x,
             gazeY = y,
-            mode = settings.value.eyeControlMode.toEyeInteractionMode(),
-            message = if (calibrated) "眼動追蹤中（已校準）" else "眼動追蹤中（校準中...）"
+            mode = EyeInteractionMode.GAZE_DWELL,   // 只有鼻子頭控 + 停留點擊一種模式
+            message = "鼻子頭控追蹤中：轉頭移動游標"
         )
     }
 
-    fun notifyEyeGesturesBlink() {
-        if (!settings.value.eyeControlEnabled) return
-        if (settings.value.eyeControlMode == EyeControlMode.BlinkScan)
-            globalBlink()
-        else
-            selectCurrentEyeScanChip()
-    }
+    /** 鼻子頭控不使用眨眼（停留即點擊）；保留空實作以相容呼叫端。 */
+    fun notifyEyeGesturesBlink() { /* no-op: 改用停留點擊 */ }
 
     fun recalibrateEyeGestures() {
-        // EyeGesturesOverlay 的 WebView 暴露 egRecalibrate()，由 MainActivity 執行 JS
-        _eyeControlState.value = _eyeControlState.value.copy(message = "重新校準中，請自然看著螢幕...")
+        // nose_tracker.html 暴露 egRecalibrate()，由 MainActivity 執行 JS 把目前頭部姿勢設為中央
+        _eyeControlState.value = _eyeControlState.value.copy(message = "已重新置中：保持自然姿勢，轉頭即可移動游標")
     }
 
     // 給 LocationTracker 用的住家錨點。在 init {} 訂閱 settings flow 之後寫入；

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #video { position: absolute; width: 2px; height: 2px; opacity: 0; }
+  </style>
+</head>
+<body>
+  <video id="video" playsinline autoplay muted></video>
+
+  <script>
+    // ── 由 Kotlin 透過 URL 參數傳入實體螢幕尺寸（鼻控輸出 0–1 正規化，此處僅備用）──
+    (function () {
+      const p = new URLSearchParams(window.location.search);
+      window.__screenW = parseInt(p.get('w')) || screen.width || 1080;
+      window.__screenH = parseInt(p.get('h')) || screen.height || 1920;
+    })();
+
+    function bridgeStatus(m) { console.log('[NOSE]', m); if (window.AndroidBridge) AndroidBridge.onStatus(m); }
+    function bridgeError(m) { console.error('[NOSE]', m); if (window.AndroidBridge) AndroidBridge.onError(String(m)); }
+
+    // ── 1-Euro 濾波器：靜止穩、移動跟手 ──
+    function OneEuro(minCutoff, beta) {
+      this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = 1.0;
+      this.xPrev = NaN; this.dxPrev = 0; this.tPrev = 0;
+    }
+    OneEuro.prototype.alpha = function (cutoff, dt) {
+      const r = 2 * Math.PI * cutoff * dt; return r / (r + 1);
+    };
+    OneEuro.prototype.filter = function (x, tMs) {
+      if (isNaN(this.xPrev)) { this.xPrev = x; this.tPrev = tMs; return x; }
+      let dt = (tMs - this.tPrev) / 1000; if (dt <= 0) dt = 1 / 30;
+      this.tPrev = tMs;
+      const dx = (x - this.xPrev) / dt;
+      const aD = this.alpha(this.dCutoff, dt);
+      const dxHat = aD * dx + (1 - aD) * this.dxPrev; this.dxPrev = dxHat;
+      const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
+      const a = this.alpha(cutoff, dt);
+      const xHat = a * x + (1 - a) * this.xPrev; this.xPrev = xHat;
+      return xHat;
+    };
+
+    // ── 頭控參數（鼻尖相對雙眼中心，並用臉寬正規化 → 與距離無關）──
+    const NOSE = 1, L_OUT = 33, R_OUT = 263;
+    const SENS_X = 4.5;   // 左右靈敏度（頭轉幅度 → 游標 x）
+    const SENS_Y = 6.0;   // 上下靈敏度（頭俯仰幅度 → 游標 y）
+    const NEUTRAL_DRIFT = 0.003;   // 中性姿勢緩慢自適應
+
+    let dx0 = NaN, dy0 = NaN, frame = 0;
+    const euroX = new OneEuro(0.6, 0.012);
+    const euroY = new OneEuro(0.6, 0.012);
+    const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+
+    function onResults(res) {
+      if (!res.multiFaceLandmarks || !res.multiFaceLandmarks.length) return;
+      const lm = res.multiFaceLandmarks[0];
+      const nose = lm[NOSE];
+      const ax = (lm[L_OUT].x + lm[R_OUT].x) / 2;
+      const ay = (lm[L_OUT].y + lm[R_OUT].y) / 2;
+      const fw = Math.hypot(lm[L_OUT].x - lm[R_OUT].x, lm[L_OUT].y - lm[R_OUT].y) + 1e-6;
+
+      let dx = (nose.x - ax) / fw;   // 鼻尖相對雙眼中心的水平偏移（正規化）
+      let dy = (nose.y - ay) / fw;   // 垂直偏移
+
+      if (isNaN(dx0)) { dx0 = dx; dy0 = dy; }
+      dx0 = dx0 * (1 - NEUTRAL_DRIFT) + dx * NEUTRAL_DRIFT;
+      dy0 = dy0 * (1 - NEUTRAL_DRIFT) + dy * NEUTRAL_DRIFT;
+
+      // 前鏡頭原始影像未鏡像：頭往右轉，鼻尖在影像中相對左移 → 用負號讓游標自然右移
+      let cx = 0.5 - (dx - dx0) * SENS_X;
+      let cy = 0.5 + (dy - dy0) * SENS_Y;
+
+      const t = performance.now();
+      cx = clamp01(euroX.filter(clamp01(cx), t));
+      cy = clamp01(euroY.filter(clamp01(cy), t));
+
+      if (window.AndroidBridge) AndroidBridge.onGaze(cx, cy, 1);
+
+      if ((frame++ % 60) === 0) console.log('[NOSE] cx=' + cx.toFixed(2) + ' cy=' + cy.toFixed(2));
+    }
+
+    // 重新置中（設定頁按鈕呼叫）：把目前頭部姿勢設為中央
+    window.egRecalibrate = function () { dx0 = NaN; dy0 = NaN; bridgeStatus('已重新置中：請保持自然姿勢看著螢幕中央'); };
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src; s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    async function init() {
+      try {
+        if (!window.isSecureContext) throw new Error('需要安全內容 (HTTPS)');
+        bridgeStatus('載入 MediaPipe FaceMesh...');
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js');
+        if (typeof FaceMesh === 'undefined') throw new Error('FaceMesh 未載入');
+
+        const faceMesh = new FaceMesh({
+          locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`
+        });
+        faceMesh.setOptions({
+          maxNumFaces: 1, refineLandmarks: false,
+          minDetectionConfidence: 0.5, minTrackingConfidence: 0.5
+        });
+        await faceMesh.initialize();
+        faceMesh.onResults(onResults);
+        bridgeStatus('FaceMesh 就緒，開啟相機...');
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+
+        async function pump() {
+          if (video.readyState >= video.HAVE_ENOUGH_DATA) {
+            try { await faceMesh.send({ image: video }); }
+            catch (e) { console.error('[NOSE] frame error', e); }
+          }
+          requestAnimationFrame(pump);
+        }
+        video.onloadeddata = () => { video.play(); bridgeStatus('鼻子頭控追蹤中'); requestAnimationFrame(pump); };
+      } catch (e) {
+        bridgeError('初始化失敗：' + (e.message || e));
+      }
+    }
+
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
