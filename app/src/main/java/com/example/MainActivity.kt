@@ -29,6 +29,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ai.VoiceWeaverViewModel
 import com.example.ui.AacScreen
 import com.example.ui.EyeCalibrationScreen
+import com.example.ui.GazeCursorOverlay
 import com.example.ui.HistoryScreen
 import com.example.ui.LocaleProvider
 import com.example.ui.RehabScreen
@@ -195,6 +196,12 @@ class MainActivity : ComponentActivity() {
                         }
                         // 危機介入「與家人對話」視窗：偵測到危機詞語時覆蓋所有畫面（Dialog 獨立 Window）
                         com.example.ui.CrisisConversationWindow(viewModel = viewModel)
+                        // 全域凝視游標：浮在所有畫面最上層，凝視停留自動注入觸控事件
+                        val eyeState by viewModel.eyeControlState.collectAsState()
+                        GazeCursorOverlay(
+                            eyeState = eyeState,
+                            activity = this@MainActivity
+                        )
                     }
                 }
             }
