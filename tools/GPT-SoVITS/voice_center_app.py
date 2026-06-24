@@ -899,7 +899,7 @@ class App:
 
         # 操作按鈕
         act = tk.Frame(parent); act.pack(fill="x", padx=20, pady=(0, 8)); self._track(act, "bg")
-        self._btn(act, "🔁  同步聲音模型", self.sync_models, C_BLUE).pack(
+        self._btn(act, "🔁  同步聲音模型", self.manual_sync, C_BLUE).pack(
             side="left", expand=True, fill="x", padx=(0, 6))
         self._btn(act, "停止全部並結束",    self.on_close,    C_RED).pack(
             side="left", expand=True, fill="x")
@@ -1284,25 +1284,90 @@ class App:
             except Exception: pass
         threading.Thread(target=_work, daemon=True).start()
 
+    # ── 無線端點記憶（USB 接上時學習手機 Wi-Fi IP，之後免插線即可無線同步） ──
+    PHONE_IP_FILE = os.path.join(ROOT, ".phone_wifi")
+
+    def _save_phone_ip(self, ip: str) -> None:
+        try:
+            with open(self.PHONE_IP_FILE, "w", encoding="utf-8") as f:
+                f.write(ip.strip())
+        except Exception:
+            pass
+
+    def _load_phone_ip(self) -> str:
+        try:
+            with open(self.PHONE_IP_FILE, encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            return ""
+
+    def _usb_serial(self) -> str:
+        """目前 USB 裝置序號（無線 serial 含 . 或 :）；無則空字串。"""
+        if not self.adb:
+            return ""
+        try:
+            out = subprocess.run([self.adb, "devices"], capture_output=True, text=True, timeout=6, **POPEN_KW).stdout
+            for l in out.splitlines()[1:]:
+                if "\tdevice" in l:
+                    s = l.split("\t")[0]
+                    if "." not in s and ":" not in s:
+                        return s
+        except Exception:
+            pass
+        return ""
+
+    def _arm_wireless(self, serial: str) -> None:
+        """USB 連接時：讀手機 Wi-Fi IP 並開啟無線 adb（埠 5555），記住端點供日後無線同步。"""
+        if not self.adb or not serial:
+            return
+        try:
+            ipout = subprocess.run([self.adb, "-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0"],
+                                   capture_output=True, text=True, timeout=6, **POPEN_KW).stdout
+            m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", ipout)
+            if not m:
+                return
+            ip = m.group(1)
+            subprocess.run([self.adb, "-s", serial, "tcpip", "5555"], capture_output=True, timeout=8, **POPEN_KW)
+            self._save_phone_ip(ip)
+        except Exception:
+            pass
+
     def _maybe_autosync(self):
         if not self.adb: return
         def _check():
             try:
-                out = subprocess.run([self.adb,"devices"], capture_output=True,
-                                     text=True, timeout=5, **POPEN_KW).stdout
-                has_usb = any(
-                    "\tdevice" in l and "." not in l.split("\t")[0] and ":" not in l.split("\t")[0]
-                    for l in out.splitlines()[1:]
-                )
-                if has_usb:
-                    self.root.after(0, self.sync_models)
+                usb = self._usb_serial()
+                if usb:
+                    self.root.after(0, self.sync_models)                 # 有線（USB）
+                    self._arm_wireless(usb)                              # 學習手機 Wi-Fi 端點
                 else:
-                    self.root.after(0, lambda: self.set_status(
-                        "提示：USB 接上時會自動同步聲音模型"))
+                    ip = self._load_phone_ip()
+                    if ip:
+                        self.root.after(0, lambda: self.sync_models(ip))  # 無線（Wi-Fi）
+                    else:
+                        self.root.after(0, lambda: self.set_status(
+                            "提示：先用 USB 接一次（會自動開啟無線），之後免插線即可無線同步；或按「🔁 同步」"))
             except Exception: pass
         threading.Thread(target=_check, daemon=True).start()
 
-    def sync_models(self):
+    def manual_sync(self):
+        """手動同步：USB 優先；沒插線則用記住的手機 Wi-Fi IP，再沒有就詢問 IP。"""
+        usb = self._usb_serial()
+        if usb:
+            self.sync_models()
+            threading.Thread(target=lambda: self._arm_wireless(usb), daemon=True).start()
+            return
+        ip = self._load_phone_ip()
+        if not ip:
+            ip = simpledialog.askstring("無線同步", "未偵測到 USB。\n請輸入手機 Wi-Fi IP（例 192.168.1.50）：", parent=self.root)
+            if ip and ip.strip():
+                self._save_phone_ip(ip.strip())
+        if ip and ip.strip():
+            self.sync_models(ip.strip())
+        else:
+            self.set_status("已取消：沒有 USB 也沒有手機 IP")
+
+    def sync_models(self, wifi_ip: str = ""):
         script = os.path.join(ROOT, "sync_voice_models.py")
         if not os.path.exists(script):
             self.set_status("找不到同步程式（sync_voice_models.py）")
@@ -1310,7 +1375,8 @@ class App:
         if not self.adb:
             self.set_status("尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）")
             return
-        self.set_status("同步聲音模型中…（首次較久）")
+        via = f"無線 {wifi_ip}" if wifi_ip else "USB"
+        self.set_status(f"同步聲音模型中（{via}）…（首次較久）")
         def work():
             try:
                 py = get_py() or sys.executable
@@ -1318,7 +1384,10 @@ class App:
                 env["ADB"] = self.adb
                 env["PYTHONUTF8"] = "1"
                 env["PYTHONIOENCODING"] = "utf-8"
-                r = subprocess.run([py, script], capture_output=True,
+                cmd = [py, script]
+                if wifi_ip:
+                    cmd += ["--wifi", wifi_ip]
+                r = subprocess.run(cmd, capture_output=True,
                                    encoding="utf-8", errors="replace",
                                    timeout=14400, env=env, **POPEN_KW)
                 out_tail = [l for l in (r.stdout or "").splitlines() if l.strip()]
