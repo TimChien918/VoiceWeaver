@@ -78,7 +78,6 @@ fun SettingsScreen(
     LaunchedEffect(cameraPerm.status.isGranted) {
         if (cameraPerm.status.isGranted && pendingEyeEnable) {
             viewModel.setEyeControlEnabled(true)
-            viewModel.retryEyeControl()
             pendingEyeEnable = false
         }
     }
@@ -557,28 +556,17 @@ fun SettingsScreen(
                         )
                         }
                         Spacer(Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.recenterEyeControl() },
-                                colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.CenterFocusStrong, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("置中", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Button(
-                                onClick = onStartCalibration,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                                modifier = Modifier.weight(2f)
-                            ) {
-                                Icon(Icons.Default.Adjust, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("5 點精準校準", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
+                        Button(
+                            onClick = onStartCalibration,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("重新校準 EyeGestures", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                         Text(
-                            "精準校準：全螢幕依序凝視 5 個靶點（約 10 秒），讓眼控游標貼合你的視線習慣。",
+                            "EyeGestures 使用 Rust WASM + MediaPipe，會隨使用自動累積校準；按此鍵立即重置重學。",
                             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )

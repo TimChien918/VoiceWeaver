@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.ai.EyeInteractionMode
+import com.example.ai.EyeControlUiState
 
 /**
  * Task 2.1: 定義全域情境資料結構 (GlobalTagsVault)
@@ -300,18 +302,31 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var telemetryJob: Job? = null
     private var eyeScanJob: Job? = null
     private var autoModelRepairStarted = false
-    val eyeControlManager = EyeControlManager(
-        context = application,
-        onBlink = {
-            if (settings.value.eyeControlMode == com.example.data.EyeControlMode.BlinkScan)
-                globalBlink()
-            else selectCurrentEyeScanChip()
-        },
-        onGaze = { x, y ->
-            _eyeControlState.value = _eyeControlState.value.copy(gazeX = x, gazeY = y)
-        },
-        onStatus = { msg -> _eyeControlState.value = _eyeControlState.value.copy(message = msg) }
-    )
+    /** EyeGestures WebView 橋接：EyeGesturesOverlay 在 Compose 層呼叫這兩個 fun */
+    fun updateGazeFromEyeGestures(x: Float, y: Float, calibrated: Boolean) {
+        if (!settings.value.eyeControlEnabled) return
+        _eyeControlState.value = _eyeControlState.value.copy(
+            enabled = true,
+            running = true,
+            gazeX = x,
+            gazeY = y,
+            mode = settings.value.eyeControlMode.toEyeInteractionMode(),
+            message = if (calibrated) "眼動追蹤中（已校準）" else "眼動追蹤中（校準中...）"
+        )
+    }
+
+    fun notifyEyeGesturesBlink() {
+        if (!settings.value.eyeControlEnabled) return
+        if (settings.value.eyeControlMode == EyeControlMode.BlinkScan)
+            globalBlink()
+        else
+            selectCurrentEyeScanChip()
+    }
+
+    fun recalibrateEyeGestures() {
+        // EyeGesturesOverlay 的 WebView 暴露 egRecalibrate()，由 MainActivity 執行 JS
+        _eyeControlState.value = _eyeControlState.value.copy(message = "重新校準中，請自然看著螢幕...")
+    }
 
     // 給 LocationTracker 用的住家錨點。在 init {} 訂閱 settings flow 之後寫入；
     // homeProvider lambda 透過讀 @Volatile 變數，避免 LocationTracker 拿到舊值。
@@ -924,7 +939,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         }
         viewModelScope.launch {
             settings.map { it.eyeControlEnabled }.distinctUntilChanged().collect { enabled ->
-                if (enabled) refreshEyeControlLifecycle() else stopEyeControl()
+                if (!enabled) {
+                    eyeScanJob?.cancel(); eyeScanJob = null
+                    _eyeControlState.value = EyeControlUiState()
+                } else {
+                    startEyeScanLoop()
+                }
             }
         }
     }
@@ -1157,12 +1177,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             lastScore = null,
             isRecording = false
         )
-        refreshEyeControlLifecycle()
+        if (settings.value.eyeControlEnabled) startEyeScanLoop()
     }
 
     fun clearRehab() {
         _rehabState.value = RehabUiState()
-        refreshEyeControlLifecycle()
+        if (settings.value.eyeControlEnabled) startEyeScanLoop()
     }
 
     /** 點字卡：單獨播放該字／詞發音 */
@@ -1259,22 +1279,22 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun enterRehabScreen() {
         rehabScreenVisible = true
-        refreshEyeControlLifecycle()
+        if (settings.value.eyeControlEnabled) startEyeScanLoop()
     }
 
     fun exitRehabScreen() {
         rehabScreenVisible = false
-        refreshEyeControlLifecycle()
+        if (settings.value.eyeControlEnabled) startEyeScanLoop()
     }
 
     fun enterAacScreen() {
         aacScreenVisible = true
-        refreshEyeControlLifecycle()
+        if (settings.value.eyeControlEnabled) startEyeScanLoop()
     }
 
     fun exitAacScreen() {
         aacScreenVisible = false
-        refreshEyeControlLifecycle()
+        if (settings.value.eyeControlEnabled) startEyeScanLoop()
     }
 
     // ─── 設定 ───────────────────────────────────────────────────────────────
@@ -1300,10 +1320,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun setDeveloperMode(on: Boolean) = viewModelScope.launch { settingsRepo.setDeveloperMode(on) }
     fun setAutoLocalAiCleanup(on: Boolean) = viewModelScope.launch { settingsRepo.setAutoLocalAiCleanup(on) }
     /** 眼控置中校準：請使用者注視螢幕中央後呼叫，把當前視線設為中心。 */
-    fun recenterEyeControl() {
-        eyeControlManager.recenter()
-        _eyeControlState.value = _eyeControlState.value.copy(message = "已置中校準：請從中央開始凝視")
-    }
     fun setEyeControlEnabled(on: Boolean) = viewModelScope.launch { settingsRepo.setEyeControlEnabled(on) }
     fun setEyeControlMode(mode: EyeControlMode) = viewModelScope.launch { settingsRepo.setEyeControlMode(mode) }
     fun setEyeScanIntervalMs(ms: Float) = viewModelScope.launch { settingsRepo.setEyeScanIntervalMs(ms) }
@@ -1633,29 +1649,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         telemetryJob = null
     }
 
-    fun retryEyeControl() { refreshEyeControlLifecycle() }
-    private fun refreshEyeControlLifecycle() {
-        // 相機只需要眼控開啟就啟動（不限畫面）；凝視選取邏輯仍限定 rehab/aac。
-        if (settings.value.eyeControlEnabled) startEyeControl() else stopEyeControl()
-    }
-
-    private fun startEyeControl() {
+    private fun startEyeScanLoop() {
         if (eyeScanJob?.isActive == true) return
-        val mode = settings.value.eyeControlMode.toEyeInteractionMode()
-        val msg = if (mode == EyeInteractionMode.GAZE_DWELL) {
-            "眼動控制已啟動：凝視字卡停留即可選取"
-        } else {
-            "眼動控制已啟動：請刻意眨眼確認目前高亮字卡"
-        }
-        _eyeControlState.value = _eyeControlState.value.copy(enabled = true, mode = mode, message = msg)
         eyeScanJob = viewModelScope.launch {
-            launch {
-                eyeControlManager.start().onSuccess {
-                    _eyeControlState.value = _eyeControlState.value.copy(running = true)
-                }.onFailure {
-                    _eyeControlState.value = _eyeControlState.value.copy(running = false, message = it.message ?: "眼動控制啟動失敗")
-                }
-            }
             while (true) {
                 if (rehabScreenVisible && _rehabState.value.isActive) {
                     when (settings.value.eyeControlMode) {
@@ -1666,16 +1662,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 delay(if (settings.value.eyeControlMode == EyeControlMode.GazeDwell) 120L else settings.value.eyeScanIntervalMs.toLong())
             }
         }
-    }
-
-    private fun stopEyeControl() {
-        eyeScanJob?.cancel()
-        eyeScanJob = null
-        viewModelScope.launch { eyeControlManager.stop() }
-        _eyeControlState.value = EyeControlUiState()
-        gazeTargetIndex = -1
-        gazeTargetStartedAt = 0L
-        lastGazeSelectAt = 0L
     }
 
     private fun updateBlinkScanSelection() {
@@ -2134,7 +2120,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         super.onCleared()
         downloadJob?.cancel()
         stopTelemetry()
-        stopEyeControl()
+        eyeScanJob?.cancel(); eyeScanJob = null
         ttsModule.shutdown()
         sttManager.destroy()
     }

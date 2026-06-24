@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,9 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.School
@@ -19,9 +20,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -30,7 +33,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ai.VoiceWeaverViewModel
 import com.example.ui.AacScreen
 import com.example.ui.BlinkScanOverlay
-import com.example.ui.EyeCalibrationScreen
+import com.example.ui.EyeGesturesOverlay
 import com.example.ui.GazeCursorOverlay
 import com.example.ui.HistoryScreen
 import com.example.ui.LocaleProvider
@@ -45,33 +48,35 @@ import com.example.ui.theme.MyApplicationTheme
 import coil.compose.AsyncImage
 
 class MainActivity : ComponentActivity() {
+
+    // EyeGestures WebView 跨 composable 存活（用於 evaluateJavascript 重置校準）
+    private var eyeGesturesWebViewRef: WebView? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             val viewModel: VoiceWeaverViewModel = viewModel()
-            // 訂閱設定，主題切換立即重組整顆樹
             val settings by viewModel.settings.collectAsState()
             MyApplicationTheme(theme = settings.theme, fontScale = settings.fontScale) {
-                // 語言切換在主題之內、Scaffold 之外，保證 nav/topbar/全部 stringResource 一致
                 LocaleProvider(language = settings.language) {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
 
-                    // 眨眼掃描：路由改變時更新全域 scan targets（導覽列 5 個 tab）
+                    // 眨眼掃描：路由改變時更新全域 scan targets
                     val eyeSettings by viewModel.settings.collectAsState()
                     LaunchedEffect(currentRoute, eyeSettings.eyeControlEnabled, eyeSettings.eyeControlMode) {
                         if (!eyeSettings.eyeControlEnabled) return@LaunchedEffect
                         val tabs = listOf(
-                            "重組" to "home",
-                            "AAC 圖卡" to "aac",
+                            "重組" to "main",
                             "語音復健" to "rehab",
+                            "報告" to "report",
                             "歷史" to "history",
                             "設定" to "settings"
                         )
                         viewModel.registerScanTargets(tabs.map { (label, route) ->
-                            com.example.ai.VoiceWeaverViewModel.ScanTarget(label) { navController.go(route) }
+                            VoiceWeaverViewModel.ScanTarget(label) { navController.go(route) }
                         })
                     }
                     val palette = LocalAppPalette.current
@@ -117,8 +122,6 @@ class MainActivity : ComponentActivity() {
                                     onClick = { navController.go("rehab") },
                                     colors = navColors
                                 )
-                                // AAC 分頁已併入「重組」主畫面（AacInlinePanel）— 此處不再列。
-                                // 進階模式（沉浸式 + 評分）的 AacScreen 仍透過 route="aac" 保留，但不放在底部列上。
                                 val labelReport = stringResource(R.string.nav_report)
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.BarChart, contentDescription = labelReport) },
@@ -179,13 +182,11 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(
                                     viewModel = viewModel,
                                     onAdvanced = { navController.go("settings_extended") },
-                                    onStartCalibration = { navController.go("eye_calibration") }
-                                )
-                            }
-                            composable("eye_calibration") {
-                                EyeCalibrationScreen(
-                                    manager = viewModel.eyeControlManager,
-                                    onDone = { navController.popBackStack() }
+                                    onStartCalibration = {
+                                        // 呼叫 EyeGestures JS 重置校準
+                                        eyeGesturesWebViewRef?.evaluateJavascript("window.egRecalibrate && window.egRecalibrate();", null)
+                                        viewModel.recalibrateEyeGestures()
+                                    }
                                 )
                             }
                             composable("report") {
@@ -212,15 +213,22 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        // 危機介入「與家人對話」視窗：偵測到危機詞語時覆蓋所有畫面（Dialog 獨立 Window）
+                        // 危機介入「與家人對話」視窗
                         com.example.ui.CrisisConversationWindow(viewModel = viewModel)
-                        // 全域眼控 overlay（校準畫面時兩者都隱藏）
+
+                        // EyeGestures 隱藏 WebView（1×1 dp，背景持續追蹤）
                         val eyeState by viewModel.eyeControlState.collectAsState()
-                        val isCalibrating = currentRoute == "eye_calibration"
-                        if (!isCalibrating) {
-                            GazeCursorOverlay(eyeState = eyeState, activity = this@MainActivity)
-                            BlinkScanOverlay(viewModel = viewModel, eyeState = eyeState)
-                        }
+                        EyeGesturesOverlay(
+                            enabled = eyeSettings.eyeControlEnabled,
+                            onGaze = { x, y, cal -> viewModel.updateGazeFromEyeGestures(x, y, cal) },
+                            onBlink = { viewModel.notifyEyeGesturesBlink() },
+                            onStatus = { msg -> /* logged inside overlay */ },
+                            modifier = Modifier.size(1.dp)
+                        )
+
+                        // 凝視游標 + 眨眼掃描 overlay（眨眼掃描模式下游標自動隱藏）
+                        GazeCursorOverlay(eyeState = eyeState, activity = this@MainActivity)
+                        BlinkScanOverlay(viewModel = viewModel, eyeState = eyeState)
                     }
                 }
             }

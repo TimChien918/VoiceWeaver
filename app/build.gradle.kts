@@ -60,7 +60,7 @@ android {
   androidResources {
     // MediaPipe .task 模型若放進 assets/models，必須保持不壓縮；
     // 否則 Android 只能用 stream 讀，無法提供穩定檔案長度與快速複製。
-    noCompress += listOf("task", "bin", "gguf", "tflite")
+    noCompress += listOf("task", "bin", "gguf", "tflite", "wasm")
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
@@ -117,6 +117,7 @@ dependencies {
   implementation("com.alphacephei:vosk-android:0.3.75")
   implementation(libs.retrofit)
   implementation(libs.retrofit.converter.serialization)
+  implementation("androidx.webkit:webkit:1.11.0")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
