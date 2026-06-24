@@ -50,15 +50,13 @@ STATE_FILE = os.path.join(LOCAL_ROOT, ".sync_state.json")   # 本機基準快照
 IS_WIN = (os.name == "nt")
 ADB_BIN = "adb.exe" if IS_WIN else "adb"
 POPEN_KW = {"creationflags": 0x08000000} if IS_WIN else {}   # CREATE_NO_WINDOW（Windows 不彈黑窗）
-SUBDIRS = [
-    "user_models",
-    "ref_audio",
-    "GPT_weights_v2",
-    "GPT_weights_v4",
-    "SoVITS_weights_v2",
-    "SoVITS_weights_v4",
-    "GPT_SoVITS/pretrained_models",   # 語音基礎模型(~4.6G)：隨身帶，插上任何電腦都能合成語音
-]
+# 會自動同步的「頂層」資料夾前綴（聲音模型相關）。用前綴白名單避免誤掃 source/快取/暫存
+# (GPT_SoVITS 原始碼樹、Docker、TEMP、__pycache__…)。任何符合前綴的資料夾——含未來新版本
+# (GPT_weights_v3 / SoVITS_weights_v2Pro / *ProPlus…)、新錄的 ref_audio、新訓練的 user_models——
+# 都會自動納入，不必再維護寫死清單。這就是「新增檔案也會同步」的關鍵。
+SUBDIR_PREFIXES = ("GPT_weights", "SoVITS_weights", "ref_audio", "user_models")
+# 一定同步的巢狀特例：語音基礎模型(~4.6G)，隨身帶、插上任何電腦都能合成語音。
+EXTRA_SUBDIRS = ["GPT_SoVITS/pretrained_models"]
 
 
 def find_adb() -> str:
@@ -116,6 +114,27 @@ def adb_sh(adb: str, serial: str, cmd: str) -> str:
         return r.stdout
     except Exception:
         return ""
+
+
+def discover_subdirs(adb: str, serial: str) -> list[str]:
+    """聯集「電腦端」與「手機」voice_models 底下、符合白名單前綴的頂層資料夾，外加基礎模型特例。
+
+    取代過去寫死的清單——使用者新訓練/匯入任何版本的權重（v2Pro/v3/ProPlus…）或新錄音，
+    只要落在 SUBDIR_PREFIXES 命中的頂層資料夾，下次同步就會自動被發現並雙向同步。
+    """
+    found: set[str] = set(EXTRA_SUBDIRS)
+    # 本機頂層
+    if os.path.isdir(LOCAL_ROOT):
+        for name in os.listdir(LOCAL_ROOT):
+            if name.startswith(SUBDIR_PREFIXES) and os.path.isdir(os.path.join(LOCAL_ROOT, name)):
+                found.add(name)
+    # 手機頂層
+    out = adb_sh(adb, serial, f"ls -1 '{PHONE_ROOT}' 2>/dev/null")
+    for name in out.splitlines():
+        name = name.strip()
+        if name and name.startswith(SUBDIR_PREFIXES):
+            found.add(name)
+    return sorted(found)
 
 
 def phone_inventory(adb: str, serial: str, sub: str) -> dict[str, tuple[int, int]]:
@@ -275,6 +294,10 @@ def main() -> int:
     print(f"[sync] 裝置 {serial}：開始雙向同步 ↔ {PHONE_ROOT}", flush=True)
     adb_sh(adb, serial, f"mkdir -p '{PHONE_ROOT}'")
 
+    # 自動探索要同步的子資料夾（取代寫死清單，使新增的權重版本/錄音自動納入）
+    subdirs = discover_subdirs(adb, serial)
+    print(f"[sync] 同步資料夾（自動探索 {len(subdirs)}）：{', '.join(subdirs)}", flush=True)
+
     baseline = load_baseline()
     first_run = baseline is None
     if first_run:
@@ -283,7 +306,7 @@ def main() -> int:
     # 收集兩邊清單
     local_all: dict[str, dict] = {}
     phone_all: dict[str, dict] = {}
-    for sub in SUBDIRS:
+    for sub in subdirs:
         local_all[sub] = local_inventory(sub)
         phone_all[sub] = phone_inventory(adb, serial, sub)
 
@@ -293,7 +316,7 @@ def main() -> int:
     copy_push: list[tuple[str, str]] = []
     copy_pull: list[tuple[str, str]] = []
     skipped = 0
-    for sub in SUBDIRS:
+    for sub in subdirs:
         local, phone = local_all[sub], phone_all[sub]
         for rel in set(local) | set(phone):
             key = f"{sub}/{rel}"
@@ -330,7 +353,7 @@ def main() -> int:
 
     # 重建基準＝同步後實際存在的檔（兩邊應一致）
     present = set()
-    for sub in SUBDIRS:
+    for sub in subdirs:
         local = local_inventory(sub)
         phone = phone_inventory(adb, serial, sub)
         for rel in set(local) | set(phone):
