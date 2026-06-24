@@ -1756,16 +1756,16 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 if (settings.value.aacIntentImageEnabled) generateIntentImage(data.reconstructedText)
                 else clearIntentImage()
                 // 自動儲存至歷史紀錄
-                repository.insert(
-                    SpeechRecord(
-                        originalInput     = data.originalText,
-                        reconstructedText = data.reconstructedText,
-                        confidence        = "${"%.0f".format(data.confidence * 100)}%",
-                        locationTag       = currentVault.locationTag,
-                        visionTag         = currentVault.visionTags.joinToString("、"),
-                        timestamp         = data.timestamp
-                    )
+                val rec = SpeechRecord(
+                    originalInput     = data.originalText,
+                    reconstructedText = data.reconstructedText,
+                    confidence        = "${"%.0f".format(data.confidence * 100)}%",
+                    locationTag       = currentVault.locationTag,
+                    visionTag         = currentVault.visionTags.joinToString("、"),
+                    timestamp         = data.timestamp
                 )
+                repository.insert(rec)
+                CloudSync.pushHistory(rec.originalInput, rec.reconstructedText, rec.timestamp)
             } catch (e: Exception) {
                 _reconstructionState.value = ReconstructionUiState.Error(e.localizedMessage ?: "系統拋出未預期異常")
             } finally {

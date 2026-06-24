@@ -1,5 +1,11 @@
 package com.example.ui.training
 
+import android.Manifest
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,12 +14,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,7 +33,11 @@ import com.example.data.StoryPrompt
 import com.example.data.StoryTrainingLog
 import com.example.data.StoryTrainingLogDao
 import com.example.ui.theme.LocalAppPalette
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * 「圖片說故事」復健模式。
@@ -40,7 +52,7 @@ import kotlinx.coroutines.launch
  *   3. 按「請 AI 評論」→ 呼叫 [InferenceEngine.suggestPractice]（重用既有 API）給回饋
  *   4. 落地一筆 [StoryTrainingLog]（含 score / aiFeedback / positiveWords）
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun StoryTrainingScreen(
     developerMode: Boolean,
@@ -51,6 +63,32 @@ fun StoryTrainingScreen(
 ) {
     val p = LocalAppPalette.current
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val micPerm = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    var isListening by remember { mutableStateOf(false) }
+    var userText by remember { mutableStateOf("") }
+
+    // STT：用系統 RecognizerIntent（免金鑰、免模型）
+    val sttLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        isListening = false
+        val text = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull() ?: return@rememberLauncherForActivityResult
+        userText = if (userText.isBlank()) text else "$userText $text"
+    }
+
+    fun launchStt() {
+        if (!micPerm.status.isGranted) { micPerm.launchPermissionRequest(); return }
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) return
+        isListening = true
+        sttLauncher.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "請說出你的故事…")
+        })
+    }
 
     if (!developerMode) {
         LockedNotice(
@@ -69,7 +107,6 @@ fun StoryTrainingScreen(
 
     var promptIdx by remember { mutableIntStateOf(0) }
     val prompt = remember(promptIdx) { DefaultStoryPrompts[promptIdx % DefaultStoryPrompts.size] }
-    var userText by remember { mutableStateOf("") }
     var aiFeedback by remember { mutableStateOf<String?>(null) }
     var loadingAi by remember { mutableStateOf(false) }
     var lastScore by remember { mutableIntStateOf(0) }
@@ -117,7 +154,16 @@ fun StoryTrainingScreen(
                         unfocusedTextColor = p.textLight,
                         focusedBorderColor = p.neonCyan,
                         unfocusedBorderColor = p.neonCyan.copy(alpha = 0.4f)
-                    )
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { launchStt() }) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = "語音輸入",
+                                tint = if (isListening) p.neonCyan else p.textMuted
+                            )
+                        }
+                    }
                 )
             }
             item {

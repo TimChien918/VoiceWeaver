@@ -52,6 +52,9 @@ import com.example.data.PowerMode
 import com.example.ui.theme.LocalAppPalette
 import com.example.ui.theme.iosReadable
 import coil.compose.AsyncImage
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import java.io.File
 
 /**
@@ -59,7 +62,7 @@ import java.io.File
  * 區塊：視覺風格 / 耗能模式 / 介面語言 / 朗讀語速 / 字體大小 / 其他。
  * 所有變更立即寫入 DataStore；主題、語言、語速立即生效（語言透過 LocaleProvider）。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: VoiceWeaverViewModel,
@@ -69,6 +72,7 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val deviceRam by viewModel.deviceRam.collectAsState()
     val deviceTier by viewModel.deviceTier.collectAsState()
+    val cameraPerm = rememberPermissionState(android.Manifest.permission.CAMERA)
     val modelDownloadState by viewModel.modelDownloadState.collectAsState()
     val modelProbeState by viewModel.modelProbeState.collectAsState()
     val metrics by viewModel.deviceMetrics.collectAsState()
@@ -470,7 +474,12 @@ fun SettingsScreen(
                         title = "眼動控制",
                         sub = "前鏡頭估算凝視位置；停留選取，像 iPhone 眼動控制。",
                         checked = settings.eyeControlEnabled,
-                        onChange = { viewModel.setEyeControlEnabled(it) }
+                        onChange = { on ->
+                            if (on && !cameraPerm.status.isGranted) {
+                                cameraPerm.launchPermissionRequest()
+                            }
+                            viewModel.setEyeControlEnabled(on)
+                        }
                     )
                     if (settings.eyeControlEnabled) {
                         Spacer(Modifier.height(6.dp))

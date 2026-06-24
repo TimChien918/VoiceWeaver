@@ -133,6 +133,18 @@ object CloudSync {
         return ImageApiStore.encode(list)
     }
 
+    // ── 推送單筆歷史（與網頁 users/{uid}/history 同結構）──
+    fun pushHistory(original: String, reconstructed: String, ts: Long) {
+        val u = uid ?: return
+        val rec = hashMapOf<String, Any>(
+            "original" to original,
+            "reconstructed" to reconstructed,
+            "ts" to ts
+        )
+        db.collection("users").document(u).collection("history").add(rec)
+            .addOnFailureListener { Log.w(TAG, "pushHistory failed", it) }
+    }
+
     // Firestore 要原生 List<Map>，JSONArray 互轉
     private fun jsonToList(a: JSONArray): List<Map<String, Any?>> {
         val out = ArrayList<Map<String, Any?>>()
