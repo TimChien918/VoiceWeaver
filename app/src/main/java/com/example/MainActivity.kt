@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.ai.VoiceWeaverViewModel
 import com.example.ui.AacScreen
+import com.example.ui.EyeCalibrationScreen
 import com.example.ui.HistoryScreen
 import com.example.ui.LocaleProvider
 import com.example.ui.RehabScreen
@@ -158,7 +159,14 @@ class MainActivity : ComponentActivity() {
                             composable("settings") {
                                 SettingsScreen(
                                     viewModel = viewModel,
-                                    onAdvanced = { navController.go("settings_extended") }
+                                    onAdvanced = { navController.go("settings_extended") },
+                                    onStartCalibration = { navController.go("eye_calibration") }
+                                )
+                            }
+                            composable("eye_calibration") {
+                                EyeCalibrationScreen(
+                                    manager = viewModel.eyeControlManager,
+                                    onDone = { navController.popBackStack() }
                                 )
                             }
                             composable("report") {

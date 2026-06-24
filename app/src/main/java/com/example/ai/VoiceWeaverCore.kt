@@ -300,7 +300,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var telemetryJob: Job? = null
     private var eyeScanJob: Job? = null
     private var autoModelRepairStarted = false
-    private val eyeControlManager = EyeControlManager(
+    val eyeControlManager = EyeControlManager(
         context = application,
         onBlink = { selectCurrentEyeScanChip() },
         onGaze = { x, y ->

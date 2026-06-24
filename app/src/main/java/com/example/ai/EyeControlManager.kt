@@ -21,6 +21,7 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.math.abs
 import kotlin.math.PI
+import kotlin.math.sqrt
 
 /**
  * 1‑Euro 濾波器：靜止時很穩（抖動小），移動時很跟手（延遲低）。
@@ -55,6 +56,74 @@ private class OneEuroFilter(
     fun reset() { xPrev = Float.NaN; dxPrev = 0f }
 }
 
+/**
+ * 仿射校準矩陣（OptiKey / EyeGestures 作法）。
+ * 從 N 組 (eyeX,eyeY) → (screenX,screenY) 對應點，用最小平方法解：
+ *   screenX = a0 + a1*eyeX + a2*eyeY
+ *   screenY = b0 + b1*eyeX + b2*eyeY
+ * 5 點校準（中心＋四角）使準度遠優於單點 EMA 中性點。
+ */
+class GazeCalibration {
+    private data class Point(val ex: Float, val ey: Float, val sx: Float, val sy: Float)
+    private val pts = mutableListOf<Point>()
+    // 仿射係數 [a0,a1,a2], [b0,b1,b2]（先用恆等映射）
+    private var ax = floatArrayOf(0.5f, 1f, 0f)
+    private var ay = floatArrayOf(0.5f, 0f, 1f)
+    val isCalibrated get() = pts.size >= 3
+
+    fun addPoint(eyeX: Float, eyeY: Float, screenX: Float, screenY: Float) {
+        pts += Point(eyeX, eyeY, screenX, screenY)
+        if (pts.size >= 3) fit()
+    }
+
+    fun clear() { pts.clear(); ax = floatArrayOf(0.5f, 1f, 0f); ay = floatArrayOf(0.5f, 0f, 1f) }
+
+    fun map(eyeX: Float, eyeY: Float): Pair<Float, Float> {
+        val sx = (ax[0] + ax[1]*eyeX + ax[2]*eyeY).coerceIn(0f, 1f)
+        val sy = (ay[0] + ay[1]*eyeX + ay[2]*eyeY).coerceIn(0f, 1f)
+        return sx to sy
+    }
+
+    // 最小平方法（正規方程 A^T A x = A^T b，3x3 手解）
+    private fun fit() {
+        val n = pts.size.toFloat()
+        var s1=0f; var sex=0f; var sey=0f
+        var sex2=0f; var sey2=0f; var sexey=0f
+        var ssx=0f; var ssexsx=0f; var sseysx=0f
+        var ssy=0f; var ssexsy=0f; var sseysy=0f
+        for (p in pts) {
+            s1 += 1f; sex += p.ex; sey += p.ey
+            sex2 += p.ex*p.ex; sey2 += p.ey*p.ey; sexey += p.ex*p.ey
+            ssx += p.sx; ssexsx += p.ex*p.sx; sseysx += p.ey*p.sx
+            ssy += p.sy; ssexsy += p.ex*p.sy; sseysy += p.ey*p.sy
+        }
+        // A^T A = [[s1,sex,sey],[sex,sex2,sexey],[sey,sexey,sey2]]
+        val M = arrayOf(
+            floatArrayOf(s1,  sex,   sey),
+            floatArrayOf(sex, sex2,  sexey),
+            floatArrayOf(sey, sexey, sey2)
+        )
+        ax = solve3(M, floatArrayOf(ssx,  ssexsx,  sseysx))  ?: ax
+        ay = solve3(M, floatArrayOf(ssy,  ssexsy,  sseysy))  ?: ay
+    }
+
+    // 高斯消去 3x3 Ax=b → x（失敗回 null）
+    private fun solve3(A: Array<FloatArray>, b: FloatArray): FloatArray? {
+        val a = Array(3){ r -> floatArrayOf(A[r][0], A[r][1], A[r][2], b[r]) }
+        for (col in 0..2) {
+            val pivot = (col..2).maxByOrNull { abs(a[it][col]) } ?: return null
+            val tmp = a[col]; a[col] = a[pivot]; a[pivot] = tmp
+            if (abs(a[col][col]) < 1e-9f) return null
+            val inv = 1f / a[col][col]
+            for (r in 0..2) if (r != col) {
+                val f = a[r][col] * inv
+                for (c in col..3) a[r][c] -= f * a[col][c]
+            }
+        }
+        return floatArrayOf(a[0][3]/a[0][0], a[1][3]/a[1][1], a[2][3]/a[2][2])
+    }
+}
+
 enum class EyeInteractionMode {
     GAZE_DWELL,
     BLINK_SCAN
@@ -86,14 +155,17 @@ class EyeControlManager(
     // ── 凝視濾波 / 校準狀態 ───────────────────────────────────────
     private val euroX = OneEuroFilter()
     private val euroY = OneEuroFilter()
-    // 中性中心（隱式校準）：使用者平均視線約等於螢幕中央 → 用很慢的 EMA 追蹤，
-    // 之後以「相對中性中心的偏移」對應到螢幕，免除每人/相機位置的系統性偏差。
+    // 仿射校準（5 點），未校準前用 EMA 隱式中心備援
+    val calibration = GazeCalibration()
     private var neutralX = Float.NaN
     private var neutralY = Float.NaN
     @Volatile private var recenterRequested = false
-    // X/Y 靈敏度可不同（垂直眼動幅度較小，給高一點）
     @Volatile var sensitivityX = 2.4f
     @Volatile var sensitivityY = 3.0f
+    // ── 校準採樣（校準畫面呼叫 beginCalibSample/endCalibSample）─
+    @Volatile private var calibSampling = false
+    private val calibSampleBuf = mutableListOf<Pair<Float,Float>>()  // (eyeX, eyeY)
+    private var calibTargetScreen: Pair<Float,Float>? = null
 
     // ── 眨眼偵測狀態（以個人睜眼基線為準，避免向下看被誤判）─────────
     private var openBaseline = 0.30f      // 睜眼時的眼高比基線（持續學習）
@@ -156,8 +228,26 @@ class EyeControlManager(
         onStatus("眼動控制已停止")
     }
 
-    /** 使用者請求「置中校準」：下一個睜眼影格的視線會被設為螢幕中央。 */
+    /** 置中（單點快速校準）*/
     fun recenter() { recenterRequested = true }
+
+    /** 開始為校準點採樣（校準畫面呼叫；持續 ~1.5 秒後呼叫 endCalibSample）*/
+    fun beginCalibSample(screenX: Float, screenY: Float) {
+        calibSampleBuf.clear()
+        calibTargetScreen = screenX to screenY
+        calibSampling = true
+    }
+    /** 結束採樣，用中位數加入校準模型。*/
+    fun endCalibSample() {
+        calibSampling = false
+        val buf = calibSampleBuf.toList()
+        val target = calibTargetScreen ?: return
+        if (buf.size < 5) return
+        val medX = buf.map { it.first }.sorted()[buf.size / 2]
+        val medY = buf.map { it.second }.sorted()[buf.size / 2]
+        calibration.addPoint(medX, medY, target.first, target.second)
+    }
+    fun clearCalibration() { calibration.clear() }
 
     private fun analyze(proxy: ImageProxy) {
         try {
@@ -194,16 +284,25 @@ class EyeControlManager(
             // ── 凝視游標：閉眼/半閉時「凍結」游標（gating），不更新位置避免跳動 ──
             if (closedNow) { euroX.reset(); euroY.reset(); return }
 
-            // 隱式校準：用很慢的 EMA 追蹤中性中心；或使用者按了置中。
-            if (recenterRequested || neutralX.isNaN()) {
-                neutralX = rawX; neutralY = rawY; recenterRequested = false
-            } else {
-                neutralX += (rawX - neutralX) * 0.004f
-                neutralY += (rawY - neutralY) * 0.004f
-            }
+            // 校準畫面採樣中 → 收集原始眼位，不更新游標
+            if (calibSampling) { calibSampleBuf += rawX to rawY; return }
 
-            val cx = ((rawX - neutralX) * sensitivityX + 0.5f).coerceIn(0f, 1f)
-            val cy = ((rawY - neutralY) * sensitivityY + 0.5f).coerceIn(0f, 1f)
+            val cx: Float; val cy: Float
+            if (calibration.isCalibrated) {
+                // 仿射映射（5 點校準後）
+                val (mx, my) = calibration.map(rawX, rawY)
+                cx = mx; cy = my
+            } else {
+                // 未校準備援：EMA 中性中心 + 固定靈敏度
+                if (recenterRequested || neutralX.isNaN()) {
+                    neutralX = rawX; neutralY = rawY; recenterRequested = false
+                } else {
+                    neutralX += (rawX - neutralX) * 0.004f
+                    neutralY += (rawY - neutralY) * 0.004f
+                }
+                cx = ((rawX - neutralX) * sensitivityX + 0.5f).coerceIn(0f, 1f)
+                cy = ((rawY - neutralY) * sensitivityY + 0.5f).coerceIn(0f, 1f)
+            }
             val t = System.nanoTime()
             onGaze(euroX.filter(cx, t), euroY.filter(cy, t))
         } catch (e: Exception) {
