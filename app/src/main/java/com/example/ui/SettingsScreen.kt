@@ -72,7 +72,16 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val deviceRam by viewModel.deviceRam.collectAsState()
     val deviceTier by viewModel.deviceTier.collectAsState()
+    var pendingEyeEnable by remember { mutableStateOf(false) }
     val cameraPerm = rememberPermissionState(android.Manifest.permission.CAMERA)
+    // 等權限授予後才真正啟動眼控（避免先啟動後權限尚未授予的競爭）
+    LaunchedEffect(cameraPerm.status.isGranted) {
+        if (cameraPerm.status.isGranted && pendingEyeEnable) {
+            viewModel.setEyeControlEnabled(true)
+            viewModel.retryEyeControl()
+            pendingEyeEnable = false
+        }
+    }
     val modelDownloadState by viewModel.modelDownloadState.collectAsState()
     val modelProbeState by viewModel.modelProbeState.collectAsState()
     val metrics by viewModel.deviceMetrics.collectAsState()
@@ -476,9 +485,12 @@ fun SettingsScreen(
                         checked = settings.eyeControlEnabled,
                         onChange = { on ->
                             if (on && !cameraPerm.status.isGranted) {
+                                pendingEyeEnable = true
                                 cameraPerm.launchPermissionRequest()
+                            } else {
+                                pendingEyeEnable = false
+                                viewModel.setEyeControlEnabled(on)
                             }
-                            viewModel.setEyeControlEnabled(on)
                         }
                     )
                     if (settings.eyeControlEnabled) {

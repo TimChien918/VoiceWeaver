@@ -187,6 +187,7 @@ class EyeControlManager(
         }
 
         runCatching {
+            Log.d(TAG, "start(): binding camera...")
             val options = FaceLandmarker.FaceLandmarkerOptions.builder()
                 .setBaseOptions(BaseOptions.builder().setModelAssetPath(ASSET_FACE_MODEL).build())
                 .setRunningMode(RunningMode.IMAGE)
@@ -215,7 +216,11 @@ class EyeControlManager(
                 )
             }
             isRunning = true
+            Log.d(TAG, "start(): camera bound, running")
             onStatus("眼動控制已啟動：凝視字卡停留即可選取")
+        }.onFailure { e ->
+            Log.e(TAG, "start() failed: ${e.javaClass.simpleName}: ${e.message}", e)
+            onStatus("眼動啟動失敗：${e.message ?: e.javaClass.simpleName}")
         }
     }
 

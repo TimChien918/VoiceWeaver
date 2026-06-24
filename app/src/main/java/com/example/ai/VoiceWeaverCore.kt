@@ -1604,10 +1604,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         telemetryJob = null
     }
 
+    fun retryEyeControl() { refreshEyeControlLifecycle() }
     private fun refreshEyeControlLifecycle() {
-        val shouldRun = settings.value.eyeControlEnabled &&
-            ((rehabScreenVisible && _rehabState.value.isActive) || aacScreenVisible)
-        if (shouldRun) startEyeControl() else stopEyeControl()
+        // 相機只需要眼控開啟就啟動（不限畫面）；凝視選取邏輯仍限定 rehab/aac。
+        if (settings.value.eyeControlEnabled) startEyeControl() else stopEyeControl()
     }
 
     private fun startEyeControl() {
