@@ -227,6 +227,7 @@ class MainActivity : ComponentActivity() {
                             onGaze = { x, y, cal -> viewModel.updateGazeFromEyeGestures(x, y, cal) },
                             onBlink = { viewModel.notifyEyeGesturesBlink() },
                             onStatus = { /* NoseTrackerOverlay already logs */ },
+                            onReady = { wv -> eyeGesturesWebViewRef = wv },
                             modifier = Modifier
                                 .requiredSize(2.dp)
                                 .alpha(0.01f)

@@ -40,6 +40,7 @@ fun EyeGesturesOverlay(
     onGaze: (x: Float, y: Float, calibrated: Boolean) -> Unit,
     onBlink: () -> Unit,
     onStatus: (String) -> Unit = {},
+    onReady: (WebView?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!enabled) return
@@ -47,8 +48,12 @@ fun EyeGesturesOverlay(
     val context = LocalContext.current
     val webView = remember { buildEyeGesturesWebView(context, onGaze, onBlink, onStatus) }
 
-    DisposableEffect(Unit) {
-        onDispose { webView.destroy() }
+    DisposableEffect(webView) {
+        onReady(webView)              // 把 WebView 交給呼叫方（重新置中要用 evaluateJavascript）
+        onDispose {
+            onReady(null)             // 清掉呼叫方持有的參考，避免操作已銷毀的 WebView
+            webView.destroy()
+        }
     }
 
     // WebView 必須保持 VISIBLE（rAF 才會持續送幀）；由呼叫方用 Modifier 把它移到畫面外/縮到極小。
