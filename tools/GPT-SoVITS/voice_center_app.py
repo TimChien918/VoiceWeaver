@@ -897,6 +897,17 @@ class App:
                                    font=(FONT_MONO, SZ_SMALL), anchor="w")
         self.conn_label.pack(anchor="w", pady=(6, 0)); self._track(self.conn_label, "muted")
 
+        # 無線同步手機 IP（可編輯 + 自動填入）
+        wf = tk.Frame(conn_card); wf.pack(fill="x", pady=(8, 0)); self._track(wf, "panel")
+        wl = tk.Label(wf, text="無線同步手機 IP：", font=(FONT_UI, SZ_SMALL))
+        wl.pack(side="left"); self._track(wl, "fg")
+        self.phone_ip_var = tk.StringVar(value=self._load_phone_ip())
+        self.phone_ip_entry = tk.Entry(wf, textvariable=self.phone_ip_var,
+                                       font=(FONT_MONO, SZ_SMALL), width=16, relief="solid", bd=1)
+        self.phone_ip_entry.pack(side="left", padx=6)
+        self.phone_ip_var.trace_add("write", lambda *_: self._save_phone_ip(self.phone_ip_var.get()))
+        self._btn(wf, "自動偵測", self.autodetect_phone_ip, C_BLUE).pack(side="left", padx=4)
+
         # 操作按鈕
         act = tk.Frame(parent); act.pack(fill="x", padx=20, pady=(0, 8)); self._track(act, "bg")
         self._btn(act, "🔁  同步聲音模型", self.manual_sync, C_BLUE).pack(
@@ -1288,9 +1299,15 @@ class App:
     PHONE_IP_FILE = os.path.join(ROOT, ".phone_wifi")
 
     def _save_phone_ip(self, ip: str) -> None:
+        ip = (ip or "").strip()
         try:
             with open(self.PHONE_IP_FILE, "w", encoding="utf-8") as f:
-                f.write(ip.strip())
+                f.write(ip)
+        except Exception:
+            pass
+        try:
+            if ip and hasattr(self, "phone_ip_var") and self.phone_ip_var.get().strip() != ip:
+                self.root.after(0, lambda: self.phone_ip_var.set(ip))
         except Exception:
             pass
 
@@ -1300,6 +1317,16 @@ class App:
                 return f.read().strip()
         except Exception:
             return ""
+
+    def _current_ip_field(self) -> str:
+        """UI 欄位目前的手機 IP（使用者可手動改）；沒有就回記憶檔。"""
+        try:
+            v = self.phone_ip_var.get().strip()
+            if v:
+                return v
+        except Exception:
+            pass
+        return self._load_phone_ip()
 
     def _usb_serial(self) -> str:
         """目前 USB 裝置序號（無線 serial 含 . 或 :）；無則空字串。"""
@@ -1316,21 +1343,97 @@ class App:
             pass
         return ""
 
+    def _read_wlan_ip(self, serial: str) -> str:
+        """透過 adb 讀手機 wlan0 的 IPv4（USB 或已連線的無線裝置皆可）。"""
+        if not self.adb or not serial:
+            return ""
+        try:
+            out = subprocess.run([self.adb, "-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0"],
+                                 capture_output=True, text=True, timeout=6, **POPEN_KW).stdout
+            m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
+            return m.group(1) if m else ""
+        except Exception:
+            return ""
+
+    def _scan_lan_for_adb(self) -> str:
+        """掃描電腦所在區網的 :5555（曾開過無線 adb 的手機），回傳第一個開埠的 IP。"""
+        base = lan_ip()
+        if not base or base.count(".") != 3:
+            return ""
+        prefix = base.rsplit(".", 1)[0] + "."
+        self_last = base.rsplit(".", 1)[1]
+
+        def check(host):
+            if host.endswith("." + self_last):
+                return ""
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.25)
+                    if s.connect_ex((host, 5555)) == 0:
+                        return host
+            except Exception:
+                pass
+            return ""
+
+        import concurrent.futures
+        hosts = [prefix + str(i) for i in range(1, 255)]
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ex:
+                for r in ex.map(check, hosts):
+                    if r:
+                        return r
+        except Exception:
+            pass
+        return ""
+
+    def _mdns_phone_ip(self) -> str:
+        """Android 11+ 無線偵錯會用 mDNS 廣播；用 adb mdns services 找手機 IP。"""
+        if not self.adb:
+            return ""
+        try:
+            out = subprocess.run([self.adb, "mdns", "services"], capture_output=True, text=True, timeout=6, **POPEN_KW).stdout
+            for l in out.splitlines():
+                if "_adb" in l:
+                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", l)
+                    if m:
+                        return m.group(1)
+        except Exception:
+            pass
+        return ""
+
+    def _autodetect_phone_ip_blocking(self) -> str:
+        """全自動偵測手機 IP：USB 讀 wlan0 → 區網掃 :5555 → mDNS → 記憶檔。"""
+        usb = self._usb_serial()
+        if usb:
+            ip = self._read_wlan_ip(usb)
+            if ip:
+                return ip
+        return self._scan_lan_for_adb() or self._mdns_phone_ip() or self._load_phone_ip()
+
+    def autodetect_phone_ip(self):
+        """背景自動偵測並填入 IP 欄位（UI 按鈕 / 啟動時呼叫）。"""
+        self.set_status("自動偵測手機 IP 中…")
+        def work():
+            ip = self._autodetect_phone_ip_blocking()
+            if ip:
+                self._save_phone_ip(ip)
+                self.root.after(0, lambda: (self.phone_ip_var.set(ip), self.set_status(f"已自動填入手機 IP：{ip}")))
+            else:
+                self.root.after(0, lambda: self.set_status("找不到手機 IP——請用 USB 接一次，或在欄位手動輸入"))
+        threading.Thread(target=work, daemon=True).start()
+
     def _arm_wireless(self, serial: str) -> None:
         """USB 連接時：讀手機 Wi-Fi IP 並開啟無線 adb（埠 5555），記住端點供日後無線同步。"""
         if not self.adb or not serial:
             return
+        ip = self._read_wlan_ip(serial)
+        if not ip:
+            return
         try:
-            ipout = subprocess.run([self.adb, "-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0"],
-                                   capture_output=True, text=True, timeout=6, **POPEN_KW).stdout
-            m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", ipout)
-            if not m:
-                return
-            ip = m.group(1)
             subprocess.run([self.adb, "-s", serial, "tcpip", "5555"], capture_output=True, timeout=8, **POPEN_KW)
-            self._save_phone_ip(ip)
         except Exception:
             pass
+        self._save_phone_ip(ip)
 
     def _maybe_autosync(self):
         if not self.adb: return
@@ -1339,33 +1442,41 @@ class App:
                 usb = self._usb_serial()
                 if usb:
                     self.root.after(0, self.sync_models)                 # 有線（USB）
-                    self._arm_wireless(usb)                              # 學習手機 Wi-Fi 端點
+                    self._arm_wireless(usb)                              # 學習手機 Wi-Fi 端點＋填欄位
+                    return
+                ip = self._autodetect_phone_ip_blocking()                # 沒 USB → 全自動偵測
+                if ip:
+                    self._save_phone_ip(ip)
+                    self.root.after(0, lambda: (self.phone_ip_var.set(ip),
+                                                self.set_status(f"未接 USB，自動無線同步（{ip}）…"),
+                                                self.sync_models(ip)))
                 else:
-                    ip = self._load_phone_ip()
-                    if ip:
-                        self.root.after(0, lambda: self.sync_models(ip))  # 無線（Wi-Fi）
-                    else:
-                        self.root.after(0, lambda: self.set_status(
-                            "提示：先用 USB 接一次（會自動開啟無線），之後免插線即可無線同步；或按「🔁 同步」"))
+                    self.root.after(0, lambda: self.set_status(
+                        "提示：先用 USB 接一次（會自動開啟無線並記住 IP），之後免插線即可全自動無線同步"))
             except Exception: pass
         threading.Thread(target=_check, daemon=True).start()
 
     def manual_sync(self):
-        """手動同步：USB 優先；沒插線則用記住的手機 Wi-Fi IP，再沒有就詢問 IP。"""
+        """手動同步：USB 優先；沒插線則用 IP 欄位（可手動改），空白就先自動偵測。"""
         usb = self._usb_serial()
         if usb:
             self.sync_models()
             threading.Thread(target=lambda: self._arm_wireless(usb), daemon=True).start()
             return
-        ip = self._load_phone_ip()
-        if not ip:
-            ip = simpledialog.askstring("無線同步", "未偵測到 USB。\n請輸入手機 Wi-Fi IP（例 192.168.1.50）：", parent=self.root)
-            if ip and ip.strip():
-                self._save_phone_ip(ip.strip())
-        if ip and ip.strip():
-            self.sync_models(ip.strip())
-        else:
-            self.set_status("已取消：沒有 USB 也沒有手機 IP")
+        ip = self._current_ip_field()
+        if ip:
+            self._save_phone_ip(ip)
+            self.sync_models(ip)
+            return
+        self.set_status("未接 USB 且 IP 欄位空白，自動偵測中…")
+        def work():
+            found = self._autodetect_phone_ip_blocking()
+            if found:
+                self._save_phone_ip(found)
+                self.root.after(0, lambda: (self.phone_ip_var.set(found), self.sync_models(found)))
+            else:
+                self.root.after(0, lambda: self.set_status("找不到手機——請在 IP 欄位手動輸入，或用 USB 接一次"))
+        threading.Thread(target=work, daemon=True).start()
 
     def sync_models(self, wifi_ip: str = ""):
         script = os.path.join(ROOT, "sync_voice_models.py")
