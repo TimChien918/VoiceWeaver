@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import android.util.Log
 import com.example.data.GptSovitVoiceMode
 import kotlinx.coroutines.CoroutineScope
@@ -92,13 +93,27 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     private val _selectedVoice = MutableStateFlow(availablePiperVoices[0])
     val selectedVoice: StateFlow<PiperVoiceProfile> = _selectedVoice.asStateFlow()
 
+    // 是否已嘗試用 Google TTS 引擎（失敗時要退回預設引擎，避免完全發不出聲）
+    private var triedGoogleEngine = false
+
     init {
         initializeSystemTts()
     }
 
+    private fun isPackageInstalled(pkg: String): Boolean = try {
+        context.packageManager.getPackageInfo(pkg, 0); true
+    } catch (_: Throwable) { false }
+
     private fun initializeSystemTts() {
         try {
-            tts = TextToSpeech(context, this)
+            // 優先用 Google TTS 引擎（內建神經語音最自然）；沒裝才用系統預設引擎。
+            val google = "com.google.android.tts"
+            if (isPackageInstalled(google)) {
+                triedGoogleEngine = true
+                tts = TextToSpeech(context, this, google)
+            } else {
+                tts = TextToSpeech(context, this)
+            }
         } catch (t: Throwable) {
             Log.e("TtsModule", "Failed to create TextToSpeech instance: ${t.message}")
         }
@@ -116,6 +131,16 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                 }
             }
         } else {
+            // Google 引擎初始化失敗（被停用/異常）→ 退回系統預設引擎，確保仍能發聲。
+            if (triedGoogleEngine) {
+                triedGoogleEngine = false
+                Log.w("TtsModule", "Google TTS 初始化失敗，改用系統預設引擎")
+                try { tts?.shutdown() } catch (_: Throwable) {}
+                tts = try { TextToSpeech(context, this) } catch (t: Throwable) {
+                    Log.e("TtsModule", "預設引擎也建立失敗：${t.message}"); null
+                }
+                return
+            }
             _isInitialized.value = false
             Log.e("TtsModule", "Initialization of TTS engine failed. Status code: $status")
         }
@@ -123,13 +148,18 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
     private fun configureLanguage(engine: TextToSpeech) {
         try {
-            // Configure language locale to traditional Chinese/Taiwanese
-            val result = engine.setLanguage(Locale.CHINESE)
+            // 語系：台灣中文優先（最貼近使用者口音），退而求其次一般中文。
+            val zhTW = Locale("zh", "TW")
+            val result = engine.setLanguage(zhTW)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                // Secondary fallback
-                engine.setLanguage(Locale.TAIWAN)
+                if (engine.setLanguage(Locale.TAIWAN) < TextToSpeech.LANG_AVAILABLE) {
+                    engine.setLanguage(Locale.CHINESE)
+                }
             }
-            
+
+            // 關鍵：主動挑選裝置上「最自然」的中文語音（神經/高品質），而非預設機械音。
+            selectBestVoice(engine)
+
             // Apply speed and pitch defaults
             engine.setSpeechRate(_speechRate.value)
             engine.setPitch(_speechPitch.value)
@@ -137,6 +167,47 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             Log.i("TtsModule", "Local Offline TextToSpeech engine initialized and configured.")
         } catch (t: Throwable) {
             Log.e("TtsModule", "Error configuring TTS engine: ${t.message}")
+        }
+    }
+
+    /**
+     * 從系統所有可用語音中，挑出指定語言「最像人類」的一個。
+     *
+     * 排序準則（由重到輕）：
+     *   1. 品質高者優先（Google 新版內建神經語音 QUALITY_VERY_HIGH，比預設音自然非常多）。
+     *   2. 不需網路者優先 → 即使手機離線也能發聲、且穩定不卡。
+     *   3. 台灣（TW）口音優先。
+     * 找不到符合語言的就維持引擎預設，不致發不出聲。
+     */
+    private fun selectBestVoice(engine: TextToSpeech) {
+        try {
+            val voices: Set<Voice> = engine.voices ?: return
+            val candidates = voices.filter { v ->
+                val lang = runCatching { v.locale.language.lowercase() }.getOrDefault("")
+                // zh / cmn（部分引擎用 cmn 表中文官話）；排除尚未安裝的語音
+                (lang == "zh" || lang == "cmn") &&
+                    !v.features.orEmpty().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
+            }
+            if (candidates.isEmpty()) {
+                Log.i("TtsModule", "找不到中文語音，沿用引擎預設")
+                return
+            }
+            // 先偏好「離線可用」這組（保證沒網路也能講）；若整組都需網路才退而用網路語音。
+            val offline = candidates.filter { !it.isNetworkConnectionRequired }
+            val pool = if (offline.isNotEmpty()) offline else candidates
+            val best = pool.maxWithOrNull(
+                compareBy<Voice>({ it.quality })                                   // 品質高優先
+                    .thenBy { if (it.locale.country.uppercase() == "TW") 1 else 0 } // 台灣口音優先
+            )
+            if (best != null) {
+                engine.voice = best
+                Log.i(
+                    "TtsModule",
+                    "已選用最自然語音：${best.name}（品質=${best.quality}、需網路=${best.isNetworkConnectionRequired}、${best.locale}）"
+                )
+            }
+        } catch (t: Throwable) {
+            Log.e("TtsModule", "selectBestVoice 失敗，沿用預設：${t.message}")
         }
     }
 
