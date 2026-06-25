@@ -252,8 +252,10 @@ class RegexTemplateEngine : InferenceEngine {
  */
 object InferenceEngineFactory {
 
-    private const val ENABLE_GEMINI_NANO = false
-    private const val ENABLE_MEDIAPIPE_LLM = false
+    // 兩者皆有「可用性把關」：Gemini Nano 需 AICore（isAvailable）、MediaPipe 需模型就緒（isModelReady）；
+    // 沒條件的裝置會自動退回 RegexTemplateEngine，開啟旗標不影響無模型/無 AICore 的使用者。
+    private const val ENABLE_GEMINI_NANO = true
+    private const val ENABLE_MEDIAPIPE_LLM = true
 
     fun createEngine(tier: DeviceTier, context: android.content.Context): InferenceEngine =
         when (tier) {
@@ -799,13 +801,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         _cloudUser.value = null; _cloudStatus.value = "已登出"
     }
     private fun pullCloud() {
-        CloudSync.pull { llm, img, tg, chat ->
+        CloudSync.pull { llm, img, tg, chat, places ->
             viewModelScope.launch {
                 suppressPushUntil = System.currentTimeMillis() + 4000L   // 拉下來後短暫不要又推回去
                 if (!llm.isNullOrBlank()) settingsRepo.setLlmApis(llm)
                 if (!img.isNullOrBlank()) settingsRepo.setImageApis(img)
                 if (!tg.isNullOrBlank()) settingsRepo.setApiKeyTelegramBotToken(tg)
                 if (!chat.isNullOrBlank()) settingsRepo.setEmergencyChatId(chat)
+                if (!places.isNullOrBlank()) settingsRepo.setApiKeyGooglePlaces(places)
                 _cloudStatus.value = "已從雲端同步金鑰/供應商"
             }
         }
@@ -872,7 +875,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 val cur = s.llmApis + "" + s.imageApis + "" + s.apiKeyTelegramBotToken + "" + s.emergencyChatId
                 if (cur != key && CloudSync.isSignedIn && System.currentTimeMillis() > suppressPushUntil) {
                     key = cur
-                    runCatching { CloudSync.push(s.llmApis, s.imageApis, s.apiKeyTelegramBotToken, s.emergencyChatId) }
+                    runCatching { CloudSync.push(s.llmApis, s.imageApis, s.apiKeyTelegramBotToken, s.emergencyChatId, s.apiKeyGooglePlaces) }
                 } else if (cur != key) {
                     key = cur   // 未登入也記住，避免登入後一次大量推送舊狀態
                 }

@@ -61,12 +61,12 @@ object CloudSync {
     }
 
     // ── 推送：Android 清單 → Firestore（web 結構）──
-    fun push(llmJson: String, imgJson: String, tgToken: String, tgChat: String) {
+    fun push(llmJson: String, imgJson: String, tgToken: String, tgChat: String, googlePlaces: String = "") {
         val u = uid ?: return
         val doc = hashMapOf<String, Any>(
             "llmApis" to jsonToList(llmToCloud(llmJson)),
             "imageApis" to jsonToList(imgToCloud(imgJson)),
-            "apiKeys" to hashMapOf("tgtoken" to tgToken, "tgchat" to tgChat),
+            "apiKeys" to hashMapOf("tgtoken" to tgToken, "tgchat" to tgChat, "googlePlaces" to googlePlaces),
             "updatedAt" to System.currentTimeMillis()
         )
         db.collection("users").document(u).set(doc, SetOptions.merge())
@@ -74,10 +74,10 @@ object CloudSync {
     }
 
     // ── 拉取：Firestore → 回呼（呼叫端寫回 DataStore）──
-    fun pull(onApply: (llmJson: String?, imgJson: String?, tgToken: String?, tgChat: String?) -> Unit) {
+    fun pull(onApply: (llmJson: String?, imgJson: String?, tgToken: String?, tgChat: String?, googlePlaces: String?) -> Unit) {
         val u = uid ?: return
         db.collection("users").document(u).get().addOnSuccessListener { snap ->
-            if (!snap.exists()) { onApply(null, null, null, null); return@addOnSuccessListener }
+            if (!snap.exists()) { onApply(null, null, null, null, null); return@addOnSuccessListener }
             val llm = (snap.get("llmApis") as? List<*>)?.let { listToJson(it) }
             val img = (snap.get("imageApis") as? List<*>)?.let { listToJson(it) }
             val ak = snap.get("apiKeys") as? Map<*, *>
@@ -85,7 +85,8 @@ object CloudSync {
                 llm?.let { llmFromCloud(it) },
                 img?.let { imgFromCloud(it) },
                 ak?.get("tgtoken") as? String,
-                ak?.get("tgchat") as? String
+                ak?.get("tgchat") as? String,
+                ak?.get("googlePlaces") as? String
             )
         }.addOnFailureListener { Log.w(TAG, "pull failed", it) }
     }
