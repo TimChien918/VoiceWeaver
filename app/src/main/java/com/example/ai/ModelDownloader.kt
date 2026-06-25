@@ -28,18 +28,25 @@ class ModelDownloader(private val context: Context) {
         private const val TAG = "ModelDownloader"
 
         /**
-         * 公開下載 URL 清單（依序嘗試，無需帳號或 API 金鑰）
+         * 公開下載 URL 清單（依序嘗試；某個失敗會自動換下一個）。
          *
-         * 採用 HuggingFace litert-community 的 Qwen2.5-1.5B-Instruct（Apache 2.0 授權，**非 gated**）。
-         * 已實測可直接下載（302 → 公開 CDN 200），不像 Gemma 需接受 Google 條款。
+         * 首選：**Gemma 3n E2B**——Google 專為手機/邊緣裝置特化的模型（MediaPipe LLM 相容 .task）。
+         *   但 Gemma 系列在 HuggingFace 是 **gated**（需登入 + 接受 Google 授權），公開直載會回 401。
+         *   → 沒有 token 的使用者會自動跳過、退回下方的 Qwen（仍可零設定使用）。
+         *   → 想用 Gemma 的人：到 HF 接受授權後下載 .task，再用 App「匯入模型」或 ADB 推送到
+         *     $MODEL_FILENAME 即可（檔名固定，引擎會直接載入）。
          *
-         * 模型為 MediaPipe LLM Inference 相容的 .task 格式（q8 量化，約 1.6 GB）。
+         * 備援：HuggingFace litert-community 的 Qwen2.5-1.5B-Instruct（Apache 2.0，**非 gated**，
+         *   302→公開 CDN 200 實測可直載，q8 量化約 1.6 GB）。
+         *
          * 全部失敗時 UI 會顯示 ADB 指令，讓使用者手動安裝任何相容 .task。
          */
         val CANDIDATE_URLS = listOf(
-            // Qwen2.5-1.5B q8 / KV1280（最小，~1.6 GB）
+            // ① 首選：Gemma 3n E2B int4（手機特化；gated，無 token 會 401 → 自動退 Qwen）
+            "https://huggingface.co/litert-community/Gemma-3n-E2B-it-litert-preview/resolve/main/gemma-3n-E2B-it-int4.task",
+            // ② 備援：Qwen2.5-1.5B q8 / KV1280（最小，~1.6 GB，公開可直載）
             "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_seq128_q8_ekv1280.task",
-            // 備用：multi-prefill 版本
+            // ③ 備援：Qwen multi-prefill 版本
             "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv1280.task"
         )
 

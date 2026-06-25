@@ -206,7 +206,7 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
                         originalText      = vault.rawText,
                         reconstructedText = cot.reconstructed,
                         confidence        = cot.confidence,
-                        engineUsed        = "On-Device Qwen2.5-1.5B INT8 (MediaPipe LLM · CoT)",
+                        engineUsed        = "On-Device LLM (Gemma 3n / Qwen2.5 · MediaPipe · CoT)",
                         inferenceTimeMs   = System.currentTimeMillis() - startTime
                     )
                 )
