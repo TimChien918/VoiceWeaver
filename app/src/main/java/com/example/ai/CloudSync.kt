@@ -31,6 +31,21 @@ object CloudSync {
 
     val uid: String? get() = auth.currentUser?.uid
     val isSignedIn: Boolean get() = auth.currentUser != null
+
+    /**
+     * 登入就緒回呼：解決「冷啟動時 Firebase auth 尚未非同步還原，當下 isSignedIn=false 導致永不 pull」競態。
+     * addAuthStateListener 會在註冊當下立即以目前狀態觸發一次，之後狀態變更（還原/登入）再觸發；
+     * 用 fireOnce 確保自動拉取只跑一次（避免 token 刷新重複 pull）。
+     */
+    fun addOnSignedIn(fireOnce: Boolean = true, cb: () -> Unit) {
+        var fired = false
+        auth.addAuthStateListener { a ->
+            if (a.currentUser != null && !(fireOnce && fired)) {
+                fired = true
+                cb()
+            }
+        }
+    }
     val displayName: String?
         get() = auth.currentUser?.let { it.displayName ?: it.email ?: if (it.isAnonymous) "匿名使用者" else "已登入" }
 
@@ -76,7 +91,12 @@ object CloudSync {
     // ── 拉取：Firestore → 回呼（呼叫端寫回 DataStore）──
     fun pull(onApply: (llmJson: String?, imgJson: String?, tgToken: String?, tgChat: String?, googlePlaces: String?) -> Unit) {
         val u = uid ?: return
-        db.collection("users").document(u).get().addOnSuccessListener { snap ->
+        // 強制讀「伺服器」：Firestore 預設離線持久化會優先回傳快取，
+        // 冷啟動拿到的常是舊/空白快取（曾觀察到 llmApis=[]、googlePlaces 空），
+        // 導致雲端最新金鑰拉不下來。Source.SERVER 確保拿伺服器最新值。
+        db.collection("users").document(u)
+            .get(com.google.firebase.firestore.Source.SERVER)
+            .addOnSuccessListener { snap ->
             if (!snap.exists()) { onApply(null, null, null, null, null); return@addOnSuccessListener }
             val llm = (snap.get("llmApis") as? List<*>)?.let { listToJson(it) }
             val img = (snap.get("imageApis") as? List<*>)?.let { listToJson(it) }

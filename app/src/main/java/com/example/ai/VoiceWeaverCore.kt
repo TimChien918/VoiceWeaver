@@ -773,6 +773,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private val _cloudStatus = MutableStateFlow(if (CloudSync.isSignedIn) "已登入" else "未登入")
     val cloudStatus: StateFlow<String> = _cloudStatus.asStateFlow()
     @Volatile private var suppressPushUntil = 0L
+    // 防資料遺失：未完成「從雲端 pull」前，禁止 push——否則裝置會把本機空狀態
+    // set(merge) 蓋掉雲端既有金鑰/供應商（曾造成 llmApis 與 googlePlaces 被清空）。
+    @Volatile private var cloudPullDone = false
 
     fun cloudSignInWithGoogle(idToken: String?, errorCode: Int? = null) {
         if (idToken.isNullOrBlank()) {
@@ -809,6 +812,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 if (!tg.isNullOrBlank()) settingsRepo.setApiKeyTelegramBotToken(tg)
                 if (!chat.isNullOrBlank()) settingsRepo.setEmergencyChatId(chat)
                 if (!places.isNullOrBlank()) settingsRepo.setApiKeyGooglePlaces(places)
+                cloudPullDone = true   // 完成 pull 後才允許 push（避免空狀態覆蓋雲端）
                 _cloudStatus.value = "已從雲端同步金鑰/供應商"
             }
         }
@@ -865,19 +869,23 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 kotlinx.coroutines.delay(25_000)
             }
         }
-        // 登入時自動把雲端的金鑰/供應商拉下來
-        if (CloudSync.isSignedIn) pullCloud()
+        // 登入時自動把雲端的金鑰/供應商拉下來。
+        // 用 auth 狀態監聽（而非當下檢查一次）：冷啟動時 Firebase auth 是非同步還原，
+        // 直接 if(isSignedIn) 常因 auth 未就緒而略過，導致雲端金鑰永遠拉不下來。
+        CloudSync.addOnSignedIn { pullCloud() }
         // 金鑰/供應商/Telegram 變動 → 防抖 1.5 秒後自動推上雲（登入時才推）
         viewModelScope.launch {
             var key = ""
             while (true) {
                 val s = settings.value
                 val cur = s.llmApis + "" + s.imageApis + "" + s.apiKeyTelegramBotToken + "" + s.emergencyChatId
-                if (cur != key && CloudSync.isSignedIn && System.currentTimeMillis() > suppressPushUntil) {
+                val pushReady = CloudSync.isSignedIn && cloudPullDone && System.currentTimeMillis() > suppressPushUntil
+                if (cur != key && pushReady) {
                     key = cur
                     runCatching { CloudSync.push(s.llmApis, s.imageApis, s.apiKeyTelegramBotToken, s.emergencyChatId, s.apiKeyGooglePlaces) }
-                } else if (cur != key) {
-                    key = cur   // 未登入也記住，避免登入後一次大量推送舊狀態
+                } else if (cur != key && (!CloudSync.isSignedIn || !cloudPullDone)) {
+                    // 未登入或尚未 pull → 只記住目前狀態、絕不推送（防止覆蓋雲端）
+                    key = cur
                 }
                 kotlinx.coroutines.delay(1500)
             }
