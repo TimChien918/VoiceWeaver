@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- 每日復健提醒通知（Android 13+ 需執行期授權）-->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 宣告 App 可以查詢裝置是否安裝語音識別服務 -->
     <queries>
@@ -85,6 +87,17 @@
             android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/app_name"
             android:targetActivity="com.example.MainActivity" />
+
+        <!-- 成績報告 CSV/PDF 匯出分享用 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

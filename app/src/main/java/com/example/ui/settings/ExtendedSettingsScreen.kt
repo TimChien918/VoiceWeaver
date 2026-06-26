@@ -103,6 +103,163 @@ fun ExtendedSettingsScreen(
         ) {
             item { Spacer(Modifier.height(4.dp)) }
 
+            // ─── 無障礙與提醒 ───
+            item {
+                SettingSection(title = "無障礙與提醒", icon = Icons.Default.Accessibility) {
+                    // 高對比
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("高對比模式", color = p.textLight, fontWeight = FontWeight.Bold)
+                            Text("純黑底 + 高彩文字，視力弱者用", fontSize = 11.sp, color = p.textMuted)
+                        }
+                        Switch(
+                            checked = settings.highContrast,
+                            onCheckedChange = { scope.launch { settingsRepo.setHighContrast(it) } },
+                            colors = SwitchDefaults.colors(checkedThumbColor = p.neonCyan, checkedTrackColor = p.neonCyan.copy(alpha = 0.5f))
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    // 超大字快捷
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("超大字", color = p.textMuted, fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Slider(
+                            value = settings.fontScale,
+                            onValueChange = { scope.launch { settingsRepo.setFontScale(it) } },
+                            valueRange = 0.8f..1.8f,
+                            colors = SliderDefaults.colors(thumbColor = p.neonCyan, activeTrackColor = p.neonCyan),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("%.1fx".format(settings.fontScale), color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    // 鼻控靈敏度
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("鼻控靈敏度", color = p.textMuted, fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Slider(
+                            value = settings.noseSensitivity,
+                            onValueChange = { scope.launch { settingsRepo.setNoseSensitivity(it) } },
+                            valueRange = 0.5f..2.0f,
+                            colors = SliderDefaults.colors(thumbColor = p.neonGreen, activeTrackColor = p.neonGreen),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("%.1fx".format(settings.noseSensitivity), color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("靈敏度即時生效，數值越大頭轉一點點游標移越多。", fontSize = 10.sp, color = p.textMuted, lineHeight = 13.sp)
+                    Spacer(Modifier.height(12.dp))
+                    // 每日提醒
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("每日復健提醒", color = p.textLight, fontWeight = FontWeight.Bold)
+                            Text("每天固定時間通知來練習", fontSize = 11.sp, color = p.textMuted)
+                        }
+                        Switch(
+                            checked = settings.dailyReminderEnabled,
+                            onCheckedChange = { on ->
+                                scope.launch {
+                                    settingsRepo.setDailyReminder(on, settings.dailyReminderHour)
+                                    com.example.work.RehabScheduler.ensureChannel(ctx)
+                                    com.example.work.RehabScheduler.scheduleDailyReminder(ctx, on, settings.dailyReminderHour)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = p.neonCyan, checkedTrackColor = p.neonCyan.copy(alpha = 0.5f))
+                        )
+                    }
+                    if (settings.dailyReminderEnabled) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("提醒時間", color = p.textMuted, fontSize = 12.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Slider(
+                                value = settings.dailyReminderHour.toFloat(),
+                                onValueChange = { h ->
+                                    scope.launch {
+                                        settingsRepo.setDailyReminder(true, h.toInt())
+                                        com.example.work.RehabScheduler.scheduleDailyReminder(ctx, true, h.toInt())
+                                    }
+                                },
+                                valueRange = 0f..23f, steps = 22,
+                                colors = SliderDefaults.colors(thumbColor = p.neonCyan, activeTrackColor = p.neonCyan),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("%02d:00".format(settings.dailyReminderHour), color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    // 成績單自動推送家屬
+                    Text("成績單自動推送家屬", color = p.textLight, fontWeight = FontWeight.Bold)
+                    Text("定期把成績單發到緊急聯絡人 Telegram", fontSize = 11.sp, color = p.textMuted)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("none" to "關閉", "daily" to "每日", "weekly" to "每週").forEach { (key, label) ->
+                            val selected = settings.reportPushFrequency == key
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        settingsRepo.setReportPushFrequency(key)
+                                        com.example.work.RehabScheduler.scheduleReportPush(ctx, key)
+                                    }
+                                },
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) p.neonCyan else p.textMuted.copy(alpha = 0.4f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = if (selected) p.neonCyan else p.textMuted),
+                                modifier = Modifier.weight(1f)
+                            ) { Text(label, fontSize = 12.sp) }
+                        }
+                    }
+                    Text("需先填上方「緊急聯絡人 Chat ID」。", fontSize = 10.sp, color = p.textMuted)
+                }
+            }
+
+            // ─── 自訂 AAC 圖卡 ───
+            item {
+                SettingSection(title = "自訂 AAC 圖卡", icon = Icons.Default.AddCard) {
+                    val existing = remember(settings.customAacItems) {
+                        runCatching { org.json.JSONArray(settings.customAacItems.ifBlank { "[]" }) }.getOrDefault(org.json.JSONArray())
+                    }
+                    var newLabel by remember { mutableStateOf("") }
+                    var newEmoji by remember { mutableStateOf("⭐") }
+                    Text("已新增 ${existing.length()} 張自訂圖卡（顯示在 AAC 板）", fontSize = 11.sp, color = p.textMuted)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newEmoji, onValueChange = { newEmoji = it.take(2) },
+                            label = { Text("圖示") }, singleLine = true,
+                            modifier = Modifier.width(80.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = p.textLight, unfocusedTextColor = p.textLight, focusedBorderColor = p.neonCyan, unfocusedBorderColor = p.neonCyan.copy(alpha = 0.4f))
+                        )
+                        OutlinedTextField(
+                            value = newLabel, onValueChange = { newLabel = it.take(10) },
+                            label = { Text("詞語") }, singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = p.textLight, unfocusedTextColor = p.textLight, focusedBorderColor = p.neonCyan, unfocusedBorderColor = p.neonCyan.copy(alpha = 0.4f))
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Button(
+                        onClick = {
+                            if (newLabel.isBlank()) return@Button
+                            val arr = org.json.JSONArray(settings.customAacItems.ifBlank { "[]" })
+                            arr.put(org.json.JSONObject().put("label", newLabel.trim()).put("emoji", newEmoji.ifBlank { "⭐" }))
+                            scope.launch { settingsRepo.setCustomAacItems(arr.toString()) }
+                            newLabel = ""; newEmoji = "⭐"
+                        },
+                        enabled = newLabel.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = p.neonGreen, contentColor = p.darkBg),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("新增圖卡", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                    if (existing.length() > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(onClick = { scope.launch { settingsRepo.setCustomAacItems("") } }) {
+                            Text("清除全部自訂圖卡", fontSize = 12.sp, color = p.dangerRose)
+                        }
+                    }
+                }
+            }
+
             // ─── 住家地址（影響 GPS 自動分類「住家」標籤）───
             item {
                 SettingSection(title = "住家地址", icon = Icons.Default.Home) {

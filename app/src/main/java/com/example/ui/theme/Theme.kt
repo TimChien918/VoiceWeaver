@@ -42,11 +42,12 @@ fun paletteOf(theme: AppTheme): AppPalette = when (theme) {
 fun MyApplicationTheme(
     theme: AppTheme = AppTheme.Tech,
     fontScale: Float = 1.0f,
+    highContrast: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val palette = paletteOf(theme)
-    // 簡約風是「淺色」風，其餘 3 種為深色（背景色決定）
-    val isLight = theme == AppTheme.Minimal || theme == AppTheme.Cute
+    val palette = if (highContrast) HighContrastPalette else paletteOf(theme)
+    // 簡約風是「淺色」風，其餘 3 種為深色（背景色決定）；高對比一律深色
+    val isLight = !highContrast && (theme == AppTheme.Minimal || theme == AppTheme.Cute)
     CompositionLocalProvider(LocalAppPalette provides palette) {
         MaterialTheme(
             colorScheme = materialSchemeFor(palette, isLight),

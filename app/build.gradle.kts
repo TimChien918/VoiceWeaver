@@ -118,6 +118,8 @@ dependencies {
   implementation(libs.retrofit)
   implementation(libs.retrofit.converter.serialization)
   implementation("androidx.webkit:webkit:1.11.0")
+  // 背景排程：每日復健提醒通知 + 成績單定期推送家屬
+  implementation("androidx.work:work-runtime-ktx:2.9.1")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

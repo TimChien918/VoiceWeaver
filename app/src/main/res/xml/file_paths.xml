@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 成績報告匯出（CSV/PDF）暫存於 cache/reports，透過 FileProvider 分享 -->
+    <cache-path name="reports" path="reports/" />
+    <files-path name="reports_files" path="reports/" />
+</paths>

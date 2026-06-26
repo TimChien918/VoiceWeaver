@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: VoiceWeaverViewModel = viewModel()
             val settings by viewModel.settings.collectAsState()
-            MyApplicationTheme(theme = settings.theme, fontScale = settings.fontScale) {
+            MyApplicationTheme(theme = settings.theme, fontScale = settings.fontScale, highContrast = settings.highContrast) {
                 LocaleProvider(language = settings.language) {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -193,7 +193,9 @@ class MainActivity : ComponentActivity() {
                             composable("report") {
                                 ReportScreen(
                                     aggregator = viewModel.reportAggregator,
-                                    settingsRepo = viewModel.settingsRepository
+                                    settingsRepo = viewModel.settingsRepository,
+                                    onExportCsv = { viewModel.buildRehabCsvShare() },
+                                    onExportPdf = { viewModel.buildRehabPdfShare() }
                                 )
                             }
                             composable("training") {
@@ -222,12 +224,23 @@ class MainActivity : ComponentActivity() {
                         //    才能蓋過底部導覽列，讓鼻控游標可以點到底部分頁。 ──
                         // 鼻子頭控背景 WebView：保持 VISIBLE 但縮到極小且近乎透明，確保 rAF 持續送幀。
                         val eyeState by viewModel.eyeControlState.collectAsState()
+                        // 鼻控靈敏度：設定頁滑桿改動 → 即時注入 nose_tracker.html
+                        LaunchedEffect(settings.noseSensitivity, eyeSettings.eyeControlEnabled) {
+                            eyeGesturesWebViewRef?.evaluateJavascript(
+                                "window.egSetSensitivity && window.egSetSensitivity(${settings.noseSensitivity});", null
+                            )
+                        }
                         EyeGesturesOverlay(
                             enabled = eyeSettings.eyeControlEnabled,
                             onGaze = { x, y, cal -> viewModel.updateGazeFromEyeGestures(x, y, cal) },
                             onBlink = { viewModel.notifyEyeGesturesBlink() },
                             onStatus = { /* NoseTrackerOverlay already logs */ },
-                            onReady = { wv -> eyeGesturesWebViewRef = wv },
+                            onReady = { wv ->
+                                eyeGesturesWebViewRef = wv
+                                wv?.evaluateJavascript(
+                                    "window.egSetSensitivity && window.egSetSensitivity(${settings.noseSensitivity});", null
+                                )
+                            },
                             modifier = Modifier
                                 .requiredSize(2.dp)
                                 .alpha(0.01f)

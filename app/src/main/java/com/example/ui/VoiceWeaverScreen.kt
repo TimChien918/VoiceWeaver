@@ -197,6 +197,37 @@ fun VoiceWeaverScreen(
                 }
             }
 
+            // ── 我的最愛：收藏的常用句，一鍵朗讀 ──
+            val favorites = settings.favoriteSentences.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+            if (favorites.isNotEmpty()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = surfaceColor),
+                        border = BorderStroke(1.dp, auraAmber.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("⭐ 我的最愛（點一下朗讀）", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = auraAmber)
+                            Spacer(Modifier.height(8.dp))
+                            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                favorites.take(12).forEach { fav ->
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(bottom = 6.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(auraAmber.copy(alpha = 0.14f))
+                                            .border(1.dp, auraAmber.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                            .clickable { if (ttsInitialized) viewModel.speak(fav) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) { Text(fav, fontSize = 14.sp, color = textLight, maxLines = 1) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Section 2: Context Manager Panel (GPS, Camera, Sensors)
             item {
                 Text(
@@ -1131,6 +1162,60 @@ fun VoiceWeaverScreen(
                                         Icon(Icons.Default.School, null, tint = neonCyan, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(6.dp))
                                         Text(stringResource(R.string.main_btn_practice), fontSize = 12.sp, color = neonCyan, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    // ── 複製 / 分享 / 收藏 ──
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    val isFav = settings.favoriteSentences.split("\n").any { it.trim() == data.reconstructedText.trim() }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                val clip = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                clip.setPrimaryClip(android.content.ClipData.newPlainText("VoiceWeaver", data.reconstructedText))
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, textMuted.copy(alpha = 0.5f)),
+                                            modifier = Modifier.weight(1f)
+                                        ) { Icon(Icons.Default.ContentCopy, null, tint = textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text("複製", fontSize = 12.sp, color = textMuted) }
+                                        OutlinedButton(
+                                            onClick = {
+                                                context.startActivity(android.content.Intent.createChooser(
+                                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, data.reconstructedText)
+                                                    }, "分享句子"))
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, textMuted.copy(alpha = 0.5f)),
+                                            modifier = Modifier.weight(1f)
+                                        ) { Icon(Icons.Default.Share, null, tint = textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text("分享", fontSize = 12.sp, color = textMuted) }
+                                        OutlinedButton(
+                                            onClick = { viewModel.toggleFavorite(data.reconstructedText) },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, if (isFav) auraAmber else textMuted.copy(alpha = 0.5f)),
+                                            modifier = Modifier.weight(1f)
+                                        ) { Icon(if (isFav) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (isFav) auraAmber else textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text("收藏", fontSize = 12.sp, color = if (isFav) auraAmber else textMuted) }
+                                    }
+
+                                    // ── 多語朗讀（中英日韓）──
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                        listOf(
+                                            "🇹🇼 中" to com.example.data.AppLanguage.ZhTW,
+                                            "🇺🇸 EN" to com.example.data.AppLanguage.En,
+                                            "🇯🇵 日" to com.example.data.AppLanguage.Ja,
+                                            "🇰🇷 한" to com.example.data.AppLanguage.Ko
+                                        ).forEach { (label, lang) ->
+                                            OutlinedButton(
+                                                onClick = { if (ttsInitialized) viewModel.speakIn(data.reconstructedText, lang) },
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(10.dp),
+                                                border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.4f)),
+                                                modifier = Modifier.weight(1f)
+                                            ) { Text(label, fontSize = 12.sp, color = neonCyan) }
+                                        }
                                     }
                                 }
                             }

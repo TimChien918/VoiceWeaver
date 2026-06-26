@@ -138,8 +138,9 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
 
             // ── 主格子：類別 or 條目；可在 grid 與 flashcard 模式間切換 ──
             Box(modifier = Modifier.weight(1f)) {
-                val filteredItems = remember(state.selectedCategory, searchQuery) {
-                    filterAacItems(state.selectedCategory, searchQuery)
+                val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
+                val filteredItems = remember(state.selectedCategory, searchQuery, customItems) {
+                    filterAacItems(state.selectedCategory, searchQuery, customItems)
                 }
                 val browsingItems = searchQuery.isNotBlank() || state.selectedCategory != null
                 when {
@@ -444,9 +445,9 @@ private fun AacSearchAndCategoryBar(
     }
 }
 
-private fun filterAacItems(category: AacCategory?, query: String): List<AacItem> {
+private fun filterAacItems(category: AacCategory?, query: String, extra: List<AacItem> = emptyList()): List<AacItem> {
     val normalizedQuery = query.trim()
-    return DefaultAacItems
+    return (extra + DefaultAacItems)
         .asSequence()
         .filter { category == null || it.category == category }
         .filter { item ->
@@ -456,6 +457,21 @@ private fun filterAacItems(category: AacCategory?, query: String): List<AacItem>
                 item.category.key.contains(normalizedQuery, ignoreCase = true)
         }
         .toList()
+}
+
+/** 解析使用者自訂 AAC 圖卡（JSON 陣列 [{label,emoji,category?}]）。category 預設 Needs。 */
+fun parseCustomAacItems(json: String): List<AacItem> {
+    if (json.isBlank()) return emptyList()
+    return runCatching {
+        val arr = org.json.JSONArray(json)
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val label = o.optString("label").trim()
+            if (label.isBlank()) return@mapNotNull null
+            val cat = runCatching { AacCategory.valueOf(o.optString("category", "Needs")) }.getOrDefault(AacCategory.Needs)
+            AacItem(id = "custom_$i", label = label, emoji = o.optString("emoji", "⭐"), category = cat)
+        }
+    }.getOrDefault(emptyList())
 }
 
 @Composable
@@ -957,8 +973,9 @@ fun AacInlinePanel(
                 }
             )
         ) {
-            val filteredItems = remember(state.selectedCategory, searchQuery) {
-                filterAacItems(state.selectedCategory, searchQuery)
+            val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
+            val filteredItems = remember(state.selectedCategory, searchQuery, customItems) {
+                filterAacItems(state.selectedCategory, searchQuery, customItems)
             }
             val browsingItems = searchQuery.isNotBlank() || state.selectedCategory != null
             when {

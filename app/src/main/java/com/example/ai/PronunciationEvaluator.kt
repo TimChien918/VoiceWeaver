@@ -31,6 +31,18 @@ object PronunciationEvaluator {
             ((1.0 - dist.toDouble() / maxLen) * 100).toInt().coerceIn(0, 100)
         }
 
+    /**
+     * 找出目標句中「沒被辨識到」的字（給字卡高亮提示哪幾個字說得不準）。
+     * 純比對：目標字不在辨識結果裡 → 視為說得不準。離線備援用。
+     */
+    fun wrongChars(target: String, recognized: String): List<String> {
+        val r = normalize(recognized)
+        return normalize(target).toCharArray()
+            .filter { it.toString() !in r.map { c -> c.toString() } }
+            .map { it.toString() }
+            .distinct()
+    }
+
     /** 移除標點與空白（中文字屬於 Letter，會保留），使比對公平 */
     private fun normalize(s: String): String = s.filter { it.isLetterOrDigit() }
 

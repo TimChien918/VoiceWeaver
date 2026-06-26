@@ -39,9 +39,12 @@ import kotlinx.coroutines.launch
 fun ReportScreen(
     aggregator: ReportAggregator,
     settingsRepo: SettingsRepository,
+    onExportCsv: (suspend () -> android.content.Intent)? = null,
+    onExportPdf: (suspend () -> android.content.Intent)? = null,
     modifier: Modifier = Modifier
 ) {
     val p = LocalAppPalette.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var range by remember { mutableStateOf(ReportRange.Today) }
     var snapshot by remember { mutableStateOf<ReportSnapshot?>(null) }
@@ -92,6 +95,30 @@ fun ReportScreen(
                                 inactiveContentColor = p.textMuted
                             )
                         ) { Text(r.displayName) }
+                    }
+                }
+            }
+
+            // === 匯出成績報告（CSV 給 Excel / PDF 給列印存檔）===
+            if (onExportCsv != null || onExportPdf != null) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        if (onExportCsv != null) {
+                            OutlinedButton(
+                                onClick = { scope.launch { runCatching { ctx.startActivity(android.content.Intent.createChooser(onExportCsv(), "匯出 CSV")) } } },
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.5f)),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("📄 匯出 CSV", fontSize = 12.sp, color = p.neonCyan) }
+                        }
+                        if (onExportPdf != null) {
+                            OutlinedButton(
+                                onClick = { scope.launch { runCatching { ctx.startActivity(android.content.Intent.createChooser(onExportPdf(), "匯出 PDF")) } } },
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.5f)),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("🖨 匯出 PDF", fontSize = 12.sp, color = p.neonCyan) }
+                        }
                     }
                 }
             }

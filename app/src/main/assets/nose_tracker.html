@@ -46,8 +46,14 @@
 
     // ── 頭控參數（鼻尖相對雙眼中心，並用臉寬正規化 → 與距離無關）──
     const NOSE = 1, L_OUT = 33, R_OUT = 263;
-    const SENS_X = 4.5;   // 左右靈敏度（頭轉幅度 → 游標 x）
-    const SENS_Y = 6.0;   // 上下靈敏度（頭俯仰幅度 → 游標 y）
+    let SENS_X = 4.5;   // 左右靈敏度（頭轉幅度 → 游標 x）；可由 App 即時調整
+    let SENS_Y = 6.0;   // 上下靈敏度（頭俯仰幅度 → 游標 y）；可由 App 即時調整
+    const BASE_SENS_X = 4.5, BASE_SENS_Y = 6.0;
+    // App 設定頁滑桿即時注入：mult 為 0.5~2.0 的倍率
+    window.egSetSensitivity = function (mult) {
+      const m = Math.max(0.3, Math.min(3.0, Number(mult) || 1));
+      SENS_X = BASE_SENS_X * m; SENS_Y = BASE_SENS_Y * m;
+    };
     const NEUTRAL_DRIFT = 0.003;   // 中性姿勢緩慢自適應
 
     let dx0 = NaN, dy0 = NaN, frame = 0;

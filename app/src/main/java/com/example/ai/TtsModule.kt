@@ -276,6 +276,29 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         speakInternal(text = text, forcedGptSovitMode = mode, expressiveTest = true, onComplete = onComplete)
     }
 
+    /**
+     * 多語朗讀：用指定語言唸一句（重組結果一鍵中/英/日/韓）。
+     * 只作用於系統 TTS 引擎；唸完立即還原原本的中文最佳嗓音，不影響後續中文朗讀。
+     * GPT-SoVITS 啟用時走原本邏輯（自家中英樣本切換）。
+     */
+    fun speakInLocale(text: String, locale: Locale, onComplete: () -> Unit = {}) {
+        if (gptSovitEnabled || !_isInitialized.value) { speak(text, onComplete); return }
+        try {
+            tts?.let { e ->
+                val prevVoice = e.voice                       // 記住目前中文最佳嗓音
+                val r = e.setLanguage(locale)
+                if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    e.setLanguage(Locale("zh", "TW"))         // 該語言沒語音包 → 退回中文
+                }
+                e.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AphasiaAssistMultiLang")
+                if (prevVoice != null) runCatching { e.voice = prevVoice }   // 還原中文嗓音給下次
+            }
+        } catch (t: Throwable) {
+            Log.e("TtsModule", "speakInLocale 失敗：${t.message}")
+        }
+        onComplete()
+    }
+
     private fun speakInternal(
         text: String,
         forcedGptSovitMode: GptSovitVoiceMode?,

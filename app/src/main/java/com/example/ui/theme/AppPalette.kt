@@ -23,6 +23,21 @@ data class AppPalette(
     val textMuted: Color    // 次要文字/說明
 )
 
+/**
+ * 高對比（無障礙）：純黑底 + 最高彩度文字（黃/白/亮綠/亮紅），給視力弱、低視能使用者。
+ * 文字一律飽和高亮，accent 用高對比黃，錯誤用亮紅。
+ */
+val HighContrastPalette = AppPalette(
+    darkBg     = Color(0xFF000000),
+    surface    = Color(0xFF000000),
+    neonCyan   = Color(0xFFFFE600),   // 高對比黃（primary，黑底上最醒目）
+    neonGreen  = Color(0xFF00FF66),   // 亮綠
+    auraAmber  = Color(0xFFFFB000),   // 琥珀
+    dangerRose = Color(0xFFFF3B30),   // 亮紅
+    textLight  = Color(0xFFFFFFFF),
+    textMuted  = Color(0xFFE0E0E0)    // 高對比下次要文字也接近白
+)
+
 /** 科技風（深色，預設）：近黑底 + iOS 系統色（藍/綠/橙/紅），沉穩專業。 */
 val TechPalette = AppPalette(
     darkBg     = Color(0xFF000000),

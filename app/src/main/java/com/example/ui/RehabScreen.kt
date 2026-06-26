@@ -61,6 +61,9 @@ fun RehabScreen(
     val isGenerating by viewModel.isGeneratingSuggestions.collectAsState()
     val eyeControl by viewModel.eyeControlState.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val streak by viewModel.rehabStreak.collectAsState()
+    val rehabQueue by viewModel.rehabQueue.collectAsState()
+    val rehabQueueIndex by viewModel.rehabQueueIndex.collectAsState()
 
     val p = LocalAppPalette.current
     val darkBg = p.darkBg
@@ -102,6 +105,50 @@ fun RehabScreen(
         ) {
             item { Spacer(Modifier.height(4.dp)) }
 
+            // 連續練習天數（streak）激勵
+            if (streak > 0) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(auraAmber.copy(alpha = 0.14f))
+                            .border(1.dp, auraAmber.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Text("🔥", fontSize = 22.sp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("連續練習 ", fontSize = 14.sp, color = textLight)
+                        Text("$streak", fontSize = 20.sp, fontWeight = FontWeight.Black, color = auraAmber)
+                        Text(" 天，繼續保持！", fontSize = 14.sp, color = textLight)
+                    }
+                }
+            }
+
+            // 整段練習：佇列進度 + 下一句
+            if (rehab.isActive && rehabQueue.size > 1) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(neonCyan.copy(alpha = 0.10f))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text("📖 整段練習 ${rehabQueueIndex + 1}/${rehabQueue.size}", fontSize = 12.sp, color = textLight, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = {
+                            if (!viewModel.nextRehabSentence()) viewModel.clearRehab()
+                        }) {
+                            Text(if (rehabQueueIndex + 1 < rehabQueue.size) "下一句 ▶" else "完成整段 ✓",
+                                 fontSize = 13.sp, color = neonCyan, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             // 故事訓練入口：只在「開發者模式」開啟時顯示。
             // 注意：實際進入畫面後還會再依 deviceTier == HIGH_END 二次把關（弱機 RAM 撐不住 LLM 評論）。
             if (settings.developerMode && !rehab.isActive) {
@@ -136,6 +183,7 @@ fun RehabScreen(
                         aiSuggestions = aiSuggestions,
                         isGenerating = isGenerating,
                         onPick = { viewModel.startRehab(it) },
+                        onPickParagraph = { viewModel.startRehabParagraph(it) },
                         onRequestAi = { viewModel.requestAiSuggestions() },
                         onClearAi = { viewModel.clearAiSuggestions() },
                         surfaceColor = surfaceColor,
@@ -200,6 +248,7 @@ private fun TargetPicker(
     aiSuggestions: List<String>,
     isGenerating: Boolean,
     onPick: (String) -> Unit,
+    onPickParagraph: (String) -> Unit,
     onRequestAi: () -> Unit,
     onClearAi: () -> Unit,
     surfaceColor: Color,
@@ -259,6 +308,21 @@ private fun TargetPicker(
                 Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.rehab_start_with_this), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            // 整段練習：貼一段文章 → 自動分句逐句練
+            if (customInput.trim().length > 12) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = { onPickParagraph(customInput.trim()) },
+                    border = BorderStroke(1.dp, auraAmber),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = auraAmber),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.MenuBook, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("整段練習（自動分句逐句練）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
 
             // 臨床常用題庫（漢語標準失語症檢查表通用題）：一鍵開始，離線也能用
@@ -512,6 +576,8 @@ private fun PracticeCard(
                 rehab.chips.forEachIndexed { idx, chip ->
                     val scale by animateFloatAsState(if (tapped == idx) 1.3f else 1f, label = "chip")
                     val scanned = eyeControl.enabled && idx == eyeControl.scanIndex
+                    // 錯誤字高亮：評分後，字卡內任一字落在 wrongChars → 紅框提示重點練
+                    val isWrong = rehab.wrongChars.isNotEmpty() && chip.any { c -> rehab.wrongChars.contains(c.toString()) }
                     Box(
                         modifier = Modifier
                             .padding(bottom = 6.dp)
@@ -522,17 +588,24 @@ private fun PracticeCard(
                             }
                             .clip(RoundedCornerShape(10.dp))
                             .background(
-                                if (tapped == idx || scanned) neonCyan.copy(alpha = 0.35f)
-                                else Color.White.copy(alpha = 0.06f)
+                                when {
+                                    tapped == idx || scanned -> neonCyan.copy(alpha = 0.35f)
+                                    isWrong -> dangerRose.copy(alpha = 0.18f)
+                                    else -> Color.White.copy(alpha = 0.06f)
+                                }
                             )
                             .border(
-                                if (scanned) 2.dp else 1.dp,
-                                if (tapped == idx || scanned) neonCyan else neonCyan.copy(alpha = 0.35f),
+                                if (scanned || isWrong) 2.dp else 1.dp,
+                                when {
+                                    tapped == idx || scanned -> neonCyan
+                                    isWrong -> dangerRose
+                                    else -> neonCyan.copy(alpha = 0.35f)
+                                },
                                 RoundedCornerShape(10.dp)
                             )
                             .semantics {
                                 role = Role.Button
-                                contentDescription = "復健字卡：$chip"
+                                contentDescription = if (isWrong) "復健字卡（需加強）：$chip" else "復健字卡：$chip"
                             }
                             .clickable {
                                 tapped = idx
@@ -540,9 +613,15 @@ private fun PracticeCard(
                             }
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        Text(chip, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = textLight)
+                        Text(chip, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                             color = if (isWrong) dangerRose else textLight)
                     }
                 }
+            }
+            if (rehab.wrongChars.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("🔴 紅字是這次說得不夠準的字，點字卡再聽一次重點練。",
+                     fontSize = 11.sp, color = dangerRose, lineHeight = 15.sp)
             }
 
             // 跟讀錄音
@@ -610,8 +689,12 @@ private fun PracticeCard(
                                 fontSize = 11.sp, color = scoreColor
                             )
                         }
-                        if (rehab.lastRecognized.isNotBlank()) {
+                        if (rehab.aiFeedback.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
+                            Text("💬 ${rehab.aiFeedback}", fontSize = 12.sp, color = scoreColor, fontWeight = FontWeight.Medium)
+                        }
+                        if (rehab.lastRecognized.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
                             Text(stringResource(R.string.rehab_heard, rehab.lastRecognized), fontSize = 11.sp, color = textMuted)
                         }
                     }

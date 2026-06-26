@@ -160,6 +160,50 @@ interface InferenceEngine {
         items: List<AacItem>,
         location: String
     ): Result<String> = Result.success(items.joinToString("") { it.label })
+
+    /**
+     * 語音復健跟讀評分：完全由 AI 依「語意完整性／流暢性／語氣」判讀，非字元差異。
+     * 預設（無 LLM 或 LOW-END）退回 Levenshtein + 字元差異標記，確保離線也有分數。
+     * CloudInferenceEngine（雲端／電腦接手）與 MediaPipeLLMEngine（裝置端 Gemma/Qwen）會覆寫為真 AI 評分。
+     */
+    suspend fun scoreRehab(
+        target: String,
+        recognized: String,
+        words: List<WordConf> = emptyList()
+    ): RehabEvaluation = RehabEvaluation(
+        score = PronunciationEvaluator.evaluatePronunciation(target, recognized),
+        wrongChars = PronunciationEvaluator.wrongChars(target, recognized)
+    )
+}
+
+/** 一次復健評分結果：分數 + AI 鼓勵語 + 說得不準的字（給字卡高亮）。 */
+data class RehabEvaluation(
+    val score: Int,
+    val feedback: String = "",
+    val wrongChars: List<String> = emptyList()
+)
+
+/**
+ * 連續練習天數：把每筆時間戳歸到「當地日期」，從今天往回數連續有練習的天數。
+ * 今天沒練但昨天有 → 從昨天起算（不歸零，當天還來得及補）。今天昨天都沒 → 0。
+ */
+fun computeStreak(timestamps: List<Long>, now: Long = System.currentTimeMillis()): Int {
+    if (timestamps.isEmpty()) return 0
+    val dayMs = 86_400_000L
+    fun dayIndex(t: Long): Long {
+        val cal = java.util.Calendar.getInstance(java.util.Locale.TAIWAN).apply {
+            timeInMillis = t
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis / dayMs
+    }
+    val days = timestamps.map { dayIndex(it) }.toSortedSet()
+    val today = dayIndex(now)
+    var cursor = when { days.contains(today) -> today; days.contains(today - 1) -> today - 1; else -> return 0 }
+    var streak = 0
+    while (days.contains(cursor)) { streak++; cursor-- }
+    return streak
 }
 
 /**
@@ -378,7 +422,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             }
             SttMode.REHAB -> {
                 sttMode = SttMode.NORMAL
-                scoreRehabAttempt(text)
+                scoreRehabAttempt(text, words)
             }
         }
     }
@@ -446,9 +490,20 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     val rehabStats: StateFlow<List<LocationScoreStat>> = rehabRepository.locationStats
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    /** 連續練習天數（streak）：從今天（或昨天）往回數，每天至少 1 筆練習就算連續。激勵用。 */
+    val rehabStreak: StateFlow<Int> = rehabLogs
+        .map { logs -> computeStreak(logs.map { it.timestamp }) }
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+
     // 復健 UI 狀態
     private val _rehabState = MutableStateFlow(RehabUiState())
     val rehabState: StateFlow<RehabUiState> = _rehabState.asStateFlow()
+
+    // 整段分句練習佇列：貼一段文章 → 自動分句 → 逐句練、自動前進
+    private val _rehabQueue = MutableStateFlow<List<String>>(emptyList())
+    val rehabQueue: StateFlow<List<String>> = _rehabQueue.asStateFlow()
+    private val _rehabQueueIndex = MutableStateFlow(0)
+    val rehabQueueIndex: StateFlow<Int> = _rehabQueueIndex.asStateFlow()
 
     // AI 推薦練習句（由 Qwen 依使用者程度生成）
     private val _aiSuggestions = MutableStateFlow<List<String>>(emptyList())
@@ -744,6 +799,46 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             )
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    init {
+        // 啟動時依目前設定套用背景排程（每日提醒 + 成績單推送），確保重裝/更新後仍生效
+        viewModelScope.launch {
+            val s = settingsRepo.settings.firstOrNull() ?: return@launch
+            val ctx = getApplication<Application>()
+            com.example.work.RehabScheduler.ensureChannel(ctx)
+            com.example.work.RehabScheduler.scheduleDailyReminder(ctx, s.dailyReminderEnabled, s.dailyReminderHour)
+            com.example.work.RehabScheduler.scheduleReportPush(ctx, s.reportPushFrequency)
+        }
+    }
+
+    /** 設定每日復健提醒（開關 + 時間），並立即套用背景排程。 */
+    fun setDailyReminder(enabled: Boolean, hour: Int) {
+        viewModelScope.launch {
+            settingsRepo.setDailyReminder(enabled, hour)
+            com.example.work.RehabScheduler.scheduleDailyReminder(getApplication(), enabled, hour)
+        }
+    }
+
+    /** 設定成績單自動推送頻率（none/daily/weekly），並立即套用背景排程。 */
+    fun setReportPushFrequency(freq: String) {
+        viewModelScope.launch {
+            settingsRepo.setReportPushFrequency(freq)
+            com.example.work.RehabScheduler.scheduleReportPush(getApplication(), freq)
+        }
+    }
+
+    /** 收藏/取消收藏一句常用句（我的最愛）。 */
+    fun toggleFavorite(sentence: String) {
+        viewModelScope.launch { settingsRepo.toggleFavorite(sentence) }
+    }
+
+    /** 匯出復健成績為 CSV，回傳可分享的 Intent（治療師用 Excel 開）。 */
+    suspend fun buildRehabCsvShare(): android.content.Intent =
+        com.example.work.ReportExporter.exportCsv(getApplication(), rehabLogs.value)
+
+    /** 匯出復健成績為 PDF，回傳可分享的 Intent。 */
+    suspend fun buildRehabPdfShare(): android.content.Intent =
+        com.example.work.ReportExporter.exportPdf(getApplication(), rehabLogs.value)
 
     // MediaPipe 模型下載狀態
     private val _modelDownloadState = MutableStateFlow<ModelDownloadState>(ModelDownloadState.Idle)
@@ -1150,6 +1245,17 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // ─── TTS ─────────────────────────────────────────────────────────────────
 
     fun speak(text: String) = ttsModule.speak(text)
+
+    /** 多語朗讀：把一句話用指定語言唸出（重組結果一鍵中/英/日/韓）。 */
+    fun speakIn(text: String, lang: AppLanguage) {
+        val locale = when (lang) {
+            AppLanguage.En -> java.util.Locale.ENGLISH
+            AppLanguage.Ja -> java.util.Locale.JAPANESE
+            AppLanguage.Ko -> java.util.Locale.KOREAN
+            else -> java.util.Locale("zh", "TW")
+        }
+        ttsModule.speakInLocale(text, locale)
+    }
     /** 即時轉發 TtsModule 的合成狀態（⏳/✅/❌ 人話訊息），給設定頁測試按鈕下方顯示。 */
     val sovitsSynthesisStatus: StateFlow<String?> get() = ttsModule.synthesisStatus
 
@@ -1188,7 +1294,34 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun clearRehab() {
         _rehabState.value = RehabUiState()
+        _rehabQueue.value = emptyList()
+        _rehabQueueIndex.value = 0
         if (settings.value.eyeControlEnabled) startEyeScanLoop()
+    }
+
+    /**
+     * 整段練習：把一段文章/段落用標點切成句子，建立佇列、自動從第一句開始練。
+     * 每句評分後可呼叫 [nextRehabSentence] 前進到下一句。
+     */
+    fun startRehabParagraph(paragraph: String) {
+        val sentences = paragraph
+            .split(Regex("(?<=[。！？!?\\n])"))
+            .map { it.trim() }
+            .filter { it.length >= 2 }
+        if (sentences.isEmpty()) { startRehab(paragraph); return }
+        _rehabQueue.value = sentences
+        _rehabQueueIndex.value = 0
+        startRehab(sentences.first())
+    }
+
+    /** 前進到佇列下一句；已是最後一句則回傳 false（UI 顯示「整段完成」）。 */
+    fun nextRehabSentence(): Boolean {
+        val queue = _rehabQueue.value
+        val next = _rehabQueueIndex.value + 1
+        if (queue.isEmpty() || next >= queue.size) return false
+        _rehabQueueIndex.value = next
+        startRehab(queue[next])
+        return true
     }
 
     /** 點字卡：單獨播放該字／詞發音 */
@@ -1232,23 +1365,25 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch(Dispatchers.Main) { sttManager.stopListening() }
     }
 
-    /** Vosk 跟讀結果 → Levenshtein 評分 → 寫入復健日誌 */
-    private fun scoreRehabAttempt(recognized: String) {
+    /** Vosk 跟讀結果 → AI 評分（語意/流暢/語氣，任何引擎皆 AI 優先、Levenshtein 備援）→ 寫入復健日誌 */
+    private fun scoreRehabAttempt(recognized: String, words: List<WordConf> = emptyList()) {
         viewModelScope.launch {
             val target = rehabTarget
-            val score = PronunciationEvaluator.evaluatePronunciation(target, recognized)
+            val eval = activeEngine.scoreRehab(target, recognized, words)
             _rehabState.value = _rehabState.value.copy(
                 lastRecognized = recognized,
-                lastScore = score,
+                lastScore = eval.score,
+                aiFeedback = eval.feedback,
+                wrongChars = eval.wrongChars,
                 isRecording = false
             )
-            rehabRepository.insert(
-                RehabLog(
-                    locationTag = _globalTagsVault.value.locationTag,
-                    targetSentence = target,
-                    score = score
-                )
+            val log = RehabLog(
+                locationTag = _globalTagsVault.value.locationTag,
+                targetSentence = target,
+                score = eval.score
             )
+            rehabRepository.insert(log)
+            CloudSync.pushRehabLog(log)
         }
     }
 
@@ -2204,6 +2339,8 @@ data class RehabUiState(
     val chips: List<String> = emptyList(),
     val lastRecognized: String = "",
     val lastScore: Int? = null,
+    val aiFeedback: String = "",
+    val wrongChars: List<String> = emptyList(),
     val isRecording: Boolean = false
 ) {
     val isActive: Boolean get() = target.isNotBlank()

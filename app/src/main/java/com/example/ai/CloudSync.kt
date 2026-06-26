@@ -154,6 +154,19 @@ object CloudSync {
         return ImageApiStore.encode(list)
     }
 
+    // ── 推送復健日誌（網頁版成績單讀取用）──
+    fun pushRehabLog(log: com.example.data.RehabLog) {
+        val u = uid ?: return
+        val data = hashMapOf<String, Any>(
+            "timestamp" to log.timestamp,
+            "locationTag" to log.locationTag,
+            "targetSentence" to log.targetSentence,
+            "score" to log.score
+        )
+        db.collection("users").document(u).collection("rehabLogs").add(data)
+            .addOnFailureListener { Log.w(TAG, "pushRehabLog failed", it) }
+    }
+
     // ── 推送單筆歷史（與網頁 users/{uid}/history 同結構）──
     fun pushHistory(original: String, reconstructed: String, ts: Long) {
         val u = uid ?: return

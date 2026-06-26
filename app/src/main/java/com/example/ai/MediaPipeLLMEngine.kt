@@ -122,6 +122,57 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
         Result.success(cleaned.ifBlank { items.joinToString("") { it.label } })
     }
 
+    /**
+     * 裝置端 AI 復健評分（Gemma/Qwen，離線）。完全由 AI 判語意/流暢/語氣，非字元差異。
+     * 失敗退回介面預設（Levenshtein + 字元差異），確保一定有分數。
+     */
+    override suspend fun scoreRehab(
+        target: String,
+        recognized: String,
+        words: List<WordConf>
+    ): RehabEvaluation = withContext(Dispatchers.IO) {
+        val raw = runLlmSession(
+            prompt = buildRehabEvalPrompt(target, recognized, words),
+            temperature = 0.3f,
+            topK = 20,
+            seed = (System.currentTimeMillis() and 0xFFFF).toInt()
+        ) ?: return@withContext super.scoreRehab(target, recognized, words)
+        Log.d(TAG, "Rehab eval raw: $raw")
+        parseRehabEval(raw) ?: super.scoreRehab(target, recognized, words)
+    }
+
+    private fun buildRehabEvalPrompt(target: String, recognized: String, words: List<WordConf>) = buildString {
+        val conf = if (words.isNotEmpty()) "（信心：${words.joinToString(" ") { "${it.word}${(it.conf*100).toInt()}%" }}）" else ""
+        appendLine("<|im_start|>system")
+        appendLine(
+            "你是失語症語言治療師，評估患者口語跟讀。不要用字元差異，要看語意完整(50%)、流暢(30%)、語氣(20%)。" +
+            "只輸出 JSON：{\"score\":0到100整數,\"feedback\":\"20字內鼓勵\",\"wrongChars\":[\"說不準的字\"]}<|im_end|>"
+        )
+        appendLine("<|im_start|>user")
+        appendLine("目標句：我想喝水")
+        appendLine("患者說出：我要水<|im_end|>")
+        appendLine("<|im_start|>assistant")
+        appendLine("{\"score\":85,\"feedback\":\"意思很清楚，很好！\",\"wrongChars\":[\"想\"]}<|im_end|>")
+        appendLine("<|im_start|>user")
+        appendLine("目標句：$target")
+        appendLine("患者說出：${recognized.ifBlank { "（未偵測到聲音）" }}$conf<|im_end|>")
+        append("<|im_start|>assistant\n")
+    }
+
+    private fun parseRehabEval(raw: String): RehabEvaluation? {
+        val cleaned = raw.replace("<|im_end|>","").replace("<|im_start|>","").replace("<|endoftext|>","").trim()
+        val s = cleaned.indexOf('{'); val e = cleaned.lastIndexOf('}')
+        if (s !in 0 until e) return null
+        return try {
+            val o = JSONObject(cleaned.substring(s, e + 1))
+            val score = o.optInt("score", -1)
+            if (score !in 0..100) return null
+            val wrong = mutableListOf<String>()
+            o.optJSONArray("wrongChars")?.let { arr -> for (i in 0 until arr.length()) arr.optString(i).trim().takeIf { it.isNotBlank() }?.let(wrong::add) }
+            RehabEvaluation(score, o.optString("feedback","").trim(), wrong)
+        } catch (e: Exception) { null }
+    }
+
     private fun buildAacPrompt(items: List<com.example.data.AacItem>, location: String) = buildString {
         appendLine("<|im_start|>system")
         appendLine(
@@ -361,9 +412,24 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
 
     private fun copyBundledModelIfNeeded(target: File, onProgress: (Int) -> Unit) {
         val assetSize = bundledAssetSize(context)
+        val marker = File(target.parentFile, "$MODEL_FILENAME.source")
+        // 已經是內建模型（大小相符）→ 不動
         if (target.exists() && assetSize > 0L && target.length() == assetSize) {
+            runCatching { marker.writeText("bundled:$assetSize") }
             onProgress(100)
             return
+        }
+        // 工作檔已存在、是有效模型、且大小與內建不同：
+        //   - 若來源標記為內建（代表內建版本換了）→ 更新成新的內建。
+        //   - 否則視為「使用者自備模型」（App 匯入 / ADB 推送 Gemma 等）→ 保留，不覆蓋。
+        if (target.exists() && target.length() > 100_000_000L && target.length() != assetSize) {
+            val markedBundled = runCatching { marker.readText().trim().startsWith("bundled:") }.getOrDefault(false)
+            if (!markedBundled) {
+                Log.i(TAG, "保留使用者自備模型（${target.length() / 1_000_000} MB），不以內建模型覆蓋")
+                onProgress(100)
+                return
+            }
+            Log.i(TAG, "內建模型版本已更新（${target.length() / 1_000_000} MB → ${assetSize / 1_000_000} MB），重新複製")
         }
 
         target.parentFile?.mkdirs()
@@ -395,6 +461,7 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
             tmp.copyTo(target, overwrite = true)
             tmp.delete()
         }
+        runCatching { marker.writeText("bundled:$assetSize") }   // 標記此工作檔來自內建
         onProgress(100)
     }
 

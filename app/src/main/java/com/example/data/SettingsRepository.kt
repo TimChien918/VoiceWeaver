@@ -185,6 +185,20 @@ data class AppSettings(
      */
     val emergencyChatId: String = DEFAULT_EMERGENCY_CHAT_ID,
 
+    /** 常用句「我的最愛」：每行一句，重組/AAC 結果可收藏，一鍵朗讀。雲端同步。 */
+    val favoriteSentences: String = "",
+    /** 自訂 AAC 圖卡（JSON 陣列：每筆 {label, emoji}）。使用者自己加的詞。 */
+    val customAacItems: String = "",
+    /** 鼻控靈敏度倍率（0.5~2.0，1.0=預設）。即時注入 nose_tracker.html。 */
+    val noseSensitivity: Float = 1.0f,
+    /** 高對比模式：純黑底 + 高彩文字，視力弱者用。 */
+    val highContrast: Boolean = false,
+    /** 每日復健提醒開關。 */
+    val dailyReminderEnabled: Boolean = false,
+    /** 每日提醒時間（24 小時制的小時，0~23）。 */
+    val dailyReminderHour: Int = 19,
+    /** 成績單自動推送家屬 Telegram 的頻率（none/daily/weekly）。 */
+    val reportPushFrequency: String = "none",
     /** 使用者自定的住家地址（純顯示用，給家屬看「目前定為這裡」）。空 = 未設定。 */
     val homeAddress: String = "",
     /** 住家經度。`Double.NaN` = 未設定。配合 [homeLongitude] 一起使用。 */
@@ -280,6 +294,13 @@ class SettingsRepository(private val context: Context) {
         val HomeLat             = floatPreferencesKey("home_lat")
         val HomeLon             = floatPreferencesKey("home_lon")
         val HomeRadius          = floatPreferencesKey("home_radius")
+        val FavoriteSentences   = stringPreferencesKey("favorite_sentences")
+        val CustomAacItems      = stringPreferencesKey("custom_aac_items")
+        val NoseSensitivity     = floatPreferencesKey("nose_sensitivity")
+        val HighContrast        = booleanPreferencesKey("high_contrast")
+        val DailyReminderEnabled= booleanPreferencesKey("daily_reminder_enabled")
+        val DailyReminderHour   = androidx.datastore.preferences.core.intPreferencesKey("daily_reminder_hour")
+        val ReportPushFrequency = stringPreferencesKey("report_push_frequency")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p -> p.toSettings() }
@@ -341,7 +362,14 @@ class SettingsRepository(private val context: Context) {
         homeAddress        = this[Keys.HomeAddress] ?: "",
         homeLatitude       = (this[Keys.HomeLat] ?: Float.NaN).toDouble(),
         homeLongitude      = (this[Keys.HomeLon] ?: Float.NaN).toDouble(),
-        homeRadiusMeters   = this[Keys.HomeRadius] ?: 150f
+        homeRadiusMeters   = this[Keys.HomeRadius] ?: 150f,
+        favoriteSentences  = this[Keys.FavoriteSentences] ?: "",
+        customAacItems     = this[Keys.CustomAacItems] ?: "",
+        noseSensitivity    = this[Keys.NoseSensitivity] ?: 1.0f,
+        highContrast       = this[Keys.HighContrast] ?: false,
+        dailyReminderEnabled = this[Keys.DailyReminderEnabled] ?: false,
+        dailyReminderHour  = this[Keys.DailyReminderHour] ?: 19,
+        reportPushFrequency = this[Keys.ReportPushFrequency] ?: "none"
     )
 
     suspend fun setTheme(theme: AppTheme)            = update { it[Keys.Theme] = theme.name }
@@ -416,6 +444,25 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHomeRadius(radiusMeters: Float) = update {
         it[Keys.HomeRadius] = radiusMeters.coerceIn(20f, 1000f)
     }
+    suspend fun setFavoriteSentences(v: String) = update { it[Keys.FavoriteSentences] = v }
+    /** 切換一句的收藏狀態（已收藏→移除，未收藏→加到最前）。回傳是否為「已加入」。 */
+    suspend fun toggleFavorite(sentence: String) {
+        val s = sentence.trim()
+        if (s.isBlank()) return
+        update { p ->
+            val list = (p[Keys.FavoriteSentences] ?: "").split("\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableList()
+            if (list.remove(s)) { /* 已移除 */ } else { list.add(0, s) }
+            p[Keys.FavoriteSentences] = list.distinct().take(50).joinToString("\n")
+        }
+    }
+    suspend fun setCustomAacItems(json: String) = update { it[Keys.CustomAacItems] = json }
+    suspend fun setNoseSensitivity(v: Float) = update { it[Keys.NoseSensitivity] = v.coerceIn(0.5f, 2.0f) }
+    suspend fun setHighContrast(on: Boolean) = update { it[Keys.HighContrast] = on }
+    suspend fun setDailyReminder(enabled: Boolean, hour: Int) = update {
+        it[Keys.DailyReminderEnabled] = enabled
+        it[Keys.DailyReminderHour] = hour.coerceIn(0, 23)
+    }
+    suspend fun setReportPushFrequency(freq: String) = update { it[Keys.ReportPushFrequency] = freq }
 
     // ─── 行為數據彙總（康復追蹤指標）───────────────────────────────────────────
 

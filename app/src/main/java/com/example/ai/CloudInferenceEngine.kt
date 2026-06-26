@@ -311,6 +311,77 @@ class HybridInferenceEngine(
         }
     }
 
+    /**
+     * 語音復健 AI 評分：語意完整性 + 流暢性 + 語氣，不用字元差異。
+     * 電腦接手(本機/USB)優先 → 雲端 LLM → 全失敗退回 Levenshtein（PronunciationEvaluator）。
+     */
+    override suspend fun scoreRehab(
+        target: String,
+        recognized: String,
+        words: List<WordConf>
+    ): RehabEvaluation {
+        val prompt = buildRehabEvalPrompt(target, recognized, words)
+        // 1) 電腦接手＝最省手機、離線可用（區網/USB）
+        if (OffloadManager.shouldUseComputerText()) {
+            val txt = OffloadManager.computerReconstruct(prompt.system, prompt.user)?.trim()
+            val parsed = txt?.let { runCatching { parseRehabScore(it) }.getOrNull() }
+            if (parsed != null) return parsed
+        }
+        // 2) 雲端 LLM（LocalOnly 時跳過，交給裝置端引擎或 fallback）
+        if (provider != CloudProvider.LocalOnly && !NetworkQualityGate.shouldPreferLocal()) {
+            try {
+                val (_, result) = tryCloudWithFailover(prompt, timeoutMs = 8_000) { raw -> parseRehabScore(raw) }
+                return result
+            } catch (e: Exception) {
+                Log.w(TAG, "Cloud rehab eval failed: ${e.message}")
+            }
+        }
+        // 3) 本地備援：先試裝置端引擎(Gemma/Qwen) 的 AI 評分，再退 Levenshtein
+        return fallbackEngine.scoreRehab(target, recognized, words)
+    }
+
+    private fun buildRehabEvalPrompt(
+        target: String,
+        recognized: String,
+        words: List<WordConf>
+    ): CloudPrompt {
+        val confInfo = if (words.isNotEmpty())
+            "\n逐字辨識信心度：${words.joinToString(" ") { "${it.word}(${(it.conf * 100).toInt()}%)" }}"
+        else ""
+        return CloudPrompt(
+            system = """
+                你是失語症語言治療師，評估患者的口語跟讀表現。
+                不要用字元差異計算，要從語意傳達與流暢自然的角度判斷。
+            """.trimIndent(),
+            user = """
+                目標句：$target
+                患者說出的：${recognized.ifBlank { "（未偵測到聲音）" }}$confInfo
+
+                評分細則：
+                • 語意完整性（50%）：核心意思有沒有傳達？關鍵詞說到了嗎？即使用詞稍異但意思相同可給高分。
+                • 流暢性（30%）：有無重複、結巴？語氣是否連貫自然？信心度低的字可能發音不清。
+                • 語氣語調（20%）：語氣是否符合句型（問句/請求/感謝）？
+
+                只回傳 JSON：{"score":整數, "feedback":"一句繁體中文鼓勵或指引（20字以內）", "wrongChars":["說得不準或漏掉的字"]}
+            """.trimIndent(),
+            temperature = 0.3,
+            maxTokens = 150
+        )
+    }
+
+    private fun parseRehabScore(raw: String): RehabEvaluation {
+        val jsonText = raw.extractJsonObject() ?: error("無法解析 AI 回傳 JSON")
+        val o = JSONObject(jsonText)
+        val score = o.optInt("score", -1)
+        if (score !in 0..100) error("分數無效: $score")
+        val feedback = o.optString("feedback", "").trim()
+        val wrong = mutableListOf<String>()
+        o.optJSONArray("wrongChars")?.let { arr ->
+            for (i in 0 until arr.length()) arr.optString(i).trim().takeIf { it.isNotBlank() }?.let(wrong::add)
+        }
+        return RehabEvaluation(score, feedback, wrong)
+    }
+
     private fun buildReconstructPrompt(vault: GlobalTagsVault): CloudPrompt {
         val words = vault.sttWords.joinToString(" ") { "${it.word}(${(it.conf * 100).toInt()}%)" }
         return CloudPrompt(
