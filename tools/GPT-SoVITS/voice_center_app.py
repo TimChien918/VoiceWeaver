@@ -714,109 +714,38 @@ class App:
         for port, name, script, args, needs in SERVICES:
             self.start(port)
         self.root.after(500, self._maybe_autosync)
-        self._start_ip_beacon()
-
-    def _start_ip_beacon(self):
-        try:
-            import firebase_ip_beacon as _bk
-            if not _bk.is_configured():
-                existing = _bk.get_device_uid()
-                if existing:
-                    self.root.after(0, lambda uid=existing: self.beacon_label.config(
-                        text=f"🔗 裝置代號：{uid[:20]}…\n   （Firebase 未設定，不自動同步 IP）"))
-                else:
-                    self.root.after(0, lambda: self.beacon_label.config(
-                        text="🔗 裝置代號：點「Firebase 設定」以啟用無線 IP 自動同步"))
-                return
-            def on_ready(uid: str, lan_url: str):
-                self.root.after(0, lambda uid=uid, u=lan_url: self.beacon_label.config(
-                    text=f"🔗 裝置代號（填入手機）：{uid}\n   ✅ 已同步 IP → {u or '—'}"))
-            _bk.start_beacon(port=9880, interval=60, on_ready=on_ready)
-            uid = _bk.get_device_uid()
-            if uid:
-                self.root.after(0, lambda uid=uid: self.beacon_label.config(
-                    text=f"🔗 裝置代號（填入手機）：{uid}\n   同步中…"))
-        except Exception as e:
-            self.root.after(0, lambda e=e: self.beacon_label.config(
-                text=f"🔗 裝置代號：載入失敗（{e}）"))
 
     def _show_qr(self):
-        """在浮動視窗顯示目前 LAN IP 的 QR Code，手機直接掃。"""
         lan = lan_ip(); ts = tailscale_ip()
         url = f"http://{lan}:9880" if lan else (f"http://{ts}:9880" if ts else "")
         if not url:
             import tkinter.messagebox
-            tkinter.messagebox.showwarning("無法取得 IP", "電腦目前未連 Wi-Fi，也未連 Tailscale。\n請用 USB 有線方式（http://127.0.0.1:9880）。")
+            tkinter.messagebox.showwarning("無法取得 IP", "電腦目前未連 Wi-Fi，也未連 Tailscale。\n請用 USB（http://127.0.0.1:9880）。")
             return
-
         dlg = tk.Toplevel(self.root)
         dlg.title(f"掃描 QR Code → {url}"); dlg.resizable(False, False); dlg.grab_set()
         t = self.theme(); dlg.configure(bg=t["bg"])
-
-        def _draw_qr_canvas(parent):
-            """純 tkinter canvas 繪製 QR Code（呼叫 qrcode 庫）。"""
-            try:
-                import qrcode as _qr
-                qr = _qr.QRCode(error_correction=_qr.constants.ERROR_CORRECT_M, box_size=8, border=3)
-                qr.add_data(url); qr.make(fit=True)
-                matrix = qr.get_matrix()
-                size = len(matrix)
-                box = 8
-                cv_size = size * box
-                cv = tk.Canvas(parent, width=cv_size, height=cv_size, bg="white", highlightthickness=0)
-                cv.pack(pady=12, padx=24)
-                for r, row in enumerate(matrix):
-                    for c, cell in enumerate(row):
-                        if cell:
-                            x0, y0 = c * box, r * box
-                            cv.create_rectangle(x0, y0, x0 + box, y0 + box, fill="black", outline="")
-            except ImportError:
-                # fallback：顯示大字 URL，使用者手動填
-                tk.Label(parent, text="（需安裝 qrcode 套件以顯示 QR）\n\n請手動輸入以下網址：",
-                         font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["muted"]).pack(pady=(16, 4))
-                url_lbl = tk.Label(parent, text=url, font=(FONT_MONO, 14, "bold"), bg=t["bg"], fg="#00d4ff")
-                url_lbl.pack(pady=(0, 16))
-
-        _draw_qr_canvas(dlg)
-
-        info = tk.Label(dlg, text=f"Wi-Fi：{url}", font=(FONT_MONO, SZ_SMALL), bg=t["bg"], fg=t["muted"])
-        info.pack(pady=(0, 4))
+        try:
+            import qrcode as _qr
+            qr = _qr.QRCode(error_correction=_qr.constants.ERROR_CORRECT_M, box_size=8, border=3)
+            qr.add_data(url); qr.make(fit=True)
+            matrix = qr.get_matrix()
+            box = 8; cv_size = len(matrix) * box
+            cv = tk.Canvas(dlg, width=cv_size, height=cv_size, bg="white", highlightthickness=0)
+            cv.pack(pady=12, padx=24)
+            for r, row in enumerate(matrix):
+                for c, cell in enumerate(row):
+                    if cell:
+                        x0, y0 = c*box, r*box
+                        cv.create_rectangle(x0, y0, x0+box, y0+box, fill="black", outline="")
+        except ImportError:
+            tk.Label(dlg, text=f"手動輸入此網址：\n{url}",
+                     font=(FONT_MONO, 14, "bold"), bg=t["bg"], fg="#00d4ff").pack(pady=24, padx=24)
+        tk.Label(dlg, text=f"Wi-Fi：{url}", font=(FONT_MONO, SZ_SMALL), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 4))
         if ts:
-            ts_lbl = tk.Label(dlg, text=f"Tailscale：http://{ts}:9880", font=(FONT_MONO, SZ_SMALL), bg=t["bg"], fg=t["muted"])
-            ts_lbl.pack(pady=(0, 4))
+            tk.Label(dlg, text=f"Tailscale：http://{ts}:9880", font=(FONT_MONO, SZ_SMALL), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 4))
         tk.Label(dlg, text="對準手機相機掃描，App 會自動填入 IP", font=(FONT_UI, SZ_SMALL), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 4))
         self._btn(dlg, "關閉", dlg.destroy, C_RED).pack(pady=(4, 16))
-
-    def _open_firebase_setup(self):
-        try:
-            import firebase_ip_beacon as _bk
-            cfg = _bk.load_firebase_config()
-        except Exception:
-            cfg = {}
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Firebase 設定（IP 自動同步）"); dlg.resizable(False, False); dlg.grab_set()
-        t = self.theme()
-        dlg.configure(bg=t["bg"])
-        tk.Label(dlg, text="Firebase Web API Key：", font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["fg"]).grid(row=0, column=0, padx=12, pady=(16,4), sticky="w")
-        api_var = tk.StringVar(value=cfg.get("apiKey",""))
-        tk.Entry(dlg, textvariable=api_var, font=(FONT_MONO, SZ_SMALL), width=44, bg=t["panel"], fg=t["fg"], insertbackground=t["fg"], relief="solid").grid(row=0, column=1, padx=12, pady=(16,4))
-        tk.Label(dlg, text="Firebase Project ID：", font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["fg"]).grid(row=1, column=0, padx=12, pady=4, sticky="w")
-        proj_var = tk.StringVar(value=cfg.get("projectId",""))
-        tk.Entry(dlg, textvariable=proj_var, font=(FONT_MONO, SZ_SMALL), width=44, bg=t["panel"], fg=t["fg"], insertbackground=t["fg"], relief="solid").grid(row=1, column=1, padx=12, pady=4)
-        note = tk.Label(dlg, text="從 Firebase Console → 專案設定 → 一般 → Web API Key / Project ID",
-                        font=(FONT_UI, SZ_SMALL), bg=t["bg"], fg=t["muted"], wraplength=400, justify="left")
-        note.grid(row=2, column=0, columnspan=2, padx=12, pady=(0,8))
-        def save():
-            try:
-                import firebase_ip_beacon as _bk
-                _bk.save_firebase_config(api_var.get().strip(), proj_var.get().strip())
-                _bk.stop_beacon()
-                dlg.destroy()
-                self._start_ip_beacon()
-            except Exception as ex:
-                tk.messagebox.showerror("錯誤", str(ex))
-        import tkinter.messagebox
-        self._btn(dlg, "儲存並重新連線", save, C_GREEN, C_WHITE).grid(row=3, column=0, columnspan=2, pady=(4,16))
 
     def _detect_device_bg(self):
         """背景偵測安裝好的環境是否能用 CUDA；可用就讓語音設定改寫成 GPU。"""
@@ -1000,12 +929,6 @@ class App:
                                    font=(FONT_MONO, SZ_SMALL), anchor="w")
         self.conn_label.pack(anchor="w", pady=(6, 0)); self._track(self.conn_label, "muted")
         self._btn(conn_card, "📷 顯示 QR Code", self._show_qr, C_GREEN).pack(anchor="w", pady=(6, 0))
-
-        # Firebase 無線 IP 同步——裝置代號（手機填此代號後自動同步 IP）
-        self.beacon_label = tk.Label(conn_card, text="🔗 裝置代號：初始化中…",
-                                     justify="left", font=(FONT_MONO, SZ_SMALL), anchor="w")
-        self.beacon_label.pack(anchor="w", pady=(4, 0)); self._track(self.beacon_label, "muted")
-        self._btn(conn_card, "⚙️ Firebase 設定", self._open_firebase_setup, C_BLUE).pack(anchor="w", pady=(4, 0))
 
         # 無線同步手機 IP（可編輯 + 自動填入）
         wf = tk.Frame(conn_card); wf.pack(fill="x", pady=(8, 0)); self._track(wf, "panel")
@@ -1670,11 +1593,6 @@ class App:
         for port, *_ in SERVICES:
             self.stop(port)
         self.stop("9890")
-        try:
-            import firebase_ip_beacon as _bk
-            _bk.stop_beacon()
-        except Exception:
-            pass
         self.root.destroy()
 
 
