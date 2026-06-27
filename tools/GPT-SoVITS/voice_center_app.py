@@ -921,25 +921,33 @@ class App:
             self._service_card(svc_frame, port, name, script, args, needs)
 
         # 連線位址卡
-        conn_card = tk.Frame(parent, padx=16, pady=12)
+        conn_card = tk.Frame(parent, padx=16, pady=14)
         conn_card.pack(fill="x", padx=20, pady=(0, 12)); self._track(conn_card, "panel")
-        tk.Label(conn_card, text="手機連線位址",
-                 font=(FONT_UI, SZ_H2, "bold")).pack(anchor="w"); self._track(conn_card.children[list(conn_card.children)[-1]], "fg")
-        self.conn_label = tk.Label(conn_card, text="偵測中…", justify="left",
-                                   font=(FONT_MONO, SZ_SMALL), anchor="w")
-        self.conn_label.pack(anchor="w", pady=(6, 0)); self._track(self.conn_label, "muted")
-        self._btn(conn_card, "📷 顯示 QR Code", self._show_qr, C_GREEN).pack(anchor="w", pady=(6, 0))
 
-        # 無線同步手機 IP（可編輯 + 自動填入）
-        wf = tk.Frame(conn_card); wf.pack(fill="x", pady=(8, 0)); self._track(wf, "panel")
-        wl = tk.Label(wf, text="無線同步手機 IP：", font=(FONT_UI, SZ_SMALL))
-        wl.pack(side="left"); self._track(wl, "fg")
-        self.phone_ip_var = tk.StringVar(value=self._load_phone_ip())
-        self.phone_ip_entry = tk.Entry(wf, textvariable=self.phone_ip_var,
-                                       font=(FONT_MONO, SZ_SMALL), width=16, relief="solid", bd=1)
-        self.phone_ip_entry.pack(side="left", padx=6)
-        self.phone_ip_var.trace_add("write", lambda *_: self._save_phone_ip(self.phone_ip_var.get()))
-        self._btn(wf, "自動偵測", self.autodetect_phone_ip, C_BLUE).pack(side="left", padx=4)
+        # 標題
+        ct = tk.Label(conn_card, text="手機連線位址", font=(FONT_UI, SZ_H2, "bold"))
+        ct.pack(anchor="w"); self._track(ct, "fg")
+
+        # 三條連線列
+        self.conn_rows = {}
+        for key, icon_label in [
+            ("usb",  "🔌  有線 USB"),
+            ("wifi", "📶  Wi-Fi"),
+            ("ts",   "🌐  Tailscale"),
+        ]:
+            row = tk.Frame(conn_card, pady=3); row.pack(fill="x"); self._track(row, "panel")
+            dot = tk.Label(row, text="●", font=(FONT_UI, 14)); dot.pack(side="left", padx=(0, 6))
+            self._track(dot, "muted")
+            lbl = tk.Label(row, text=icon_label, font=(FONT_UI, SZ_SMALL), width=14, anchor="w")
+            lbl.pack(side="left"); self._track(lbl, "fg")
+            url_lbl = tk.Label(row, text="偵測中…", font=(FONT_MONO, SZ_SMALL), anchor="w")
+            url_lbl.pack(side="left", padx=(4, 0)); self._track(url_lbl, "muted")
+            self.conn_rows[key] = {"dot": dot, "url": url_lbl}
+
+        # QR Code 按鈕（全寬、醒目）
+        self._btn(conn_card, "📷  掃描連線（顯示 QR Code）", self._show_qr, C_GREEN).pack(
+            fill="x", pady=(10, 4))
+
 
         # 操作按鈕
         act = tk.Frame(parent); act.pack(fill="x", padx=20, pady=(0, 8)); self._track(act, "bg")
@@ -1575,16 +1583,22 @@ class App:
                 row["btn"].config(text="啟動", bg=C_GREEN)
 
         if not self.adb:
-            self.adb = ""   # 留給背景執行緒更新
+            self.adb = ""
         lan = lan_ip(); ts = tailscale_ip()
         adb_ok = bool(self.adb)
-        lines = [
-            f"{'✅' if adb_ok else '⚠️'}  有線(USB)：http://127.0.0.1:9880"
-            + ("" if adb_ok else "  ← 需 adb"),
-            f"📶  無線(Wi-Fi)：" + (f"http://{lan}:9880" if lan else "未連 Wi-Fi"),
-            f"🌐  全域(Tailscale)：" + (f"http://{ts}:9880" if ts else "未連線"),
-        ]
-        self.conn_label.config(text="\n".join(lines))
+
+        usb_url  = "http://127.0.0.1:9880" if adb_ok else "需 adb 連線"
+        wifi_url = f"http://{lan}:9880" if lan else "未連 Wi-Fi"
+        ts_url   = f"http://{ts}:9880" if ts else "未連 Tailscale"
+
+        for key, url, ok in [
+            ("usb",  usb_url,  adb_ok),
+            ("wifi", wifi_url, bool(lan)),
+            ("ts",   ts_url,   bool(ts)),
+        ]:
+            color = C_GREEN if ok else t["muted"]
+            self.conn_rows[key]["dot"].config(fg=color)
+            self.conn_rows[key]["url"].config(text=url, fg=color)
         self.root.after(2500, self.refresh)
 
     def on_close(self):
