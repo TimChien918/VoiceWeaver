@@ -260,6 +260,83 @@ fun ExtendedSettingsScreen(
                 }
             }
 
+            // ─── 無線連結電腦（Firebase IP 同步）───
+            item {
+                SettingSection(title = "無線連結電腦（自動同步 IP）", icon = Icons.Default.Wifi) {
+                    var computerIdDraft by remember(settings.linkedComputerId) {
+                        mutableStateOf(settings.linkedComputerId)
+                    }
+                    var syncStatus by remember { mutableStateOf<String?>(null) }
+                    Text("電腦啟動語音中心後，把畫面上的「裝置代號」貼到這裡，之後 App 會自動取得 IP，不需手動填。",
+                        fontSize = 11.sp, color = p.textMuted, lineHeight = 15.sp)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = computerIdDraft,
+                        onValueChange = { computerIdDraft = it.trim() },
+                        label = { Text("電腦裝置代號") },
+                        placeholder = { Text("貼上語音中心顯示的代號") },
+                        singleLine = true,
+                        trailingIcon = {
+                            if (computerIdDraft.isNotBlank()) {
+                                IconButton(onClick = {
+                                    computerIdDraft = ""
+                                    scope.launch {
+                                        settingsRepo.setLinkedComputerId("")
+                                        settingsRepo.setGptSovitApiBaseUrl("")
+                                    }
+                                    syncStatus = "已清除連結"
+                                }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "清除", tint = p.textMuted)
+                                }
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = p.textLight, unfocusedTextColor = p.textLight,
+                            focusedBorderColor = p.neonCyan, unfocusedBorderColor = p.neonCyan.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val id = computerIdDraft.trim()
+                            if (id.isBlank()) { syncStatus = "請先輸入裝置代號"; return@Button }
+                            syncStatus = "取得中…"
+                            scope.launch {
+                                settingsRepo.setLinkedComputerId(id)
+                            }
+                            com.example.ai.CloudSync.pullComputerIp(id) { lanUrl, tsUrl ->
+                                val url = lanUrl.ifBlank { tsUrl }
+                                if (url.isNotBlank()) {
+                                    scope.launch {
+                                        settingsRepo.setGptSovitApiBaseUrl(url)
+                                        syncStatus = "✅ 已套用 $url"
+                                    }
+                                } else {
+                                    syncStatus = "❌ 找不到此代號，確認電腦語音中心已啟動且已連 Firebase"
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan, contentColor = p.darkBg),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("連結並套用 IP", fontWeight = FontWeight.Bold)
+                    }
+                    syncStatus?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(it, fontSize = 12.sp,
+                            color = if (it.startsWith("✅")) p.neonGreen else if (it.startsWith("❌")) p.dangerRose else p.textMuted)
+                    }
+                    if (settings.linkedComputerId.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("已連結代號：${settings.linkedComputerId.take(24)}…",
+                            fontSize = 10.sp, color = p.textMuted)
+                    }
+                }
+            }
+
             // ─── 住家地址（影響 GPS 自動分類「住家」標籤）───
             item {
                 SettingSection(title = "住家地址", icon = Icons.Default.Home) {

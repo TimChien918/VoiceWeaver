@@ -199,6 +199,8 @@ data class AppSettings(
     val dailyReminderHour: Int = 19,
     /** 成績單自動推送家屬 Telegram 的頻率（none/daily/weekly）。 */
     val reportPushFrequency: String = "none",
+    /** 已連結電腦的 Firebase 裝置代號（devices/{id}）；空 = 未連結。 */
+    val linkedComputerId: String = "",
     /** 使用者自定的住家地址（純顯示用，給家屬看「目前定為這裡」）。空 = 未設定。 */
     val homeAddress: String = "",
     /** 住家經度。`Double.NaN` = 未設定。配合 [homeLongitude] 一起使用。 */
@@ -301,6 +303,7 @@ class SettingsRepository(private val context: Context) {
         val DailyReminderEnabled= booleanPreferencesKey("daily_reminder_enabled")
         val DailyReminderHour   = androidx.datastore.preferences.core.intPreferencesKey("daily_reminder_hour")
         val ReportPushFrequency = stringPreferencesKey("report_push_frequency")
+        val LinkedComputerId    = stringPreferencesKey("linked_computer_id")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p -> p.toSettings() }
@@ -369,7 +372,8 @@ class SettingsRepository(private val context: Context) {
         highContrast       = this[Keys.HighContrast] ?: false,
         dailyReminderEnabled = this[Keys.DailyReminderEnabled] ?: false,
         dailyReminderHour  = this[Keys.DailyReminderHour] ?: 19,
-        reportPushFrequency = this[Keys.ReportPushFrequency] ?: "none"
+        reportPushFrequency = this[Keys.ReportPushFrequency] ?: "none",
+        linkedComputerId    = this[Keys.LinkedComputerId] ?: ""
     )
 
     suspend fun setTheme(theme: AppTheme)            = update { it[Keys.Theme] = theme.name }
@@ -463,6 +467,7 @@ class SettingsRepository(private val context: Context) {
         it[Keys.DailyReminderHour] = hour.coerceIn(0, 23)
     }
     suspend fun setReportPushFrequency(freq: String) = update { it[Keys.ReportPushFrequency] = freq }
+    suspend fun setLinkedComputerId(id: String) = update { it[Keys.LinkedComputerId] = id.trim() }
 
     // ─── 行為數據彙總（康復追蹤指標）───────────────────────────────────────────
 

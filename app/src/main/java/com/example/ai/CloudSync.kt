@@ -154,6 +154,26 @@ object CloudSync {
         return ImageApiStore.encode(list)
     }
 
+    // ── 拉取電腦端 IP（devices/{linkedId} → gptSovitApiBaseUrl）──
+    /**
+     * 讀取電腦端語音中心推送的 IP。
+     * @param linkedId  使用者在電腦語音中心看到的裝置代號（Firebase 匿名 UID）
+     * @param onResult  (lanUrl, tailscaleUrl) 任一有值即可用；都空代表找不到
+     */
+    fun pullComputerIp(linkedId: String, onResult: (lanUrl: String, tailscaleUrl: String) -> Unit) {
+        if (linkedId.isBlank()) return
+        db.collection("devices").document(linkedId)
+            .get()
+            .addOnSuccessListener { snap ->
+                if (!snap.exists()) { onResult("", ""); return@addOnSuccessListener }
+                onResult(
+                    snap.getString("lanUrl") ?: "",
+                    snap.getString("tailscaleUrl") ?: ""
+                )
+            }
+            .addOnFailureListener { Log.w(TAG, "pullComputerIp failed", it); onResult("", "") }
+    }
+
     // ── 推送復健日誌（網頁版成績單讀取用）──
     fun pushRehabLog(log: com.example.data.RehabLog) {
         val u = uid ?: return
