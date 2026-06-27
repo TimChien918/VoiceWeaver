@@ -113,6 +113,7 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.play.services.location)
   implementation(libs.play.services.mlkit.`object`.detection)
+  implementation("com.google.mlkit:barcode-scanning:17.3.0")
   // Vosk 離線語音辨識（純裝置端 AI ASR，免帳號、免 Google 語言包）
   implementation("com.alphacephei:vosk-android:0.3.75")
   implementation(libs.retrofit)

@@ -740,6 +740,53 @@ class App:
             self.root.after(0, lambda e=e: self.beacon_label.config(
                 text=f"🔗 裝置代號：載入失敗（{e}）"))
 
+    def _show_qr(self):
+        """在浮動視窗顯示目前 LAN IP 的 QR Code，手機直接掃。"""
+        lan = lan_ip(); ts = tailscale_ip()
+        url = f"http://{lan}:9880" if lan else (f"http://{ts}:9880" if ts else "")
+        if not url:
+            import tkinter.messagebox
+            tkinter.messagebox.showwarning("無法取得 IP", "電腦目前未連 Wi-Fi，也未連 Tailscale。\n請用 USB 有線方式（http://127.0.0.1:9880）。")
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"掃描 QR Code → {url}"); dlg.resizable(False, False); dlg.grab_set()
+        t = self.theme(); dlg.configure(bg=t["bg"])
+
+        def _draw_qr_canvas(parent):
+            """純 tkinter canvas 繪製 QR Code（呼叫 qrcode 庫）。"""
+            try:
+                import qrcode as _qr
+                qr = _qr.QRCode(error_correction=_qr.constants.ERROR_CORRECT_M, box_size=8, border=3)
+                qr.add_data(url); qr.make(fit=True)
+                matrix = qr.get_matrix()
+                size = len(matrix)
+                box = 8
+                cv_size = size * box
+                cv = tk.Canvas(parent, width=cv_size, height=cv_size, bg="white", highlightthickness=0)
+                cv.pack(pady=12, padx=24)
+                for r, row in enumerate(matrix):
+                    for c, cell in enumerate(row):
+                        if cell:
+                            x0, y0 = c * box, r * box
+                            cv.create_rectangle(x0, y0, x0 + box, y0 + box, fill="black", outline="")
+            except ImportError:
+                # fallback：顯示大字 URL，使用者手動填
+                tk.Label(parent, text="（需安裝 qrcode 套件以顯示 QR）\n\n請手動輸入以下網址：",
+                         font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["muted"]).pack(pady=(16, 4))
+                url_lbl = tk.Label(parent, text=url, font=(FONT_MONO, 14, "bold"), bg=t["bg"], fg="#00d4ff")
+                url_lbl.pack(pady=(0, 16))
+
+        _draw_qr_canvas(dlg)
+
+        info = tk.Label(dlg, text=f"Wi-Fi：{url}", font=(FONT_MONO, SZ_SMALL), bg=t["bg"], fg=t["muted"])
+        info.pack(pady=(0, 4))
+        if ts:
+            ts_lbl = tk.Label(dlg, text=f"Tailscale：http://{ts}:9880", font=(FONT_MONO, SZ_SMALL), bg=t["bg"], fg=t["muted"])
+            ts_lbl.pack(pady=(0, 4))
+        tk.Label(dlg, text="對準手機相機掃描，App 會自動填入 IP", font=(FONT_UI, SZ_SMALL), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 4))
+        self._btn(dlg, "關閉", dlg.destroy, C_RED).pack(pady=(4, 16))
+
     def _open_firebase_setup(self):
         try:
             import firebase_ip_beacon as _bk
@@ -952,6 +999,7 @@ class App:
         self.conn_label = tk.Label(conn_card, text="偵測中…", justify="left",
                                    font=(FONT_MONO, SZ_SMALL), anchor="w")
         self.conn_label.pack(anchor="w", pady=(6, 0)); self._track(self.conn_label, "muted")
+        self._btn(conn_card, "📷 顯示 QR Code", self._show_qr, C_GREEN).pack(anchor="w", pady=(6, 0))
 
         # Firebase 無線 IP 同步——裝置代號（手機填此代號後自動同步 IP）
         self.beacon_label = tk.Label(conn_card, text="🔗 裝置代號：初始化中…",
