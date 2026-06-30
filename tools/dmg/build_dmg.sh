@@ -83,11 +83,18 @@ RP="$APP/Contents/Resources/payload/GPT-SoVITS"
 find "$RP" -type d \( -name '*weights*' -o -name 'pretrained_models' -o -name 'user_models' \
    -o -name 'ref_audio' -o -name 'G2PWModel' -o -name '.cache' -o -name '__pycache__' \) \
    -prune -exec rm -rf {} + 2>/dev/null || true
+# G2PWModel 也會以「壓縮檔」形式出現（如 G2PWModel_1.1.zip ~568M），上面只清目錄會漏 → 連檔案一起清（首次執行自動下載）
+find "$RP" -iname 'G2PWModel*' -exec rm -rf {} + 2>/dev/null || true
 LEAK="$(find "$RP" -type d -name '*weights*' 2>/dev/null)"
 if [ -n "$LEAK" ]; then
   echo "✗ 偵測到權重資料夾仍在 payload，為保護版權中止打包："; echo "$LEAK"; exit 1
 fi
-echo "    payload(已過濾權重) : $(du -sh "$RP" | cut -f1)"
+# 大檔守門：payload 不該有任何 >20M 檔（模型一律自動下載），否則中止避免誤打包
+BIG="$(find "$RP" -type f -size +20M 2>/dev/null)"
+if [ -n "$BIG" ]; then
+  echo "✗ payload 仍有 >20M 大檔，為避免誤打包模型中止："; echo "$BIG"; exit 1
+fi
+echo "    payload(已過濾權重/大檔) : $(du -sh "$RP" | cut -f1)"
 
 echo "==> ad-hoc 簽章（含圖示）"
 codesign --force --deep --sign - "$APP" 2>/dev/null || echo "    (簽章略過)"

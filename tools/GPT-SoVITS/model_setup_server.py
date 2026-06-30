@@ -133,6 +133,22 @@ def ensure_dirs(version: str) -> tuple[Path, Path]:
     return gpt_dir, sovits_dir
 
 
+def detect_lang_from_text(text: str) -> str:
+    """依參考文字的文字種類判斷語言，回傳 _KO/_JA/_ZH/_EN 或空字串。
+    諺文→韓、假名→日、（無假名的）漢字→中、純拉丁字母→英。"""
+    if not text:
+        return ""
+    if re.search(r"[가-힣]", text):            # 한글 諺文
+        return "_KO"
+    if re.search(r"[぀-ヿ]", text):            # ひらがな/カタカナ 假名
+        return "_JA"
+    if re.search(r"[一-鿿]", text):            # 漢字（無假名 → 視為中文）
+        return "_ZH"
+    if re.search(r"[A-Za-z]", text):                    # 拉丁字母
+        return "_EN"
+    return ""
+
+
 def scan_model_folder(folder: Path) -> dict:
     """自動辨識模型資料夾，回傳可帶入表單的欄位。
     結構例：我的聲音_ZH/{我的聲音_ZH-e10.ckpt, 我的聲音_ZH_e10_s860_l32.pth, reference_audios/中文/emotions/【默认】…wav}
@@ -154,11 +170,23 @@ def scan_model_folder(folder: Path) -> dict:
         stem = re.sub(r"^[【\[〖（(][^】\]〗）)]*[】\]〗）)]\s*", "", stem)
         prompt = stem.strip()
     folder_name = unicodedata.normalize("NFC", folder.name)
-    lang = "_ZH"
-    for tag in ("_ZH", "_CN", "_EN", "_JA", "_JP", "_KO", "_KR"):
-        if tag in folder_name.upper():
-            lang = {"_CN": "_ZH", "_JP": "_JA", "_KR": "_KO"}.get(tag, tag)
-            break
+    # 語言偵測（由最可靠到最寬鬆）：
+    #   ① 參考文字的文字種類（諺文/假名/漢字/拉丁）— 最準
+    #   ② 資料夾名稱的明確標籤  ③ 參考音檔路徑的語言子資料夾  ④ 預設中文
+    lang = detect_lang_from_text(prompt)
+    if not lang:
+        for tag in ("_ZH", "_CN", "_EN", "_JA", "_JP", "_KO", "_KR"):
+            if tag in folder_name.upper():
+                lang = {"_CN": "_ZH", "_JP": "_JA", "_KR": "_KO"}.get(tag, tag)
+                break
+    if not lang:
+        probe = unicodedata.normalize("NFC", str(ref) if ref else (str(wavs[0]) if wavs else ""))
+        if   any(k in probe for k in ("日语", "日語", "日文", "japanese")): lang = "_JA"
+        elif any(k in probe for k in ("韩语", "韓語", "韓文", "韩文", "korean")): lang = "_KO"
+        elif any(k in probe for k in ("英语", "英文", "english")): lang = "_EN"
+        elif any(k in probe for k in ("中文", "汉语", "漢語", "chinese")): lang = "_ZH"
+    if not lang:
+        lang = "_ZH"
     parent = folder.parent.name
     version = parent if parent in SUPPORTED_VERSIONS else "v4"
     return {
@@ -177,21 +205,59 @@ def scan_model_folder(folder: Path) -> dict:
 def load_history() -> list[dict]:
     if not HISTORY_PATH.exists():
         return []
+    raw = HISTORY_PATH.read_text(encoding="utf-8")
     try:
-        data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+        data = json.loads(raw)
         if not isinstance(data, list):
-            return []
-        return [normalize_history_record(item) for item in data if isinstance(item, dict)]
+            data = []
     except Exception:
-        return []
+        # 檔案損壞（例如並行寫入造成多段 JSON 黏接）：盡力救回所有物件
+        data = _salvage_history(raw)
+        if data:
+            try: save_history(data)   # 立刻寫回乾淨版本
+            except Exception: pass
+    return [normalize_history_record(item) for item in data if isinstance(item, dict)]
+
+
+def _salvage_history(raw: str) -> list[dict]:
+    """從損壞的 JSON 文字盡量逐段抽出 dict 物件，依 id 去重。"""
+    dec = json.JSONDecoder()
+    raw = raw.lstrip()
+    idx = 0
+    by_id = {}
+    extras = []
+    while idx < len(raw):
+        try:
+            obj, end = dec.raw_decode(raw, idx)
+        except json.JSONDecodeError:
+            idx += 1
+            continue
+        if isinstance(obj, dict):
+            key = obj.get("id")
+            (by_id.__setitem__(key, obj) if key else extras.append(obj))
+        idx = end
+        while idx < len(raw) and raw[idx] in " \n\t\r,":
+            idx += 1
+    return list(by_id.values()) + extras
 
 
 def save_history(records: list[dict]) -> None:
+    # 原子寫入：先寫到同目錄的暫存檔，再 os.replace 取代，避免並行/中斷寫入造成檔案損壞
     HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    HISTORY_PATH.write_text(
-        json.dumps(records, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    payload = json.dumps(records, ensure_ascii=False, indent=2) + "\n"
+    tmp = HISTORY_PATH.with_suffix(HISTORY_PATH.suffix + f".tmp.{os.getpid()}")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, HISTORY_PATH)   # 同檔案系統上是原子操作
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
 
 
 def model_id(version: str, gpt_rel: str, sovits_rel: str, ref_path: Path) -> str:

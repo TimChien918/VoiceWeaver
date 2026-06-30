@@ -1441,7 +1441,29 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // ─── 設定 ───────────────────────────────────────────────────────────────
 
     fun setTheme(theme: AppTheme) = viewModelScope.launch { settingsRepo.setTheme(theme) }
-    fun setLanguage(lang: AppLanguage) = viewModelScope.launch { settingsRepo.setLanguage(lang) }
+    fun setLanguage(lang: AppLanguage) = viewModelScope.launch {
+        settingsRepo.setLanguage(lang)
+        val baseUrl = settings.value.gptSovitApiBaseUrl.ifBlank { return@launch }
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val langUrl = baseUrl.let {
+                    val uri = android.net.Uri.parse(it)
+                    "${uri.scheme}://${uri.host}:9879/lang"
+                }
+                val body = """{"tag":"${lang.tag}","name":"${lang.displayName}"}"""
+                    .toByteArray()
+                val conn = java.net.URL(langUrl).openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.connectTimeout = 2000
+                conn.readTimeout = 2000
+                conn.outputStream.write(body)
+                conn.responseCode
+                conn.disconnect()
+            }
+        }
+    }
     fun setPowerMode(mode: PowerMode) = viewModelScope.launch {
         settingsRepo.setPowerMode(mode)
         // 立即把耗能模式對應到 DeviceTier override：省電→LOW、標準→自動、高效能→HIGH

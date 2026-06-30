@@ -702,6 +702,7 @@ private fun GptSovitDeveloperPanel(
     onClearEnglishModelDir: () -> Unit,
     onClearAutoImport: () -> Unit,
     onBack: () -> Unit,
+    appLangTag: String = "zh-TW",
     p: com.example.ui.theme.AppPalette
 ) {
     Column(
@@ -783,6 +784,7 @@ private fun GptSovitDeveloperPanel(
             onApiBaseUrlChange = onApiBaseUrlChange,
             serverList = serverList,
             onServerListChange = onServerListChange,
+            appLangTag = appLangTag,
             p = p
         )
         // 舊的「自動/中文/English」模式 chip 已移除：語言現在由文字自動偵測（中/英/日/韓），
@@ -923,6 +925,7 @@ private fun TermuxSovitsPanel(
     onApiBaseUrlChange: (String) -> Unit,
     serverList: String,
     onServerListChange: (String) -> Unit,
+    appLangTag: String = "zh-TW",
     p: com.example.ui.theme.AppPalette
 ) {
     val context = LocalContext.current
@@ -1109,61 +1112,97 @@ private fun TermuxSovitsPanel(
             }
         }
 
-        // ── 角色模型（含語言標籤 _ZH/_EN/_JA/_KO）──
-        // 清單由伺服器 /models 動態提供（電腦端新增/刪除即時反映），合成時依文字語言自動切換。
-        Text("角色模型（電腦端即時同步，依文字語言自動切換）", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-        // 面板出現/位址變動時，自動向伺服器抓最新模型清單（電腦端新增/刪除即時反映）
+        // ── 角色模型（依介面語言過濾）──
         LaunchedEffect(apiBaseUrl) {
             runCatching { com.example.ai.LocalSovitsHelper.refreshModels(apiBaseUrl) }
         }
         val voices by com.example.ai.LocalSovitsHelper.voicesFlow.collectAsState()
         val curVoice = com.example.ai.LocalSovitsHelper.currentVoice()
-        if (voices.isEmpty()) {
+        // 依目前 App 介面語言過濾：只顯示對應語言的模型
+        val voiceLangFilter = com.example.ai.LocalSovitsHelper.langFromAppTag(appLangTag)
+        val filteredVoices = voices.filter { it.lang == voiceLangFilter }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("角色模型", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+            Spacer(Modifier.width(6.dp))
+            Text("（${voiceLangFilter.displayName}）", fontSize = 10.sp, color = p.neonCyan)
+            Spacer(Modifier.weight(1f))
+            if (voices.size > filteredVoices.size) {
+                Text("顯示 ${filteredVoices.size}/${voices.size}", fontSize = 9.sp, color = p.textMuted)
+            }
+        }
+        if (filteredVoices.isEmpty()) {
             Text(
-                "目前電腦上沒有模型。請在 Mac 開啟模型控制中心（http://127.0.0.1:9890）匯入模型，或按上方「測試連線」重新整理。",
+                if (voices.isEmpty())
+                    "電腦上尚無任何模型，請在 Mac 語音中心匯入後按上方「測試連線」重新整理。"
+                else
+                    "目前介面語言（${voiceLangFilter.displayName}）沒有對應模型。請在 Mac 語音中心匯入含「${voiceLangFilter.tag}」標籤的模型。",
                 fontSize = 11.sp, color = p.textMuted, lineHeight = 16.sp
             )
         }
-        androidx.compose.foundation.layout.FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            voices.forEach { v ->
-                val active = curVoice?.character == v.character && curVoice.lang == v.lang
-                OutlinedButton(
-                    onClick = {
-                        if (switching) return@OutlinedButton
-                        switching = true
-                        switchStatus = "⏳ 正在切換到 ${v.displayLabel}（CPU 載權重需數十秒）…"
-                        scope.launch {
-                            val r = com.example.ai.LocalSovitsHelper.switchModel(apiBaseUrl, v)
-                            switchStatus = r.fold(
-                                onSuccess = { "✅ 已切換到 $it，ref/prompt 已自動跟上" },
-                                onFailure = { "❌ ${it.message}" }
-                            )
-                            pingResult = com.example.ai.LocalSovitsHelper.pingServer(apiBaseUrl)
-                            switching = false
+        // 2 欄宮格，每排兩張卡，全部展開不捲動
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+            filteredVoices.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                    row.forEach { v ->
+                        val active = curVoice?.character == v.character && curVoice.lang == v.lang
+                        val borderColor = if (active) p.neonCyan else p.textMuted.copy(alpha = 0.35f)
+                        val bgColor = if (active) p.neonCyan.copy(alpha = 0.12f) else p.surface.copy(alpha = 0.6f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(bgColor)
+                                .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                                .clickable(enabled = !switching) {
+                                    if (switching) return@clickable
+                                    switching = true
+                                    switchStatus = "⏳ 正在切換到 ${v.displayLabel}…"
+                                    scope.launch {
+                                        val r = com.example.ai.LocalSovitsHelper.switchModel(apiBaseUrl, v)
+                                        switchStatus = r.fold(
+                                            onSuccess = { "✅ 已切換到 $it，ref/prompt 已自動跟上" },
+                                            onFailure = { "❌ ${it.message}" }
+                                        )
+                                        pingResult = com.example.ai.LocalSovitsHelper.pingServer(apiBaseUrl)
+                                        switching = false
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        v.character,
+                                        fontSize = 13.sp,
+                                        color = if (active) p.neonCyan else p.textLight,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (active) {
+                                        Text("●", fontSize = 8.sp, color = p.neonCyan)
+                                    }
+                                }
+                                Text(
+                                    v.lang.displayName,
+                                    fontSize = 9.sp,
+                                    color = p.textMuted
+                                )
+                            }
                         }
-                    },
-                    enabled = !switching,
-                    border = BorderStroke(
-                        1.dp,
-                        if (active) p.neonCyan else p.textMuted.copy(alpha = 0.4f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        (if (active) "● " else "") + v.displayLabel,
-                        fontSize = 11.sp,
-                        color = if (active) p.neonCyan else p.textLight,
-                        fontWeight = FontWeight.Bold
-                    )
+                    }
+                    // 奇數模型時補空白佔位，維持左對齊
+                    if (row.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
         Text(
-            "💡 講中文用 _ZH、講英文自動切 _EN；切換約需數十秒（CPU 載權重），同語言內連續講不會重切。",
+            "切換 App 介面語言即可篩選對應聲音模型；切換約需數十秒（CPU 載權重），同語言內連續講不會重切。",
             fontSize = 9.sp, color = p.textMuted, lineHeight = 13.sp
         )
         switchStatus?.let {
@@ -1810,6 +1849,7 @@ private fun DeveloperModeSection(
                         autoImportStatus = null
                     },
                     onBack = { showGptSovitPanel = false },
+                    appLangTag = settings.language.tag,
                     p = p.iosReadable
                 )
             } else {

@@ -37,6 +37,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
+# 學習到的手機區網 IP（隱私／本機執行期狀態，勿進 git）
+tools/GPT-SoVITS/.phone_wifi
+
 # Local GPT-SoVITS runtimes, model weights, caches, and imports
 tools/miniforge3/
 tools/gpt-sovits-env/

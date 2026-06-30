@@ -41,12 +41,13 @@ fun EyeGesturesOverlay(
     onBlink: () -> Unit,
     onStatus: (String) -> Unit = {},
     onReady: (WebView?) -> Unit = {},
+    lang: String = "zh-TW",
     modifier: Modifier = Modifier
 ) {
     if (!enabled) return
 
     val context = LocalContext.current
-    val webView = remember { buildEyeGesturesWebView(context, onGaze, onBlink, onStatus) }
+    val webView = remember(lang) { buildEyeGesturesWebView(context, onGaze, onBlink, onStatus, lang) }
 
     DisposableEffect(webView) {
         onReady(webView)              // 把 WebView 交給呼叫方（重新置中要用 evaluateJavascript）
@@ -68,7 +69,8 @@ private fun buildEyeGesturesWebView(
     context: Context,
     onGaze: (Float, Float, Boolean) -> Unit,
     onBlink: () -> Unit,
-    onStatus: (String) -> Unit
+    onStatus: (String) -> Unit,
+    lang: String = "zh-TW"
 ): WebView {
     val assetLoader = WebViewAssetLoader.Builder()
         .setDomain("appassets.androidplatform.net")
@@ -76,7 +78,7 @@ private fun buildEyeGesturesWebView(
         .build()
 
     val dm = context.resources.displayMetrics
-    val url = "$TRACKER_URL?w=${dm.widthPixels}&h=${dm.heightPixels}"
+    val url = "$TRACKER_URL?w=${dm.widthPixels}&h=${dm.heightPixels}&lang=$lang"
 
     return WebView(context).apply {
         settings.apply {
