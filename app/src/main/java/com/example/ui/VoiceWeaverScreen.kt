@@ -173,14 +173,14 @@ fun VoiceWeaverScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                "🏥 快速求救（一鍵發聲）",
+                                I18n.tr("🏥 快速求救（一鍵發聲）"),
                                 fontSize = 12.sp, fontWeight = FontWeight.Bold, color = dangerRose
                             )
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                listOf("😖 我痛" to "我很痛，請幫幫我。",
-                                       "💧 喝水" to "我想要喝水。",
-                                       "🚻 廁所" to "我想上廁所，請帶我去。").forEach { (label, phrase) ->
+                                listOf(I18n.tr("😖 我痛") to I18n.tr("我很痛，請幫幫我。"),
+                                       I18n.tr("💧 喝水") to I18n.tr("我想要喝水。"),
+                                       I18n.tr("🚻 廁所") to I18n.tr("我想上廁所，請帶我去。")).forEach { (label, phrase) ->
                                     Button(
                                         onClick = { viewModel.speakClinicalPhrase(phrase) },
                                         colors = ButtonDefaults.buttonColors(containerColor = dangerRose),
@@ -208,7 +208,7 @@ fun VoiceWeaverScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text("⭐ 我的最愛（點一下朗讀）", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = auraAmber)
+                            Text(I18n.tr("⭐ 我的最愛（點一下朗讀）"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = auraAmber)
                             Spacer(Modifier.height(8.dp))
                             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 favorites.take(12).forEach { fav ->
@@ -334,7 +334,7 @@ fun VoiceWeaverScreen(
                                     Spacer(Modifier.width(8.dp))
                                     Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "目前地點：${result.shortTag}",
+                                            text = I18n.tr("目前地點：%s").format(result.shortTag),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = textLight,
@@ -354,9 +354,9 @@ fun VoiceWeaverScreen(
                                 ) {
                                     OutlinedButton(
                                         onClick = {
-                                            setHomeStatus = "設定中…"
+                                            setHomeStatus = I18n.tr("設定中…")
                                             viewModel.setCurrentGpsAsHomeNow { success, addr ->
-                                                setHomeStatus = if (success) "✅ 已設為我家：${addr ?: ""}" else "❌ 沒抓到 GPS"
+                                                setHomeStatus = if (success) I18n.tr("✅ 已設為我家：%s").format(addr ?: "") else I18n.tr("❌ 沒抓到 GPS")
                                             }
                                         },
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = auraAmber),
@@ -366,7 +366,7 @@ fun VoiceWeaverScreen(
                                     ) {
                                         Icon(Icons.Default.Home, null, modifier = Modifier.size(14.dp))
                                         Spacer(Modifier.width(4.dp))
-                                        Text("設為我家", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(I18n.tr("設為我家"), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                     OutlinedButton(
                                         onClick = {
@@ -385,7 +385,7 @@ fun VoiceWeaverScreen(
                                     ) {
                                         Icon(Icons.Default.Map, null, modifier = Modifier.size(14.dp))
                                         Spacer(Modifier.width(4.dp))
-                                        Text("看地圖", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(I18n.tr("看地圖"), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 setHomeStatus?.let {
@@ -486,7 +486,7 @@ fun VoiceWeaverScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.Add, null, tint = auraAmber, modifier = Modifier.size(12.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("更多物品", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = auraAmber)
+                                    Text(I18n.tr("更多物品"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = auraAmber)
                                 }
                             }
                             if (showCatalog) {
@@ -550,7 +550,7 @@ fun VoiceWeaverScreen(
                                 ) {
                                     Icon(Icons.Default.Visibility, null, tint = neonGreen, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(6.dp))
-                                    Text("開啟預覽", fontSize = 11.sp, color = neonGreen, fontWeight = FontWeight.Bold)
+                                    Text(I18n.tr("開啟預覽"), fontSize = 11.sp, color = neonGreen, fontWeight = FontWeight.Bold)
                                 }
                                 Button(
                                     onClick = { viewModel.startSensingVision() },
@@ -884,7 +884,7 @@ fun VoiceWeaverScreen(
                             border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.5f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("🃏 大圖卡模式（適合用圖說話）", fontSize = 13.sp, color = neonCyan)
+                            Text(I18n.tr("🃏 大圖卡模式（適合用圖說話）"), fontSize = 13.sp, color = neonCyan)
                         }
                     }
                 }
@@ -1053,7 +1053,7 @@ fun VoiceWeaverScreen(
                                     if (intentImagePath != null) {
                                         coil.compose.AsyncImage(
                                             model = java.io.File(intentImagePath!!),
-                                            contentDescription = "意圖示意圖",
+                                            contentDescription = I18n.tr("意圖示意圖"),
                                             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -1065,7 +1065,7 @@ fun VoiceWeaverScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                                             CircularProgressIndicator(modifier = Modifier.size(16.dp), color = neonCyan, strokeWidth = 2.dp)
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("正在生成專屬圖卡…", fontSize = 12.sp, color = textMuted)
+                                            Text(I18n.tr("正在生成專屬圖卡…"), fontSize = 12.sp, color = textMuted)
                                         }
                                     }
 
@@ -1143,7 +1143,7 @@ fun VoiceWeaverScreen(
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Text(
-                                                text = "不對？唸原始輸入：「${data.originalText.take(20)}」",
+                                                text = I18n.tr("不對？唸原始輸入：「%s」").format(data.originalText.take(20)),
                                                 fontSize = 12.sp,
                                                 color = textMuted,
                                                 maxLines = 1
@@ -1177,26 +1177,26 @@ fun VoiceWeaverScreen(
                                             shape = RoundedCornerShape(10.dp),
                                             border = BorderStroke(1.dp, textMuted.copy(alpha = 0.5f)),
                                             modifier = Modifier.weight(1f)
-                                        ) { Icon(Icons.Default.ContentCopy, null, tint = textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text("複製", fontSize = 12.sp, color = textMuted) }
+                                        ) { Icon(Icons.Default.ContentCopy, null, tint = textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text(I18n.tr("複製"), fontSize = 12.sp, color = textMuted) }
                                         OutlinedButton(
                                             onClick = {
                                                 context.startActivity(android.content.Intent.createChooser(
                                                     android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                                         type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, data.reconstructedText)
-                                                    }, "分享句子"))
+                                                    }, I18n.tr("分享句子")))
                                             },
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                             shape = RoundedCornerShape(10.dp),
                                             border = BorderStroke(1.dp, textMuted.copy(alpha = 0.5f)),
                                             modifier = Modifier.weight(1f)
-                                        ) { Icon(Icons.Default.Share, null, tint = textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text("分享", fontSize = 12.sp, color = textMuted) }
+                                        ) { Icon(Icons.Default.Share, null, tint = textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text(I18n.tr("分享"), fontSize = 12.sp, color = textMuted) }
                                         OutlinedButton(
                                             onClick = { viewModel.toggleFavorite(data.reconstructedText) },
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                             shape = RoundedCornerShape(10.dp),
                                             border = BorderStroke(1.dp, if (isFav) auraAmber else textMuted.copy(alpha = 0.5f)),
                                             modifier = Modifier.weight(1f)
-                                        ) { Icon(if (isFav) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (isFav) auraAmber else textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text("收藏", fontSize = 12.sp, color = if (isFav) auraAmber else textMuted) }
+                                        ) { Icon(if (isFav) Icons.Default.Star else Icons.Default.StarBorder, null, tint = if (isFav) auraAmber else textMuted, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(4.dp)); Text(I18n.tr("收藏"), fontSize = 12.sp, color = if (isFav) auraAmber else textMuted) }
                                     }
 
                                     // ── 多語朗讀（中英日韓）──
@@ -1393,7 +1393,7 @@ private fun LocationPresetDropdown(
             OutlinedTextField(
                 value = selectedPreset?.takeIf { group.presets.any { p -> p.label == it.label } }
                     ?.let { "${it.emoji} ${it.label}" }
-                    ?: "選擇${group.title}情境",
+                    ?: I18n.tr("選擇%s情境").format(group.title),
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
@@ -1508,7 +1508,7 @@ private fun CameraPreviewDialog(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Visibility, null, tint = neonGreen, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("攝影預覽", color = textLight, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(I18n.tr("攝影預覽"), color = textLight, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Close, null, tint = textMuted, modifier = Modifier.size(18.dp))
                 }
@@ -1575,7 +1575,7 @@ private fun CameraPreviewDialog(
                 }, androidx.core.content.ContextCompat.getMainExecutor(context))
             }
             Text(
-                if (lens == CameraLens.Both) "前後一起拍會按一次連續擷取兩顆鏡頭；預覽先顯示後攝影機。" else "關閉視窗後會立即釋放相機。",
+                if (lens == CameraLens.Both) I18n.tr("前後一起拍會按一次連續擷取兩顆鏡頭；預覽先顯示後攝影機。") else I18n.tr("關閉視窗後會立即釋放相機。"),
                 color = textMuted,
                 fontSize = 11.sp
             )
@@ -1628,11 +1628,11 @@ private fun VisionCatalogDialog(
                     Icon(Icons.Default.CameraAlt, null, tint = p.neonGreen, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "選擇看到的物品",
+                        I18n.tr("選擇看到的物品"),
                         fontSize = 14.sp, fontWeight = FontWeight.Bold,
                         color = p.textLight, modifier = Modifier.weight(1f)
                     )
-                    Text("已選 ${selected.size}", fontSize = 11.sp, color = p.neonGreen)
+                    Text(I18n.tr("已選 %d").format(selected.size), fontSize = 11.sp, color = p.neonGreen)
                     Spacer(Modifier.width(8.dp))
                     IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
                         Icon(Icons.Default.Close, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
@@ -1702,7 +1702,7 @@ private fun VisionCatalogDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("完成", color = p.neonGreen, fontWeight = FontWeight.Bold)
+                        Text(I18n.tr("完成"), color = p.neonGreen, fontWeight = FontWeight.Bold)
                     }
                 }
             }

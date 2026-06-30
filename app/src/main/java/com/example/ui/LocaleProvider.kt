@@ -26,6 +26,7 @@ import java.util.Locale
  */
 @Composable
 fun LocaleProvider(language: AppLanguage, content: @Composable () -> Unit) {
+    I18n.lang = language   // 同步給「中文原文鍵」翻譯層（補 strings.xml 未涵蓋的寫死字串）
     val base = LocalContext.current
     val localized = remember(language, base) {
         val locale = Locale.forLanguageTag(language.tag)
