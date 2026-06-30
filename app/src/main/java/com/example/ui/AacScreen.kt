@@ -97,7 +97,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                     IconButton(onClick = { viewModel.aacToggleFlashcardMode() }) {
                         Icon(
                             imageVector = if (state.flashcardMode) Icons.Default.GridView else Icons.Default.ViewCarousel,
-                            contentDescription = if (state.flashcardMode) "切換到九宮格" else "切換到識字卡",
+                            contentDescription = if (state.flashcardMode) I18n.tr("切換到九宮格") else I18n.tr("切換到識字卡"),
                             tint = p.auraAmber
                         )
                     }
@@ -239,7 +239,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                     // 1–5 星評分（寫進 Room AacComboLog，給 AI 推薦下一次圖卡用）
                     if (state.lastLogId != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("這次有傳達到嗎？", color = p.textMuted, fontSize = 11.sp)
+                            Text(I18n.tr("這次有傳達到嗎？"), color = p.textMuted, fontSize = 11.sp)
                             Spacer(Modifier.width(6.dp))
                             (1..5).forEach { n ->
                                 val filled = n <= state.lastRating
@@ -270,7 +270,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
 
             if (state.rejectCount in 1..2) {
                 Text(
-                    "已連續 ${state.rejectCount} 次選錯，再 ${3 - state.rejectCount} 次將呼叫家屬",
+                    I18n.tr("已連續 %d 次選錯，再 %d 次將呼叫家屬").format(state.rejectCount, 3 - state.rejectCount),
                     fontSize = 11.sp, color = p.auraAmber, modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -304,7 +304,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                         // SMS Intent（無收件人，由使用者在簡訊 App 中選聯絡人）
                         runCatching {
                             ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))
-                                .putExtra("sms_body", "我目前需要協助，請聯絡我（VoiceWeaver 緊急通報）。"))
+                                .putExtra("sms_body", I18n.tr("我目前需要協助，請聯絡我（VoiceWeaver 緊急通報）。")))
                         }
                         viewModel.aacDismissAlert()
                     }) { Text(stringResource(R.string.aac_alert_send_sms), color = p.dangerRose) }
@@ -385,7 +385,7 @@ private fun AacSearchAndCategoryBar(
                     }
                 }
             },
-            placeholder = { Text("搜尋圖卡", fontSize = 12.sp) },
+            placeholder = { Text(I18n.tr("搜尋圖卡"), fontSize = 12.sp) },
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = p.neonCyan,
@@ -403,7 +403,7 @@ private fun AacSearchAndCategoryBar(
             modifier = Modifier.widthIn(min = 136.dp, max = 180.dp)
         ) {
             OutlinedTextField(
-                value = selectedCategory?.let { "${it.emoji} ${stringResource(catLabelRes(it))}" } ?: "全部分類",
+                value = selectedCategory?.let { "${it.emoji} ${stringResource(catLabelRes(it))}" } ?: I18n.tr("全部分類"),
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
@@ -423,7 +423,7 @@ private fun AacSearchAndCategoryBar(
                 onDismissRequest = { expanded = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("全部分類") },
+                    text = { Text(I18n.tr("全部分類")) },
                     leadingIcon = { Icon(Icons.Default.Apps, null) },
                     onClick = {
                         onCategoryChange(null)
@@ -482,9 +482,9 @@ private fun CategoryGrid(
 ) {
     val groups = remember {
         listOf(
-            "基礎溝通" to listOf(AacCategory.Actions, AacCategory.Needs, AacCategory.Questions, AacCategory.Emotions, AacCategory.Emergency),
-            "日常情境" to listOf(AacCategory.FoodDrink, AacCategory.Products, AacCategory.Money),
-            "照護資訊" to listOf(AacCategory.People, AacCategory.Places, AacCategory.Medical, AacCategory.Time)
+            I18n.tr("基礎溝通") to listOf(AacCategory.Actions, AacCategory.Needs, AacCategory.Questions, AacCategory.Emotions, AacCategory.Emergency),
+            I18n.tr("日常情境") to listOf(AacCategory.FoodDrink, AacCategory.Products, AacCategory.Money),
+            I18n.tr("照護資訊") to listOf(AacCategory.People, AacCategory.Places, AacCategory.Medical, AacCategory.Time)
         )
     }
     val orderedCategories = remember(groups) { groups.flatMap { it.second } }
@@ -544,7 +544,7 @@ private fun ItemGrid(
 ) {
     if (items.isEmpty() && onCustomAmount == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("沒有符合的圖卡", color = p.textMuted, fontSize = 14.sp)
+            Text(I18n.tr("沒有符合的圖卡"), color = p.textMuted, fontSize = 14.sp)
         }
         return
     }
@@ -751,7 +751,7 @@ private fun FlashcardChrome(
                 content = {
                     Icon(Icons.Default.ChevronLeft, null, tint = p.textLight, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("上一張", color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("上一張"), color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 },
                 modifier = Modifier.weight(1f)
             )
@@ -763,7 +763,7 @@ private fun FlashcardChrome(
                 content = {
                     Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("是這個", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text(I18n.tr("是這個"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
                 },
                 modifier = Modifier.weight(1.3f)
             )
@@ -773,7 +773,7 @@ private fun FlashcardChrome(
                 border = p.textMuted.copy(alpha = 0.4f),
                 onClick = onNext,
                 content = {
-                    Text("下一張", color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("下一張"), color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Default.ChevronRight, null, tint = p.textLight, modifier = Modifier.size(28.dp))
                 },
@@ -821,7 +821,7 @@ private fun CategoryFlashcard(
         p = p,
         emoji = cat.emoji,
         label = stringResource(catLabelRes(cat)),
-        sublabel = "類別 ${safeIndex + 1} / ${cats.size}",
+        sublabel = I18n.tr("類別 %d / %d").format(safeIndex + 1, cats.size),
         progressText = "${safeIndex + 1}/${cats.size}",
         accent = p.neonCyan,
         onPrev = onPrev,
@@ -846,7 +846,7 @@ private fun ItemFlashcard(
     val totalCards = items.size + if (hasCustomMoney) 1 else 0
     if (totalCards == 0) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("這個類別還沒有圖卡", color = p.textMuted, fontSize = 14.sp)
+            Text(I18n.tr("這個類別還沒有圖卡"), color = p.textMuted, fontSize = 14.sp)
         }
         return
     }
@@ -857,8 +857,8 @@ private fun ItemFlashcard(
         FlashcardChrome(
             p = p,
             emoji = "✏️",
-            label = "自訂金額",
-            sublabel = "按 ✓ 開啟數字鍵盤輸入",
+            label = I18n.tr("自訂金額"),
+            sublabel = I18n.tr("按 ✓ 開啟數字鍵盤輸入"),
             progressText = "1/$totalCards",
             accent = p.auraAmber,
             onPrev = onPrev,
@@ -873,7 +873,7 @@ private fun ItemFlashcard(
             p = p,
             emoji = item.emoji,
             label = item.label,
-            sublabel = if (item.isStrongIntent) "緊急 — 按 ✓ 會立即播報" else null,
+            sublabel = if (item.isStrongIntent) I18n.tr("緊急 — 按 ✓ 會立即播報") else null,
             progressText = "${safeIndex + 1}/$totalCards",
             accent = accent,
             onPrev = onPrev,
@@ -918,14 +918,14 @@ fun AacInlinePanel(
                     onClick = { viewModel.aacSelectCategory(null) },
                     modifier = Modifier.size(28.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "回類別", tint = p.neonCyan, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, I18n.tr("回類別"), tint = p.neonCyan, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(4.dp))
             }
             Icon(Icons.Default.GridView, null, tint = p.neonCyan, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(
-                "圖卡（點一下加進句子）",
+                I18n.tr("圖卡（點一下加進句子）"),
                 fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight,
                 modifier = Modifier.weight(1f)
             )
@@ -936,7 +936,7 @@ fun AacInlinePanel(
             ) {
                 Icon(
                     imageVector = if (state.flashcardMode) Icons.Default.GridView else Icons.Default.ViewCarousel,
-                    contentDescription = if (state.flashcardMode) "切換到九宮格" else "切換到識字卡",
+                    contentDescription = if (state.flashcardMode) I18n.tr("切換到九宮格") else I18n.tr("切換到識字卡"),
                     tint = p.auraAmber,
                     modifier = Modifier.size(20.dp)
                 )

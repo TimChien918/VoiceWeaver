@@ -119,9 +119,9 @@ fun RehabScreen(
                     ) {
                         Text("🔥", fontSize = 22.sp)
                         Spacer(Modifier.width(10.dp))
-                        Text("連續練習 ", fontSize = 14.sp, color = textLight)
+                        Text(I18n.tr("連續練習 "), fontSize = 14.sp, color = textLight)
                         Text("$streak", fontSize = 20.sp, fontWeight = FontWeight.Black, color = auraAmber)
-                        Text(" 天，繼續保持！", fontSize = 14.sp, color = textLight)
+                        Text(I18n.tr(" 天，繼續保持！"), fontSize = 14.sp, color = textLight)
                     }
                 }
             }
@@ -137,12 +137,12 @@ fun RehabScreen(
                             .background(neonCyan.copy(alpha = 0.10f))
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
-                        Text("📖 整段練習 ${rehabQueueIndex + 1}/${rehabQueue.size}", fontSize = 12.sp, color = textLight, fontWeight = FontWeight.Bold)
+                        Text(I18n.tr("📖 整段練習 %d/%d").format(rehabQueueIndex + 1, rehabQueue.size), fontSize = 12.sp, color = textLight, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = {
                             if (!viewModel.nextRehabSentence()) viewModel.clearRehab()
                         }) {
-                            Text(if (rehabQueueIndex + 1 < rehabQueue.size) "下一句 ▶" else "完成整段 ✓",
+                            Text(if (rehabQueueIndex + 1 < rehabQueue.size) I18n.tr("下一句 ▶") else I18n.tr("完成整段 ✓"),
                                  fontSize = 13.sp, color = neonCyan, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -321,17 +321,17 @@ private fun TargetPicker(
                 ) {
                     Icon(Icons.Default.MenuBook, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("整段練習（自動分句逐句練）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("整段練習（自動分句逐句練）"), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             // 臨床常用題庫（漢語標準失語症檢查表通用題）：一鍵開始，離線也能用
             Spacer(Modifier.height(16.dp))
-            Text("臨床常用題庫（點一下開始練）", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = neonCyan)
-            ClinicalBankRow("字詞（名詞）", com.example.data.AphasiaPractice.nouns.take(12), onPick, neonCyan, textLight)
-            ClinicalBankRow("字詞（動作）", com.example.data.AphasiaPractice.verbs.take(10), onPick, neonCyan, textLight)
-            ClinicalBankRow("短句", com.example.data.AphasiaPractice.mediumSentences.take(8), onPick, neonCyan, textLight)
-            ClinicalBankRow("情境句", com.example.data.AphasiaPractice.hardSentences.take(4), onPick, neonCyan, textLight)
+            Text(I18n.tr("臨床常用題庫（點一下開始練）"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = neonCyan)
+            ClinicalBankRow(I18n.tr("字詞（名詞）"), com.example.data.AphasiaPractice.nouns.take(12), onPick, neonCyan, textLight)
+            ClinicalBankRow(I18n.tr("字詞（動作）"), com.example.data.AphasiaPractice.verbs.take(10), onPick, neonCyan, textLight)
+            ClinicalBankRow(I18n.tr("短句"), com.example.data.AphasiaPractice.mediumSentences.take(8), onPick, neonCyan, textLight)
+            ClinicalBankRow(I18n.tr("情境句"), com.example.data.AphasiaPractice.hardSentences.take(4), onPick, neonCyan, textLight)
 
             // AI 智慧推薦（依使用者程度）
             Spacer(Modifier.height(16.dp))
@@ -527,7 +527,7 @@ private fun PracticeCard(
                         Spacer(Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                if (eyeControl.mode == EyeInteractionMode.GAZE_DWELL) "凝視停留模式" else "眨眼掃描模式",
+                                if (eyeControl.mode == EyeInteractionMode.GAZE_DWELL) I18n.tr("凝視停留模式") else I18n.tr("眨眼掃描模式"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textLight
@@ -538,7 +538,7 @@ private fun PracticeCard(
                     if (eyeControl.mode == EyeInteractionMode.GAZE_DWELL) {
                         Spacer(Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("視線", fontSize = 10.sp, color = textMuted)
+                            Text(I18n.tr("視線"), fontSize = 10.sp, color = textMuted)
                             Spacer(Modifier.width(8.dp))
                             Box(
                                 modifier = Modifier
@@ -605,7 +605,7 @@ private fun PracticeCard(
                             )
                             .semantics {
                                 role = Role.Button
-                                contentDescription = if (isWrong) "復健字卡（需加強）：$chip" else "復健字卡：$chip"
+                                contentDescription = if (isWrong) I18n.tr("復健字卡（需加強）：%s").format(chip) else I18n.tr("復健字卡：%s").format(chip)
                             }
                             .clickable {
                                 tapped = idx
@@ -620,7 +620,7 @@ private fun PracticeCard(
             }
             if (rehab.wrongChars.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text("🔴 紅字是這次說得不夠準的字，點字卡再聽一次重點練。",
+                Text(I18n.tr("🔴 紅字是這次說得不夠準的字，點字卡再聽一次重點練。"),
                      fontSize = 11.sp, color = dangerRose, lineHeight = 15.sp)
             }
 
@@ -835,11 +835,11 @@ private fun StoryTrainingEntryCard(
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "故事訓練模式 · 開發者",
+                I18n.tr("故事訓練模式 · 開發者"),
                 color = textLight, fontSize = 14.sp, fontWeight = FontWeight.Bold
             )
             Text(
-                "看 4 格圖卡編一段故事，AI 老師會即時評論並打分",
+                I18n.tr("看 4 格圖卡編一段故事，AI 老師會即時評論並打分"),
                 color = textMuted, fontSize = 11.sp
             )
         }

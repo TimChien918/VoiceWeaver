@@ -104,9 +104,9 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Favorite, null, tint = CalmWarm, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("我們在這裡陪你", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = CalmText)
+                Text(I18n.tr("我們在這裡陪你"), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = CalmText)
             }
-            Text(state.status.ifBlank { "正在聯繫家人…" }, fontSize = 12.sp, color = CalmAccent)
+            Text(state.status.ifBlank { I18n.tr("正在聯繫家人…") }, fontSize = 12.sp, color = CalmAccent)
 
             // ── 即時視訊通話：用網頁跳轉到視訊房，與家人面對面（最顯眼）──
             if (state.videoCallUrl.isNotBlank()) {
@@ -122,7 +122,7 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
                 ) {
                     Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("開始即時視訊通話", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(I18n.tr("開始即時視訊通話"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
             // 備援：直接打電話給家人
@@ -140,7 +140,7 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
                 ) {
                     Icon(Icons.Default.Call, null, tint = Color(0xFF6FE08A), modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("改用電話打給家人", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = CalmText)
+                    Text(I18n.tr("改用電話打給家人"), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = CalmText)
                 }
             }
 
@@ -149,8 +149,8 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
 
             // ── 狀態列 ──
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.videoCallUrl.isNotBlank()) StatusChip(Icons.Default.Videocam, "視訊連結已傳家人", CalmAccent)
-                if (state.photosSent > 0) StatusChip(Icons.Default.PhotoCamera, "畫面已傳家人", CalmWarm)
+                if (state.videoCallUrl.isNotBlank()) StatusChip(Icons.Default.Videocam, I18n.tr("視訊連結已傳家人"), CalmAccent)
+                if (state.photosSent > 0) StatusChip(Icons.Default.PhotoCamera, I18n.tr("畫面已傳家人"), CalmWarm)
             }
 
             // ── 家人對話區 ──
@@ -172,13 +172,13 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
             }
 
             // ── 安撫快捷句（送給家人）──
-            Text("想對家人說（點一下傳出）", fontSize = 11.sp, color = CalmMuted)
+            Text(I18n.tr("想對家人說（點一下傳出）"), fontSize = 11.sp, color = CalmMuted)
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                listOf("我需要陪伴", "我很難過", "我想聽你說話", "我會撐住", "請打給我").forEach { phrase ->
+                listOf(I18n.tr("我需要陪伴"), I18n.tr("我很難過"), I18n.tr("我想聽你說話"), I18n.tr("我會撐住"), I18n.tr("請打給我")).forEach { phrase ->
                     SoftChip(phrase) { viewModel.sendCrisisMessage(phrase) }
                 }
             }
@@ -198,20 +198,20 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
                 Icon(Icons.Default.Mic, null, tint = CalmWarm, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    if (state.recordingVoice) "錄音中…（約 6 秒後自動傳出）" else "🎤 傳語音訊息給家人",
+                    if (state.recordingVoice) I18n.tr("錄音中…（約 6 秒後自動傳出）") else I18n.tr("🎤 傳語音訊息給家人"),
                     fontSize = 13.sp, fontWeight = FontWeight.Bold, color = CalmText
                 )
             }
 
             // ── 安心專線 / 119 ──
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                HotlineButton("1925 安心專線", "1925", CalmAccent, Modifier.weight(1f), ctx)
-                HotlineButton("119 緊急", "119", CalmWarm, Modifier.weight(1f), ctx)
+                HotlineButton(I18n.tr("1925 安心專線"), "1925", CalmAccent, Modifier.weight(1f), ctx)
+                HotlineButton(I18n.tr("119 緊急"), "119", CalmWarm, Modifier.weight(1f), ctx)
             }
 
             // ── 結束由家人控制：使用者無法自行關閉，需家人在 Telegram 輸入 /end ──
             Text(
-                "🔒 為了你的安全，這個畫面需要家人確認後才能關閉\n（家人在訊息輸入 /end 即可結束）",
+                I18n.tr("🔒 為了你的安全，這個畫面需要家人確認後才能關閉\n（家人在訊息輸入 /end 即可結束）"),
                 fontSize = 11.sp, color = CalmText, textAlign = TextAlign.Center, lineHeight = 16.sp,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -220,7 +220,7 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
                     .padding(vertical = 10.dp, horizontal = 8.dp)
             )
             Text(
-                "畫面與聲音僅安全傳給家人，不會公開。家人可用 /call 視訊、/camera 重拍。",
+                I18n.tr("畫面與聲音僅安全傳給家人，不會公開。家人可用 /call 視訊、/camera 重拍。"),
                 fontSize = 9.sp, color = CalmMuted, textAlign = TextAlign.Center, lineHeight = 13.sp
             )
         }
@@ -242,7 +242,7 @@ private fun BreathingOrb() {
                 .clip(RoundedCornerShape(60.dp))
                 .background(Brush.radialGradient(listOf(CalmAccent.copy(alpha = 0.55f), Color.Transparent)))
         )
-        Text(if (scale > 0.85f) "吸氣…" else "吐氣…", fontSize = 14.sp, color = CalmText, fontWeight = FontWeight.Medium)
+        Text(if (scale > 0.85f) I18n.tr("吸氣…") else I18n.tr("吐氣…"), fontSize = 14.sp, color = CalmText, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -275,7 +275,7 @@ private fun ChatBubble(m: VoiceWeaverViewModel.CrisisChatMsg) {
             Text(m.text, fontSize = 11.sp, color = CalmMuted, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(), lineHeight = 15.sp)
         } else {
-            if (isFamily) Text("家人", fontSize = 9.sp, color = CalmWarm, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+            if (isFamily) Text(I18n.tr("家人"), fontSize = 9.sp, color = CalmWarm, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
             Box(
                 modifier = Modifier
                     .wrapContentWidth()

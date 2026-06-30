@@ -1,5 +1,7 @@
 package com.example.ui.report
 
+import com.example.ui.I18n
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -62,7 +64,7 @@ fun ReportScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "▌ 成績單 · 進步報表",
+                        I18n.tr("▌ 成績單 · 進步報表"),
                         color = p.textLight, fontSize = 17.sp, fontWeight = FontWeight.Bold
                     )
                 },
@@ -105,19 +107,19 @@ fun ReportScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         if (onExportCsv != null) {
                             OutlinedButton(
-                                onClick = { scope.launch { runCatching { ctx.startActivity(android.content.Intent.createChooser(onExportCsv(), "匯出 CSV")) } } },
+                                onClick = { scope.launch { runCatching { ctx.startActivity(android.content.Intent.createChooser(onExportCsv(), I18n.tr("匯出 CSV"))) } } },
                                 shape = RoundedCornerShape(10.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.5f)),
                                 modifier = Modifier.weight(1f)
-                            ) { Text("📄 匯出 CSV", fontSize = 12.sp, color = p.neonCyan) }
+                            ) { Text(I18n.tr("📄 匯出 CSV"), fontSize = 12.sp, color = p.neonCyan) }
                         }
                         if (onExportPdf != null) {
                             OutlinedButton(
-                                onClick = { scope.launch { runCatching { ctx.startActivity(android.content.Intent.createChooser(onExportPdf(), "匯出 PDF")) } } },
+                                onClick = { scope.launch { runCatching { ctx.startActivity(android.content.Intent.createChooser(onExportPdf(), I18n.tr("匯出 PDF"))) } } },
                                 shape = RoundedCornerShape(10.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.5f)),
                                 modifier = Modifier.weight(1f)
-                            ) { Text("🖨 匯出 PDF", fontSize = 12.sp, color = p.neonCyan) }
+                            ) { Text(I18n.tr("🖨 匯出 PDF"), fontSize = 12.sp, color = p.neonCyan) }
                         }
                     }
                 }
@@ -136,29 +138,29 @@ fun ReportScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("🧭 行為數據（治療師評估用，全期累計）",
+                    Text(I18n.tr("🧭 行為數據（治療師評估用，全期累計）"),
                         fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SummaryTile(
-                            "⏱ 反應",
+                            I18n.tr("⏱ 反應"),
                             if (bm.firstSpeakCount > 0) "%.1f".format(bm.avgFirstSpeakMs / 1000.0) else "—",
-                            "秒", Modifier.weight(1f)
+                            I18n.tr("秒"), Modifier.weight(1f)
                         )
                         SummaryTile(
-                            "🎯 選句",
+                            I18n.tr("🎯 選句"),
                             if (bm.candidateTotal > 0) "${(bm.firstHitRate * 100).toInt()}" else "—",
                             "%", Modifier.weight(1f)
                         )
-                        SummaryTile("✏️ 修改", "${bm.undoCount}", "次", Modifier.weight(1f))
+                        SummaryTile(I18n.tr("✏️ 修改"), "${bm.undoCount}", I18n.tr("次"), Modifier.weight(1f))
                         SummaryTile(
-                            "🖼 圖卡",
+                            I18n.tr("🖼 圖卡"),
                             if (bm.aacInputCount + bm.textInputCount > 0) "${(bm.aacRatio * 100).toInt()}" else "—",
                             "%", Modifier.weight(1f)
                         )
                     }
                     Text(
-                        "反應 = 開 App 到第一次發聲的平均耗時 · 選句 = AI 第一候選被採用率 · " +
-                        "修改 = 退回/刪卡累計 · 圖卡 = 圖卡輸入佔總輸入比例",
+                        I18n.tr("反應 = 開 App 到第一次發聲的平均耗時 · 選句 = AI 第一候選被採用率 · ") +
+                        I18n.tr("修改 = 退回/刪卡累計 · 圖卡 = 圖卡輸入佔總輸入比例"),
                         fontSize = 9.sp, color = p.textMuted, lineHeight = 13.sp
                     )
                 }
@@ -176,9 +178,9 @@ fun ReportScreen(
             } else {
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SummaryTile("🎯 練習", "${s.totalRehabSessions}", "次", Modifier.weight(1f))
-                        SummaryTile("📈 平均", "%.0f".format(s.averageScore), "分", Modifier.weight(1f))
-                        SummaryTile("💖 正向", "${s.positiveEmotionCount}", "次", Modifier.weight(1f))
+                        SummaryTile(I18n.tr("🎯 練習"), "${s.totalRehabSessions}", I18n.tr("次"), Modifier.weight(1f))
+                        SummaryTile(I18n.tr("📈 平均"), "%.0f".format(s.averageScore), I18n.tr("分"), Modifier.weight(1f))
+                        SummaryTile(I18n.tr("💖 正向"), "${s.positiveEmotionCount}", I18n.tr("次"), Modifier.weight(1f))
                     }
                 }
 
@@ -210,10 +212,10 @@ fun ReportScreen(
                             .border(1.dp, p.neonGreen.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
-                        Text("📖 故事練習", color = p.neonGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(I18n.tr("📖 故事練習"), color = p.neonGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "嘗試 ${s.storyAttempts} 次・平均 ${"%.0f".format(s.storyAverageScore)} 分",
+                            I18n.tr("嘗試 %d 次・平均 %s 分").format(s.storyAttempts, "%.0f".format(s.storyAverageScore)),
                             color = p.textLight, fontSize = 14.sp
                         )
                     }
@@ -228,8 +230,8 @@ fun ReportScreen(
                                 val chatId = settingsRepo.settings.first().emergencyChatId
                                 val text = s.toTelegramText()
                                 val r = TelegramClient.sendEmergency(text, chatId)
-                                lastSendResult = if (r.isSuccess) "✅ 已送到 Chat $chatId"
-                                                 else "❌ 送出失敗：${r.exceptionOrNull()?.message?.take(60)}"
+                                lastSendResult = if (r.isSuccess) I18n.tr("✅ 已送到 Chat %s").format(chatId)
+                                                 else I18n.tr("❌ 送出失敗：%s").format(r.exceptionOrNull()?.message?.take(60) ?: "")
                                 sending = false
                             }
                         },
@@ -242,7 +244,7 @@ fun ReportScreen(
                     ) {
                         Icon(Icons.Default.Send, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (sending) "傳送中…" else "📤 匯出成績單到 Telegram",
+                        Text(if (sending) I18n.tr("傳送中…") else I18n.tr("📤 匯出成績單到 Telegram"),
                              fontWeight = FontWeight.Bold)
                     }
                     lastSendResult?.let {

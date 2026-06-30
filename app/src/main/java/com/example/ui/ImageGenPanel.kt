@@ -66,17 +66,17 @@ fun ImageGenPanel(
 
     val selected = apis.firstOrNull { it.id == settings.imageApiSelectedId } ?: apis.firstOrNull()
 
-    FloatingPanel(title = "AI 生圖", icon = Icons.Default.Image, onDismiss = onDismiss) {
+    FloatingPanel(title = I18n.tr("AI 生圖"), icon = Icons.Default.Image, onDismiss = onDismiss) {
 
         // 使用中服務（管理在 API 金鑰管理）
-        Text("使用中的生圖服務", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.neonCyan)
+        Text(I18n.tr("使用中的生圖服務"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.neonCyan)
         ActivePicker(apis = apis, selected = selected, onSelect = { viewModel.selectImageApi(it.id) }, p = p)
 
         OutlinedTextField(
             value = prompt,
             onValueChange = { prompt = it },
-            label = { Text("想生成的圖片描述") },
-            placeholder = { Text("例：溫馨的客廳，柔和光線，扁平插畫風") },
+            label = { Text(I18n.tr("想生成的圖片描述")) },
+            placeholder = { Text(I18n.tr("例：溫馨的客廳，柔和光線，扁平插畫風")) },
             minLines = 2,
             modifier = Modifier.fillMaxWidth(),
             colors = fieldColors(p)
@@ -92,11 +92,11 @@ fun ImageGenPanel(
             if (loading) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
-                Text("生成中…（雲端運算，約 10～30 秒）", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(I18n.tr("生成中…（雲端運算，約 10～30 秒）"), fontWeight = FontWeight.Bold, fontSize = 13.sp)
             } else {
                 Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("生成圖片", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(I18n.tr("生成圖片"), fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
 
@@ -111,7 +111,7 @@ fun ImageGenPanel(
                 ) {
                     AsyncImage(
                         model = File(s.pngPath),
-                        contentDescription = "生成的圖片",
+                        contentDescription = I18n.tr("生成的圖片"),
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -123,7 +123,7 @@ fun ImageGenPanel(
                 ) {
                     Icon(Icons.Default.Wallpaper, null, tint = p.neonCyan, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("設為 App 背景", color = p.neonCyan, fontSize = 13.sp)
+                    Text(I18n.tr("設為 App 背景"), color = p.neonCyan, fontSize = 13.sp)
                 }
             }
             is VoiceWeaverViewModel.ImageGenState.Error ->
@@ -132,7 +132,7 @@ fun ImageGenPanel(
         }
 
         Text(
-            "要新增服務商或金鑰，請到「設定 → API 金鑰管理 → AI 生圖」。同一服務商可放多把金鑰，生圖時自動備援。",
+            I18n.tr("要新增服務商或金鑰，請到「設定 → API 金鑰管理 → AI 生圖」。同一服務商可放多把金鑰，生圖時自動備援。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
         )
     }
@@ -155,7 +155,7 @@ private fun ActivePicker(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                selected?.provider?.displayName ?: "尚無生圖設定，請到 API 金鑰管理新增",
+                selected?.provider?.displayName ?: I18n.tr("尚無生圖設定，請到 API 金鑰管理新增"),
                 color = p.textLight, fontSize = 13.sp, modifier = Modifier.weight(1f)
             )
             Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))

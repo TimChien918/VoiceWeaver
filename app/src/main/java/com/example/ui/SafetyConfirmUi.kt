@@ -54,10 +54,10 @@ fun SpeakGateDialogs(viewModel: VoiceWeaverViewModel, p: AppPalette) {
         is VoiceWeaverViewModel.SpeakGate.NeedConfirm -> AlertDialog(
             onDismissRequest = { viewModel.dismissSpeakGate() },
             icon = { Icon(Icons.Default.Warning, null, tint = p.auraAmber) },
-            title = { Text("醫療相關內容，請確認", color = p.textLight) },
+            title = { Text(I18n.tr("醫療相關內容，請確認"), color = p.textLight) },
             text = {
                 Text(
-                    "「${g.text}」\n\n請患者或照護者確認句子正確（部位、意圖無誤）後再朗讀。",
+                    I18n.tr("「%s」\n\n請患者或照護者確認句子正確（部位、意圖無誤）後再朗讀。").format(g.text),
                     color = p.textMuted, fontSize = 14.sp, lineHeight = 20.sp
                 )
             },
@@ -68,12 +68,12 @@ fun SpeakGateDialogs(viewModel: VoiceWeaverViewModel, p: AppPalette) {
                 ) {
                     Icon(Icons.AutoMirrored.Filled.VolumeUp, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("確認朗讀", fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("確認朗讀"), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissSpeakGate() }) {
-                    Text("取消", color = p.textMuted)
+                    Text(I18n.tr("取消"), color = p.textMuted)
                 }
             },
             containerColor = p.surface
@@ -81,11 +81,11 @@ fun SpeakGateDialogs(viewModel: VoiceWeaverViewModel, p: AppPalette) {
         is VoiceWeaverViewModel.SpeakGate.Locked -> AlertDialog(
             onDismissRequest = { viewModel.dismissSpeakGate() },
             icon = { Icon(Icons.Default.Block, null, tint = p.dangerRose) },
-            title = { Text("語音輸出已鎖定", color = p.dangerRose) },
+            title = { Text(I18n.tr("語音輸出已鎖定"), color = p.dangerRose) },
             text = { Text(g.reason, color = p.textMuted, fontSize = 14.sp, lineHeight = 20.sp) },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissSpeakGate() }) {
-                    Text("我知道了", color = p.textLight)
+                    Text(I18n.tr("我知道了"), color = p.textLight)
                 }
             },
             containerColor = p.surface
@@ -131,7 +131,7 @@ fun AacPendingConfirmCard(
         if (bigCard && intentImagePath != null) {
             coil.compose.AsyncImage(
                 model = java.io.File(intentImagePath),
-                contentDescription = "意圖示意圖",
+                contentDescription = I18n.tr("意圖示意圖"),
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -142,7 +142,7 @@ fun AacPendingConfirmCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = p.neonCyan, strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
-                Text("正在生成專屬圖卡…", fontSize = 12.sp, color = p.textMuted)
+                Text(I18n.tr("正在生成專屬圖卡…"), fontSize = 12.sp, color = p.textMuted)
             }
         }
         if (bigCard && items.isNotEmpty()) {
@@ -163,7 +163,7 @@ fun AacPendingConfirmCard(
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            "是這個意思嗎？",
+            I18n.tr("是這個意思嗎？"),
             fontSize = if (bigCard) 14.sp else 11.sp,
             color = p.textMuted
         )
@@ -175,7 +175,7 @@ fun AacPendingConfirmCard(
             ) {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, null, modifier = Modifier.size(if (bigCard) 24.dp else 16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("對，朗讀", fontWeight = FontWeight.Bold, fontSize = if (bigCard) 17.sp else 12.sp)
+                Text(I18n.tr("對，朗讀"), fontWeight = FontWeight.Bold, fontSize = if (bigCard) 17.sp else 12.sp)
             }
             OutlinedButton(
                 onClick = onRegenerate,
@@ -184,7 +184,7 @@ fun AacPendingConfirmCard(
             ) {
                 Icon(Icons.Default.Refresh, null, tint = p.neonCyan, modifier = Modifier.size(if (bigCard) 20.dp else 14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("再猜", color = p.neonCyan, fontSize = if (bigCard) 15.sp else 11.sp)
+                Text(I18n.tr("再猜"), color = p.neonCyan, fontSize = if (bigCard) 15.sp else 11.sp)
             }
             OutlinedButton(
                 onClick = onDismiss,
@@ -193,7 +193,7 @@ fun AacPendingConfirmCard(
             ) {
                 Icon(Icons.Default.Close, null, tint = p.dangerRose, modifier = Modifier.size(if (bigCard) 20.dp else 14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("修改", color = p.dangerRose, fontSize = if (bigCard) 15.sp else 11.sp)
+                Text(I18n.tr("修改"), color = p.dangerRose, fontSize = if (bigCard) 15.sp else 11.sp)
             }
         }
     }

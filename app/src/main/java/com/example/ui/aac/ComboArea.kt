@@ -1,5 +1,7 @@
 package com.example.ui.aac
 
+import com.example.ui.I18n
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,7 +59,7 @@ fun ComboArea(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            "▌ 組合區（Combo Area）",
+            I18n.tr("▌ 組合區（Combo Area）"),
             color = palette.neonCyan,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
@@ -65,7 +67,7 @@ fun ComboArea(
 
         if (items.isEmpty()) {
             Text(
-                "尚未選擇圖卡。請從下方類別挑選想表達的內容（賣出商品、收款、找零都可以混搭）。",
+                I18n.tr("尚未選擇圖卡。請從下方類別挑選想表達的內容（賣出商品、收款、找零都可以混搭）。"),
                 color = palette.textMuted,
                 fontSize = 12.sp
             )
@@ -107,7 +109,7 @@ fun ComboArea(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    "這次有傳達到嗎？",
+                    I18n.tr("這次有傳達到嗎？"),
                     color = palette.textMuted,
                     fontSize = 12.sp
                 )
@@ -192,7 +194,7 @@ fun ImageOnlyConfirmGate(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            "▌ 確認再唸出來",
+            I18n.tr("▌ 確認再唸出來"),
             color = palette.neonCyan,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
@@ -220,7 +222,7 @@ fun ImageOnlyConfirmGate(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             GazeConfirmBlock(
-                label = "接受",
+                label = I18n.tr("接受"),
                 emoji = "✔️",
                 bg = palette.neonGreen,
                 onTriggered = onAccept,
@@ -229,7 +231,7 @@ fun ImageOnlyConfirmGate(
                 modifier = Modifier.weight(1f).fillMaxHeight()
             )
             GazeConfirmBlock(
-                label = "重來",
+                label = I18n.tr("重來"),
                 emoji = "✖️",
                 bg = palette.dangerRose,
                 onTriggered = onReject,
@@ -239,7 +241,7 @@ fun ImageOnlyConfirmGate(
             )
         }
         Text(
-            "說明：AI 已組好「$sentenceForVisual」。確認後才會唸出來。",
+            I18n.tr("說明：AI 已組好「%s」。確認後才會唸出來。").format(sentenceForVisual),
             color = palette.textMuted,
             fontSize = 11.sp
         )
