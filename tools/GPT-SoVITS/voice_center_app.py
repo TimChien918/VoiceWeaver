@@ -630,6 +630,15 @@ class App:
         self.dark = system_is_dark()
         self.themed: list[tuple] = []
         self.adv_history: list[dict] = []
+        self.phone_lang  = {"tag": "zh-TW", "name": "繁體中文"}  # 手機語言（由 port 9879 同步）
+        self.lang_filter = "ZH"                                   # 模型清單語言篩選（ZH/EN/JA/KO/ALL）
+        self.adv_filtered: list[dict] = []                        # 篩選後的顯示清單（索引對應用）
+        self._selected_card_idx: int | None = None                # 宮格選中的卡片索引
+        self._model_card_items: list[dict] = []                   # 每張卡片的 widget 參考
+        self._model_grid_frame = None                              # 宮格容器 Frame
+        self._adv_canvas = None                                    # 進階分頁的捲動 canvas
+        self._bridge_lock = threading.Lock()                       # 網頁橋接合成序列化
+        self._bridge_voice = None                                  # 網頁橋接：目前載入的語音 {name,lang,ref,prompt}
 
         root.title("VoiceWeaver 語音中心")
         root.geometry("660x720")
@@ -714,6 +723,238 @@ class App:
         for port, name, script, args, needs in SERVICES:
             self.start(port)
         self.root.after(500, self._maybe_autosync)
+        self._start_lang_server()
+
+    def _start_lang_server(self):
+        """port 9879：手機語言同步 + 網頁橋接（皆帶 CORS，供 github.io 網頁從 localhost/Tailscale 呼叫）
+
+          POST /lang    {"tag","name"}        手機語言推送（既有）
+          GET  /health                        橋接狀態（網頁偵測連線用）
+          GET  /voices                        模型清單 [{name,lang}]
+          POST /switch  {"name","lang"}       切換 GPT-SoVITS 模型（載權重，較慢）
+          POST /speak   {"text","lang"?}      用目前語音合成 → 回 audio/wav
+        """
+        import json, http.server
+        app_ref = self
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a): pass  # 靜音 access log
+
+            def _cors(self):
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+            def _json(self, code, obj):
+                body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+                self.send_response(code); self._cors()
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                try: self.wfile.write(body)
+                except Exception: pass
+
+            def _wav(self, data: bytes):
+                self.send_response(200); self._cors()
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                try: self.wfile.write(data)
+                except Exception: pass
+
+            def _body(self):
+                length = int(self.headers.get("Content-Length", 0) or 0)
+                raw = self.rfile.read(length) if length else b""
+                try: return json.loads(raw) if raw else {}
+                except Exception: return {}
+
+            def do_OPTIONS(self):
+                self.send_response(204); self._cors(); self.end_headers()
+
+            def do_GET(self):
+                if self.path == "/" or self.path.startswith("/health"):
+                    cur = app_ref._bridge_voice or {}
+                    return self._json(200, {
+                        "ok": True, "service": "voiceweaver-bridge",
+                        "current": cur.get("name", ""), "lang": cur.get("lang", ""),
+                        # 電腦端三項運算的即時可用性（給網頁顯示「誰由電腦跑」）
+                        "voice": port_up(9880), "image": port_up(9881), "text": port_up(9882),
+                    })
+                if self.path.startswith("/voices"):
+                    try:
+                        voices = [{"name": m.get("name", ""), "lang": app_ref._model_lang_tag(m)}
+                                  for m in cc.load_history()]
+                        return self._json(200, {"ok": True, "voices": voices})
+                    except Exception as e:
+                        return self._json(500, {"ok": False, "error": str(e)})
+                self._json(404, {"ok": False, "error": "not found"})
+
+            def do_POST(self):
+                data = self._body()
+                if self.path == "/lang":
+                    try:
+                        tag  = str(data.get("tag", "zh-TW"))[:10]
+                        name = str(data.get("name", tag))[:20]
+                        app_ref.phone_lang = {"tag": tag, "name": name}
+                        new_filter = ("EN" if tag.startswith("en") else
+                                      "JA" if tag.startswith("ja") else
+                                      "KO" if tag.startswith("ko") else "ZH")
+                        def _sync_ui(n=name, f=new_filter):
+                            try: app_ref.phone_lang_lbl.config(text=n)
+                            except Exception: pass
+                            app_ref._set_lang_filter(f)
+                        app_ref.root.after(0, _sync_ui)
+                        return self._json(200, {"ok": True})
+                    except Exception as e:
+                        return self._json(400, {"ok": False, "error": str(e)})
+                if self.path == "/switch":
+                    ok, msg = app_ref._bridge_switch(str(data.get("name", "")), str(data.get("lang", "")))
+                    return self._json(200 if ok else 500, {"ok": ok, "msg": msg})
+                if self.path == "/speak":
+                    text = str(data.get("text", "")).strip()
+                    if not text:
+                        return self._json(400, {"ok": False, "error": "empty text"})
+                    wav, err = app_ref._bridge_speak(text, str(data.get("lang", "")),
+                                                     str(data.get("name", "")))
+                    if wav is None:
+                        return self._json(500, {"ok": False, "error": err})
+                    return self._wav(wav)
+                if self.path == "/image":
+                    prompt = str(data.get("prompt", "")).strip()
+                    if not prompt:
+                        return self._json(400, {"ok": False, "error": "empty prompt"})
+                    png, err = app_ref._bridge_image(prompt, int(data.get("steps", 2) or 2))
+                    if png is None:
+                        return self._json(502, {"ok": False, "error": err})
+                    self.send_response(200); self._cors()
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(png)))
+                    self.end_headers()
+                    try: self.wfile.write(png)
+                    except Exception: pass
+                    return
+                if self.path == "/text":
+                    out, err = app_ref._bridge_text(str(data.get("system", "")), str(data.get("user", "")))
+                    if out is None:
+                        return self._json(502, {"ok": False, "error": err})
+                    return self._json(200, {"ok": True, "text": out})
+                self._json(404, {"ok": False, "error": "not found"})
+
+        def _serve():
+            try:
+                srv = http.server.ThreadingHTTPServer(("0.0.0.0", 9879), _Handler)
+                srv.serve_forever()
+            except Exception:
+                pass
+        threading.Thread(target=_serve, daemon=True).start()
+
+    # ── 網頁橋接：切換 / 合成 ───────────────────────────────────
+    def _bridge_find_voice(self, name: str, lang: str):
+        norm = self._norm_lang(lang)
+        hist = cc.load_history()
+        cands = [m for m in hist if m.get("name") == name and (not norm or self._model_lang_tag(m) == norm)]
+        if not cands:
+            cands = [m for m in hist if m.get("name") == name]
+        return cands[0] if cands else None
+
+    def _bridge_switch(self, name: str, lang: str):
+        from pathlib import Path
+        try:
+            m = self._bridge_find_voice(name, lang)
+            if not m:
+                return False, f"找不到模型「{name}」"
+            gpt_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["gpt_rel"])), ROOT)
+            sov_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["sovits_rel"])), ROOT)
+            ref_abs = resolve_existing(m["ref_path"])
+            cc.apply_runtime_model(m["version"], gpt_rel, sov_rel, Path(ref_abs), m.get("prompt", ""))
+            cc.mark_model_used(m)
+            self._bridge_voice = {"name": m.get("name", ""), "lang": self._model_lang_tag(m),
+                                  "ref": ref_abs, "prompt": m.get("prompt", "")}
+            return True, f"已切換到 {name}"
+        except Exception as e:
+            return False, str(e)
+
+    def _bridge_speak(self, text: str, lang_hint: str = "", want_name: str = ""):
+        from pathlib import Path
+        with self._bridge_lock:
+            try:
+                cur = self._bridge_voice
+                want_norm = self._norm_lang(lang_hint)
+                # 指定了語音、且和目前載入的不同 → 先切換（惰性切換，只在真的換時才付出時間）
+                if want_name and (not cur or cur.get("name") != want_name
+                                  or (want_norm and self._norm_lang(cur.get("lang", "")) != want_norm)):
+                    ok, msg = self._bridge_switch(want_name, lang_hint)
+                    if not ok:
+                        return None, msg
+                # 沒有指定、也沒載入過 → 自動載入最近使用的那一個
+                elif not cur:
+                    hist = cc.load_history()
+                    if not hist:
+                        return None, "電腦上沒有任何語音模型"
+                    ok, msg = self._bridge_switch(hist[0].get("name", ""), self._model_lang_tag(hist[0]))
+                    if not ok:
+                        return None, msg
+                v = self._bridge_voice
+                tag = self._norm_lang(lang_hint) or self._norm_lang(v.get("lang", "")) \
+                      or self._detect_lang_from_text(v.get("prompt", "")) or "ZH"
+                ok, msg = cc.run_tts_test(text, v.get("prompt", ""), Path(v["ref"]), 8, "_" + tag)
+                if not ok:
+                    return None, msg
+                return cc.TEST_WAV_PATH.read_bytes(), None
+            except Exception as e:
+                return None, str(e)
+
+    def _bridge_image(self, prompt: str, steps: int = 2):
+        """代理到本機生圖伺服器(9881)，回 png bytes。"""
+        import urllib.request, json as _json
+        try:
+            if not port_up(9881):
+                return None, "電腦生圖伺服器(9881)未啟動"
+            req = urllib.request.Request(
+                "http://127.0.0.1:9881/generate",
+                data=_json.dumps({"prompt": prompt, "steps": max(1, min(8, steps))}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                return resp.read(), None
+        except Exception as e:
+            return None, str(e)
+
+    def _bridge_text(self, system: str, user: str):
+        """代理到本機文字推論伺服器(9882)，回 text。"""
+        import urllib.request, json as _json
+        try:
+            if not port_up(9882):
+                return None, "電腦文字伺服器(9882)未啟動"
+            req = urllib.request.Request(
+                "http://127.0.0.1:9882/reconstruct",
+                data=_json.dumps({"system": system, "user": user}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                obj = _json.loads(resp.read())
+            if not obj.get("ok"):
+                return None, obj.get("error", "文字推論失敗")
+            return obj.get("text", ""), None
+        except Exception as e:
+            return None, str(e)
+
+    def _copy_conn_url(self, key: str):
+        """點連線列 → 複製位址到剪貼簿，並在 ⧉ 圖示閃一下「✓」。"""
+        info = self.conn_rows.get(key)
+        if not info:
+            return
+        url = info["url"].cget("text")
+        if not url.startswith("http"):
+            self.set_status("這個連線方式目前不可用，無法複製")
+            return
+        try:
+            self.root.clipboard_clear(); self.root.clipboard_append(url)
+        except Exception:
+            pass
+        self.set_status(f"已複製：{url}")
+        cp = info.get("copy")
+        if cp is not None:
+            cp.config(text="✓", fg=C_GREEN)
+            self.root.after(1200, lambda: cp.config(text="⧉", fg=self.theme()["muted"]))
 
     def _show_qr(self):
         lan = lan_ip(); ts = tailscale_ip()
@@ -877,6 +1118,7 @@ class App:
                 if cfg: w.configure(**cfg)
             except Exception:
                 pass
+        self._refresh_card_visuals()
 
     # ── 按鈕工廠 ─────────────────────────────────────────────────
     def _btn(self, parent, text, cmd, bg, fg=C_WHITE, size=SZ_BODY):
@@ -924,29 +1166,53 @@ class App:
         conn_card = tk.Frame(parent, padx=16, pady=14)
         conn_card.pack(fill="x", padx=20, pady=(0, 12)); self._track(conn_card, "panel")
 
-        # 標題
-        ct = tk.Label(conn_card, text="手機連線位址", font=(FONT_UI, SZ_H2, "bold"))
-        ct.pack(anchor="w"); self._track(ct, "fg")
+        # 標題 + 副標
+        head = tk.Frame(conn_card); head.pack(fill="x"); self._track(head, "panel")
+        ico = tk.Label(head, text="📱", font=(FONT_UI, 18)); ico.pack(side="left", padx=(0, 8)); self._track(ico, "fg")
+        tbox = tk.Frame(head); tbox.pack(side="left", fill="x", expand=True); self._track(tbox, "panel")
+        ct = tk.Label(tbox, text="手機連線位址", font=(FONT_UI, SZ_H2, "bold"), anchor="w")
+        ct.pack(fill="x"); self._track(ct, "fg")
+        sub = tk.Label(tbox, text="手機 App 的「電腦語音中心」填入任一位址即可連線（點位址可複製）",
+                       font=(FONT_UI, SZ_SMALL), anchor="w")
+        sub.pack(fill="x"); self._track(sub, "muted")
 
-        # 三條連線列
+        spacer = tk.Frame(conn_card, height=8); spacer.pack(fill="x"); self._track(spacer, "panel")
+
+        # 三條連線列（每列做成有底色的晶片，URL 可點擊複製）
         self.conn_rows = {}
-        for key, icon_label in [
-            ("usb",  "🔌  有線 USB"),
-            ("wifi", "📶  Wi-Fi"),
-            ("ts",   "🌐  Tailscale"),
+        for key, icon, name in [
+            ("usb",  "🔌", "有線 USB"),
+            ("wifi", "📶", "Wi-Fi"),
+            ("ts",   "🌐", "Tailscale"),
         ]:
-            row = tk.Frame(conn_card, pady=3); row.pack(fill="x"); self._track(row, "panel")
-            dot = tk.Label(row, text="●", font=(FONT_UI, 14)); dot.pack(side="left", padx=(0, 6))
+            chip = tk.Frame(conn_card, padx=10, pady=8); chip.pack(fill="x", pady=3); self._track(chip, "card")
+            dot = tk.Label(chip, text="●", font=(FONT_UI, 13)); dot.pack(side="left", padx=(0, 8))
             self._track(dot, "muted")
-            lbl = tk.Label(row, text=icon_label, font=(FONT_UI, SZ_SMALL), width=14, anchor="w")
+            ic = tk.Label(chip, text=icon, font=(FONT_UI, 13)); ic.pack(side="left", padx=(0, 6)); self._track(ic, "fg")
+            lbl = tk.Label(chip, text=name, font=(FONT_UI, SZ_SMALL, "bold"), width=10, anchor="w")
             lbl.pack(side="left"); self._track(lbl, "fg")
-            url_lbl = tk.Label(row, text="偵測中…", font=(FONT_MONO, SZ_SMALL), anchor="w")
-            url_lbl.pack(side="left", padx=(4, 0)); self._track(url_lbl, "muted")
-            self.conn_rows[key] = {"dot": dot, "url": url_lbl}
+            url_lbl = tk.Label(chip, text="偵測中…", font=(FONT_MONO, SZ_SMALL), anchor="w", cursor="hand2")
+            url_lbl.pack(side="left", fill="x", expand=True, padx=(4, 0)); self._track(url_lbl, "muted")
+            cp = tk.Label(chip, text="⧉", font=(FONT_UI, 13), cursor="hand2")
+            cp.pack(side="right"); self._track(cp, "muted")
+            for w in (url_lbl, cp):
+                w.bind("<Button-1>", lambda e, k=key: self._copy_conn_url(k))
+            self.conn_rows[key] = {"dot": dot, "url": url_lbl, "copy": cp}
+
+        # 分隔線
+        sep = tk.Frame(conn_card, height=1); sep.pack(fill="x", pady=(8, 6)); self._track(sep, "border")
+
+        # 手機語言列
+        lang_row = tk.Frame(conn_card, padx=10, pady=6); lang_row.pack(fill="x"); self._track(lang_row, "card")
+        lg = tk.Label(lang_row, text="🗣", font=(FONT_UI, 13)); lg.pack(side="left", padx=(0, 6)); self._track(lg, "fg")
+        ll = tk.Label(lang_row, text="手機語言", font=(FONT_UI, SZ_SMALL, "bold"), width=10, anchor="w")
+        ll.pack(side="left"); self._track(ll, "fg")
+        self.phone_lang_lbl = tk.Label(lang_row, text="繁體中文", font=(FONT_UI, SZ_SMALL), anchor="w")
+        self.phone_lang_lbl.pack(side="left", padx=(4, 0)); self._track(self.phone_lang_lbl, "fg")
 
         # QR Code 按鈕（全寬、醒目）
         self._btn(conn_card, "📷  掃描連線（顯示 QR Code）", self._show_qr, C_GREEN).pack(
-            fill="x", pady=(10, 4))
+            fill="x", pady=(12, 2))
 
 
         # 操作按鈕
@@ -992,6 +1258,7 @@ class App:
             msg.pack(pady=20, padx=20); self._track(msg, "muted"); return
 
         canvas = tk.Canvas(outer, highlightthickness=0, bd=0); self._track(canvas, "bg")
+        self._adv_canvas = canvas
         vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
@@ -1015,22 +1282,40 @@ class App:
         self.adv_api.pack(fill="x", padx=20, pady=(14, 0)); self._track(self.adv_api, "muted")
 
         _section("聲音模型")
-        listwrap = tk.Frame(parent); listwrap.pack(fill="x", padx=20); self._track(listwrap, "bg")
-        self.model_list = tk.Listbox(listwrap, height=5, font=(FONT_UI, SZ_BODY),
-                                     activestyle="none", highlightthickness=0, bd=0)
-        self.model_list.pack(side="left", fill="both", expand=True)
-        self._track(self.model_list, "list")
-        tk.Scrollbar(listwrap, command=self.model_list.yview).pack(side="right", fill="y")
-        self.model_list.config(yscrollcommand=lambda *a: None)
+
+        # ── 語言篩選按鈕 ──
+        self._lang_filter_btns = {}
+        lang_bar = tk.Frame(parent); lang_bar.pack(fill="x", padx=20, pady=(0, 6)); self._track(lang_bar, "bg")
+        tk.Label(lang_bar, text="篩選：", font=(FONT_UI, SZ_SMALL),
+                 ).pack(side="left", padx=(0, 4)); self._track(lang_bar.children[list(lang_bar.children)[-1]], "muted")
+        for code, label in [("ALL","全部"), ("ZH","🇹🇼 中文"), ("EN","🇺🇸 English"), ("JA","🇯🇵 日本語"), ("KO","🇰🇷 한국어")]:
+            is_sel = (code == self.lang_filter)
+            bg = C_BLUE if is_sel else None
+            fg = C_WHITE if is_sel else None
+            if bg:
+                btn = tk.Label(lang_bar, text=label, bg=bg, fg=fg, cursor="hand2",
+                               font=(FONT_UI, SZ_SMALL, "bold"), padx=10, pady=4)
+            else:
+                btn = tk.Label(lang_bar, text=label, cursor="hand2",
+                               font=(FONT_UI, SZ_SMALL), padx=10, pady=4)
+                self._track(btn, "neutralbtn")
+            btn.bind("<Button-1>", lambda e, c=code: self._set_lang_filter(c))
+            btn.pack(side="left", padx=(0, 3))
+            self._lang_filter_btns[code] = btn
+
+        self._model_grid_frame = tk.Frame(parent)
+        self._model_grid_frame.pack(fill="x", padx=20, pady=(0, 4))
+        self._track(self._model_grid_frame, "bg")
 
         row1 = tk.Frame(parent); row1.pack(fill="x", padx=20, pady=(8, 4)); self._track(row1, "bg")
         self._btn(row1,     "✅ 切換為此模型", self.adv_switch, C_GREEN).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._neutral_btn(row1, "重新命名", self.adv_rename).pack(side="left", expand=True, fill="x", padx=(0,4))
+        self._neutral_btn(row1, "✏️ 編輯",   self.adv_edit).pack(side="left", expand=True, fill="x", padx=(0,4))
         self._neutral_btn(row1, "重新整理", self.adv_reload).pack(side="left", expand=True, fill="x", padx=(0,4))
         self._btn(row1,     "🗑 刪除",      self.adv_delete, C_RED).pack(side="left", expand=True, fill="x")
 
         row2 = tk.Frame(parent); row2.pack(fill="x", padx=20, pady=(4, 4)); self._track(row2, "bg")
-        self._btn(row2, "📁 從資料夾匯入模型", self.adv_import, C_BLUE).pack(side="left", expand=True, fill="x", padx=(0,4))
+        self._btn(row2, "📁 匯入單個資料夾", self.adv_import,       C_BLUE).pack(side="left", expand=True, fill="x", padx=(0,4))
+        self._btn(row2, "📂 批量匯入資料夾",  self.adv_import_batch, C_AMBER).pack(side="left", expand=True, fill="x", padx=(0,4))
         self._neutral_btn(row2, "⏹ 中止合成", self.adv_stopgen).pack(side="left", expand=True, fill="x")
 
         _section("測試合成")
@@ -1088,17 +1373,80 @@ class App:
             self.root.after(0, lambda: (self.set_adv_status(txt), self.adv_reload()))
         threading.Thread(target=work, daemon=True).start()
 
+    # ── 語言標籤萃取 ──────────────────────────────────────────────
+    @staticmethod
+    def _norm_lang(raw: str) -> str:
+        """把 _ZH / _JA / CN / JP / KR 等格式標準化成 ZH/EN/JA/KO 或空字串。"""
+        t = raw.strip().upper().lstrip("_")
+        return {"CN": "ZH", "JP": "JA", "KR": "KO"}.get(t, t) if t in ("ZH","EN","JA","JP","KO","KR","CN") else ""
+
+    @staticmethod
+    def _detect_lang_from_text(text: str) -> str:
+        """依文字種類判斷語言：諺文→KO、假名→JA、漢字→ZH、純拉丁→EN。"""
+        if not text: return ""
+        if re.search(r"[가-힣]", text): return "KO"
+        if re.search(r"[぀-ヿ]", text): return "JA"
+        if re.search(r"[一-鿿]", text): return "ZH"
+        if re.search(r"[A-Za-z]", text): return "EN"
+        return ""
+
+    @classmethod
+    def _model_lang_tag(cls, m: dict) -> str:
+        """回傳 ZH/EN/JA/KO 或空字串。
+        優先讀已存的 lang 欄位；沒有就從參考文字的文字種類偵測；再退回名稱標籤。"""
+        stored = cls._norm_lang(m.get("lang", ""))
+        if stored:
+            return stored
+        # 退回①：參考文字（逐字稿）的文字種類 — 最可靠
+        det = cls._detect_lang_from_text(m.get("prompt","") or os.path.basename(m.get("ref_path","")))
+        if det:
+            return det
+        # 退回②：從 name/version 字串偵測
+        text = (m.get("name","") + " " + m.get("version","")).upper()
+        for tag in ("EN","JA","JP","KO","KR","ZH","CN"):
+            if f"_{tag}" in text or f" {tag}" in text:
+                if   tag in ("ZH","CN"): return "ZH"
+                elif tag in ("JA","JP"): return "JA"
+                elif tag in ("KO","KR"): return "KO"
+                else: return tag
+        return ""   # 無標籤 → 不過濾
+
+    def _set_lang_filter(self, code: str):
+        self.lang_filter = code
+        # 更新按鈕樣式
+        for c, btn in getattr(self, "_lang_filter_btns", {}).items():
+            if c == code:
+                btn.configure(bg=C_BLUE, fg=C_WHITE, font=(FONT_UI, SZ_SMALL, "bold"))
+            else:
+                t = self.theme()
+                btn.configure(bg=t["panel"], fg=t["fg"], font=(FONT_UI, SZ_SMALL))
+        self.adv_reload()
+
     def adv_reload(self):
         if not CC_OK: return
         try: self.adv_history = cc.load_history()
         except Exception as exc:
             self.set_adv_status(f"讀取模型清單失敗：{exc}"); self.adv_history = []
-        self.model_list.delete(0, tk.END)
-        for m in self.adv_history:
-            used = m.get("last_used_at", "")
-            self.model_list.insert(tk.END,
-                f"{m.get('name','?')}  [{m.get('version','')}]"
-                + (f"  · {used}" if used else ""))
+
+        # 套用語言篩選
+        if self.lang_filter == "ALL":
+            self.adv_filtered = list(self.adv_history)
+        else:
+            self.adv_filtered = [
+                m for m in self.adv_history
+                if self._model_lang_tag(m) in (self.lang_filter, "")
+            ]
+
+        # 若選中的模型在新清單裡不存在，重置選擇
+        if self._selected_card_idx is not None and self._selected_card_idx >= len(self.adv_filtered):
+            self._selected_card_idx = None
+
+        self.root.after(0, self._build_card_grid)
+
+        total = len(self.adv_history); shown = len(self.adv_filtered)
+        if total != shown:
+            self.set_adv_status(f"顯示 {shown}/{total} 個模型（篩選：{self.lang_filter}）")
+
         def upd():
             try:
                 ver, gpt, sov = cc.get_current_config()
@@ -1111,9 +1459,106 @@ class App:
         threading.Thread(target=upd, daemon=True).start()
 
     def _selected_model(self):
-        sel = self.model_list.curselection()
-        if not sel: self.set_adv_status("請先在清單選一個模型"); return None
-        return self.adv_history[sel[0]]
+        if self._selected_card_idx is None or self._selected_card_idx >= len(self.adv_filtered):
+            self.set_adv_status("請先點選一個模型卡片"); return None
+        return self.adv_filtered[self._selected_card_idx]
+
+    # ── 宮格卡片 ──────────────────────────────────────────────────
+    _LANG_DISPLAY = {"ZH": "中文", "EN": "English", "JA": "日本語", "KO": "한국어"}
+
+    def _build_card_grid(self):
+        """清空並重建聲音模型宮格（2 欄）。"""
+        if self._model_grid_frame is None:
+            return
+        # 記住目前捲動位置，重建後還原（避免每次操作都跳回頂端）
+        scroll_top = None
+        if self._adv_canvas is not None:
+            try: scroll_top = self._adv_canvas.yview()[0]
+            except Exception: scroll_top = None
+
+        for w in self._model_grid_frame.winfo_children():
+            w.destroy()
+        self._model_card_items = []
+
+        t = self.theme()
+        self._model_grid_frame.columnconfigure(0, weight=1)
+        self._model_grid_frame.columnconfigure(1, weight=1)
+
+        for i, m in enumerate(self.adv_filtered):
+            row, col = divmod(i, 2)
+            lang_tag  = self._model_lang_tag(m)
+            lang_text = self._LANG_DISPLAY.get(lang_tag, lang_tag or "")
+            name      = m.get("name", "?")
+            is_sel    = (i == self._selected_card_idx)
+
+            border_bg = C_BLUE  if is_sel else t["border"]
+            card_bg   = t["listsel"] if is_sel else t["card"]
+            name_fg   = C_WHITE if is_sel else t["fg"]
+            muted_fg  = C_WHITE if is_sel else t["muted"]
+
+            outer = tk.Frame(self._model_grid_frame, bg=border_bg, cursor="hand2", padx=1, pady=1)
+            outer.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
+
+            inner = tk.Frame(outer, bg=card_bg, cursor="hand2", padx=10, pady=7)
+            inner.pack(fill="both", expand=True)
+
+            name_lbl = tk.Label(inner, text=name, font=(FONT_UI, SZ_BODY, "bold"),
+                                bg=card_bg, fg=name_fg, anchor="w", cursor="hand2", wraplength=170)
+            name_lbl.pack(fill="x")
+
+            lang_lbl = tk.Label(inner, text=lang_text, font=(FONT_UI, SZ_SMALL),
+                                bg=card_bg, fg=muted_fg, anchor="w", cursor="hand2")
+            lang_lbl.pack(fill="x")
+
+            for w in (outer, inner, name_lbl, lang_lbl):
+                w.bind("<Button-1>", lambda e, idx=i: self._select_card(idx))
+
+            self._model_card_items.append({
+                "outer": outer, "inner": inner,
+                "name_lbl": name_lbl, "lang_lbl": lang_lbl,
+            })
+
+        # 還原捲動位置（等版面重排與 scrollregion 更新後再設定）
+        if scroll_top is not None and self._adv_canvas is not None:
+            def _restore(c=self._adv_canvas, y=scroll_top):
+                try:
+                    c.update_idletasks()
+                    c.configure(scrollregion=c.bbox("all"))
+                    c.yview_moveto(y)
+                except Exception:
+                    pass
+            self.root.after_idle(_restore)
+
+    @staticmethod
+    def _lang_tagged_name(filename: str, lang: str) -> str:
+        """若檔名未含任何語言標籤，加上 LANG_ 前綴，避免不同語言同名模型互相覆蓋。"""
+        if not lang:
+            return filename
+        up = filename.upper()
+        if any(t in up for t in ("_ZH", "_EN", "_JA", "_JP", "_KO", "_KR", "_CN",
+                                 "ZH_", "EN_", "JA_", "JP_", "KO_", "KR_", "CN_")):
+            return filename
+        return f"{lang}_{filename}"
+
+    def _select_card(self, idx: int):
+        self._selected_card_idx = idx
+        self._refresh_card_visuals()
+
+    def _refresh_card_visuals(self):
+        t = self.theme()
+        for i, item in enumerate(self._model_card_items):
+            is_sel   = (i == self._selected_card_idx)
+            border_bg = C_BLUE  if is_sel else t["border"]
+            card_bg   = t["listsel"] if is_sel else t["card"]
+            name_fg   = C_WHITE if is_sel else t["fg"]
+            muted_fg  = C_WHITE if is_sel else t["muted"]
+            try:
+                item["outer"].configure(bg=border_bg)
+                item["inner"].configure(bg=card_bg)
+                item["name_lbl"].configure(bg=card_bg, fg=name_fg)
+                item["lang_lbl"].configure(bg=card_bg, fg=muted_fg)
+            except Exception:
+                pass
 
     def adv_switch(self):
         m = self._selected_model()
@@ -1139,34 +1584,348 @@ class App:
             return True, f"已移除「{m.get('name')}」"
         self._run_bg(task)
 
+    # ── 通用模型欄位編輯對話框 ─────────────────────────────────
+    def _model_edit_dialog(self, title: str, initial: dict) -> dict | None:
+        """
+        顯示可編輯 name/version/.ckpt/.pth/ref 音檔/ref 文字的對話框。
+        傳入 initial dict（同模型 history record 格式），返回使用者確認後的 dict 或 None。
+        initial 可含 gpt_path / sovits_path（原始絕對路徑，掃描結果用）
+        或 gpt_rel / sovits_rel（已存紀錄的相對路徑）。
+        """
+        from pathlib import Path
+        t = self.theme()
+        result = [None]
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title)
+        dlg.geometry("660x560")
+        dlg.resizable(False, False)
+        dlg.configure(bg=t["bg"])
+        dlg.transient(self.root); dlg.grab_set()
+
+        # ── 欄位輔助函數 ──
+        def _row(label, pady=(4, 2)):
+            f = tk.Frame(dlg, bg=t["bg"]); f.pack(fill="x", padx=24, pady=pady)
+            tk.Label(f, text=label, font=(FONT_UI, SZ_SMALL), bg=t["bg"], fg=t["muted"],
+                     width=14, anchor="w").pack(side="left")
+            return f
+
+        def _entry_var(label, default="", pady=(4, 2)):
+            row = _row(label, pady)
+            var = tk.StringVar(value=default)
+            tk.Entry(row, textvariable=var, font=(FONT_MONO, SZ_SMALL),
+                     bg=t["panel"], fg=t["fg"], insertbackground=t["fg"],
+                     relief="flat", bd=4).pack(side="left", fill="x", expand=True)
+            return var
+
+        def _file_row(label, default="", filetypes=None, pady=(4, 2), on_pick=None):
+            row = _row(label, pady)
+            var = tk.StringVar(value=default)
+            tk.Entry(row, textvariable=var, font=(FONT_MONO, SZ_SMALL),
+                     bg=t["panel"], fg=t["fg"], insertbackground=t["fg"],
+                     relief="flat", bd=4).pack(side="left", fill="x", expand=True, padx=(0, 6))
+            def browse():
+                ft = filetypes or [("All", "*.*")]
+                # 若目前路徑有效，以其所在目錄為起點
+                cur = var.get()
+                init_dir = os.path.dirname(cur) if cur and os.path.exists(os.path.dirname(cur)) else None
+                kw = {"filetypes": ft}
+                if init_dir: kw["initialdir"] = init_dir
+                path = filedialog.askopenfilename(**kw)
+                if path:
+                    var.set(path)
+                    if on_pick: on_pick(path)
+            browse_btn = tk.Label(row, text="瀏覽…", bg=C_BLUE, fg=C_WHITE, cursor="hand2",
+                                  font=(FONT_UI, SZ_SMALL, "bold"), padx=10, pady=5)
+            browse_btn.bind("<Button-1>", lambda e: browse())
+            browse_btn.pack(side="left")
+            return var
+
+        def _prompt_from_audio(path):
+            """從音檔檔名萃取逐字稿（去掉【情緒】前綴），與掃描邏輯一致。"""
+            import unicodedata
+            stem = unicodedata.normalize("NFC", Path(path).stem)
+            stem = re.sub(r"^[【\[〖（(][^】\]〗）)]*[】\]〗）)]\s*", "", stem)
+            return stem.strip()
+
+        def _dropdown(label, options, default, pady=(4, 2)):
+            row = _row(label, pady)
+            var = tk.StringVar(value=default)
+            ttk.OptionMenu(row, var, default, *options).pack(side="left")
+            return var
+
+        # ── 標題 ──
+        tk.Label(dlg, text=title, font=(FONT_UI, SZ_H2, "bold"),
+                 bg=t["bg"], fg=t["fg"]).pack(anchor="w", padx=24, pady=(16, 10))
+
+        # ── 各欄位 ──
+        v_name   = _entry_var("名稱",       initial.get("name", ""))
+        v_ver    = _dropdown ("版本",       sorted(cc.SUPPORTED_VERSIONS), initial.get("version", "v4"))
+        auto_lang = self._model_lang_tag(initial)
+        v_lang   = _dropdown ("語言",       ["ZH", "EN", "JA", "KO"], auto_lang or "ZH")
+
+        gpt_default = initial.get("gpt_path") or (
+            str(Path(ROOT) / initial["gpt_rel"]) if initial.get("gpt_rel") else "")
+        v_gpt    = _file_row ("GPT (.ckpt)", gpt_default,
+                              [("GPT 模型", "*.ckpt"), ("All", "*.*")])
+
+        sov_default = initial.get("sovits_path") or (
+            str(Path(ROOT) / initial["sovits_rel"]) if initial.get("sovits_rel") else "")
+        v_sov    = _file_row ("SoVITS (.pth)", sov_default,
+                              [("SoVITS 模型", "*.pth"), ("All", "*.*")])
+
+        v_prompt = None  # 先佔位，供 on_pick 閉包延遲取用
+        v_ref    = _file_row ("參考音檔",   initial.get("ref_path", ""),
+                              [("音檔", "*.wav *.mp3 *.flac"), ("All", "*.*")],
+                              on_pick=lambda p: v_prompt.set(_prompt_from_audio(p)) if v_prompt else None)
+        v_prompt = _entry_var("參考文字",   initial.get("prompt", ""))
+
+        # ── 確認 / 取消 ──
+        sep = tk.Frame(dlg, bg=t["border"], height=1); sep.pack(fill="x", padx=24, pady=(14, 0))
+        btn_bar = tk.Frame(dlg, bg=t["bg"]); btn_bar.pack(fill="x", padx=24, pady=12)
+        def _confirm():
+            result[0] = {
+                "name":        v_name.get().strip(),
+                "version":     v_ver.get(),
+                "lang":        v_lang.get(),
+                "gpt_path":    v_gpt.get().strip(),
+                "sovits_path": v_sov.get().strip(),
+                "ref_path":    v_ref.get().strip(),
+                "prompt":      v_prompt.get().strip(),
+            }
+            dlg.destroy()
+        self._btn(btn_bar, "✅ 確認", _confirm, C_GREEN).pack(side="left", expand=True, fill="x", padx=(0, 8))
+        self._btn(btn_bar, "取消",    dlg.destroy, C_RED ).pack(side="left", expand=True, fill="x")
+
+        self.root.wait_window(dlg)
+        return result[0]
+
+    # ── 匯入（單個，先編輯再匯入）──────────────────────────────
     def adv_import(self):
+        import shutil
+        from pathlib import Path
+
         folder = filedialog.askdirectory(title="選擇聲音模型資料夾（含 .ckpt 與 .pth）")
         if not folder: return
-        self.set_adv_status("掃描並匯入中…")
+
+        # 先掃描，取得預設值
+        info = cc.scan_model_folder(Path(folder))
+        initial = {
+            "name":        info.get("name", Path(folder).name),
+            "version":     info.get("version", "v4"),
+            "gpt_path":    info.get("gpt_path", ""),
+            "sovits_path": info.get("sovits_path", ""),
+            "ref_path":    info.get("ref_path", ""),
+            "prompt":      info.get("prompt", ""),
+        }
+
+        # 打開編輯對話框讓使用者調整
+        edited = self._model_edit_dialog("匯入聲音模型", initial)
+        if not edited: return
+
+        self.set_adv_status(f"匯入「{edited['name']}」中…")
         def task():
-            import shutil
-            from pathlib import Path
-            info = cc.scan_model_folder(Path(folder))
-            if not info.get("ok"): return False, info.get("error","掃描失敗")
-            ver = info["version"]
+            ver = edited["version"]
+            lang_val = edited.get("lang", "") or "ZH"
+            gpt_src = Path(edited["gpt_path"])
+            sov_src = Path(edited["sovits_path"])
+            if not gpt_src.exists(): return False, f"找不到 .ckpt：{gpt_src}"
+            if not sov_src.exists(): return False, f"找不到 .pth：{sov_src}"
             gpt_dir, sovits_dir = cc.ensure_dirs(ver)
-            gpt_src, sov_src = Path(info["gpt_path"]), Path(info["sovits_path"])
-            gpt_dst = gpt_dir / gpt_src.name; sov_dst = sovits_dir / sov_src.name
+            # 加語言前綴避免不同語言同名模型互相覆蓋
+            gpt_dst = gpt_dir / self._lang_tagged_name(gpt_src.name, lang_val)
+            sov_dst = sovits_dir / self._lang_tagged_name(sov_src.name, lang_val)
             if not gpt_dst.exists(): shutil.copy2(gpt_src, gpt_dst)
             if not sov_dst.exists(): shutil.copy2(sov_src, sov_dst)
-            ref_src = info.get("ref_path","")
-            ref_path = Path(ref_src) if ref_src else None
-            if ref_path:
+            ref_path = Path(edited["ref_path"]) if edited["ref_path"] else None
+            if ref_path and ref_path.exists():
+                cc.REF_DIR.mkdir(parents=True, exist_ok=True)
+                ref_dst = cc.REF_DIR / self._lang_tagged_name(ref_path.name, lang_val)
+                if not ref_dst.exists(): shutil.copy2(ref_path, ref_dst)
+                ref_path = ref_dst
+            gpt_rel = os.path.relpath(gpt_dst, ROOT)
+            sov_rel = os.path.relpath(sov_dst, ROOT)
+            cc.update_config(ver, gpt_rel, sov_rel)
+            cc.remember_model(edited["name"], ver, gpt_rel, sov_rel,
+                              ref_path or Path(""), edited["prompt"])
+            # 把語言標籤寫入 history（remember_model 不接受 lang 參數）
+            hist = cc.load_history()
+            for r in hist:
+                if r.get("gpt_rel") == gpt_rel and r.get("sovits_rel") == sov_rel:
+                    r["lang"] = lang_val; break
+            cc.save_history(hist)
+            ok, _ = cc.apply_runtime_model(ver, gpt_rel, sov_rel,
+                                           ref_path or Path(""), edited["prompt"])
+            return True, f"已匯入「{edited['name']}」（{ver}）" + ("，已載入" if ok else "；請重啟語音服務")
+        self._run_bg(task)
+
+    # ── 編輯現有模型 ───────────────────────────────────────────
+    def adv_edit(self):
+        import shutil
+        from pathlib import Path
+
+        m = self._selected_model()
+        if not m: return
+
+        edited = self._model_edit_dialog("編輯聲音模型", m)
+        if not edited: return
+
+        self.set_adv_status(f"更新「{edited['name']}」中…")
+        def task():
+            ver = edited["version"]
+            gpt_src = Path(edited["gpt_path"])
+            sov_src = Path(edited["sovits_path"])
+            if not gpt_src.exists(): return False, f"找不到 .ckpt：{gpt_src}"
+            if not sov_src.exists(): return False, f"找不到 .pth：{sov_src}"
+
+            # 若使用者換了檔案才複製，否則直接用相對路徑
+            gpt_dir, sovits_dir = cc.ensure_dirs(ver)
+            gpt_dst = gpt_dir / gpt_src.name
+            sov_dst = sovits_dir / sov_src.name
+            if not gpt_dst.exists(): shutil.copy2(gpt_src, gpt_dst)
+            if not sov_dst.exists(): shutil.copy2(sov_src, sov_dst)
+
+            ref_path = Path(edited["ref_path"]) if edited["ref_path"] else None
+            if ref_path and ref_path.exists():
                 cc.REF_DIR.mkdir(parents=True, exist_ok=True)
                 ref_dst = cc.REF_DIR / ref_path.name
                 if not ref_dst.exists(): shutil.copy2(ref_path, ref_dst)
                 ref_path = ref_dst
-            gpt_rel = os.path.relpath(gpt_dst, ROOT); sov_rel = os.path.relpath(sov_dst, ROOT)
+
+            gpt_rel = os.path.relpath(gpt_dst, ROOT)
+            sov_rel = os.path.relpath(sov_dst, ROOT)
+
+            # 更新歷史紀錄
+            records = cc.load_history()
+            for r in records:
+                if r.get("id") == m.get("id"):
+                    r["name"]       = edited["name"] or r["name"]
+                    r["version"]    = ver
+                    r["lang"]       = edited.get("lang", "")
+                    r["gpt_rel"]    = gpt_rel
+                    r["sovits_rel"] = sov_rel
+                    r["ref_path"]   = str(ref_path) if ref_path else r.get("ref_path","")
+                    r["prompt"]     = edited["prompt"]
+                    break
+            cc.save_history(records)
             cc.update_config(ver, gpt_rel, sov_rel)
-            cc.remember_model(info["name"], ver, gpt_rel, sov_rel, ref_path or Path(""), info.get("prompt",""))
-            ok, _ = cc.apply_runtime_model(ver, gpt_rel, sov_rel, ref_path or Path(""), info.get("prompt",""))
-            return True, f"已匯入「{info['name']}」（{ver}）" + ("，已載入" if ok else "；請重啟語音服務")
+            ok, _ = cc.apply_runtime_model(ver, gpt_rel, sov_rel,
+                                           ref_path or Path(""), edited["prompt"])
+            return True, f"已更新「{edited['name']}」" + ("，已重新載入" if ok else "；請重啟語音服務")
         self._run_bg(task)
+
+    def adv_import_batch(self):
+        """批量掃描一個父資料夾，把所有含 .ckpt + .pth 的子資料夾全部匯入。"""
+        parent_dir = filedialog.askdirectory(title="選擇包含多個聲音模型的父資料夾")
+        if not parent_dir: return
+
+        from pathlib import Path
+        parent_path = Path(parent_dir)
+
+        # 找出所有有效子資料夾（至少含一個 .ckpt 或 .pth）
+        candidates = sorted([
+            d for d in parent_path.iterdir()
+            if d.is_dir() and (any(d.glob("*.ckpt")) or any(d.glob("*.pth")))
+        ])
+
+        if not candidates:
+            self.set_adv_status("未找到任何含有 .ckpt / .pth 的子資料夾")
+            return
+
+        # ── 進度視窗 ──
+        t = self.theme()
+        dlg = tk.Toplevel(self.root)
+        dlg.title("批量匯入進度")
+        dlg.geometry("520x360")
+        dlg.configure(bg=t["bg"])
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        tk.Label(dlg, text=f"找到 {len(candidates)} 個候選資料夾，匯入中…",
+                 font=(FONT_UI, SZ_BODY, "bold"), bg=t["bg"], fg=t["fg"]).pack(pady=(16, 4), padx=16, anchor="w")
+
+        bar = ttk.Progressbar(dlg, length=480, mode="determinate", maximum=len(candidates))
+        bar.pack(pady=(0, 8), padx=16)
+
+        log_frame = tk.Frame(dlg, bg=t["bg"]); log_frame.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        log_box = tk.Text(log_frame, font=(FONT_MONO, SZ_SMALL), relief="flat", bd=0,
+                          state="disabled", height=12, bg=t["panel"], fg=t["fg"])
+        log_sb = ttk.Scrollbar(log_frame, command=log_box.yview)
+        log_box.configure(yscrollcommand=log_sb.set)
+        log_sb.pack(side="right", fill="y")
+        log_box.pack(side="left", fill="both", expand=True)
+
+        close_btn = self._btn(dlg, "關閉", dlg.destroy, C_RED)
+        close_btn.pack(pady=(0, 12))
+        close_btn.configure(state="disabled")
+
+        def _log(msg: str):
+            def upd():
+                log_box.configure(state="normal")
+                log_box.insert("end", msg + "\n")
+                log_box.see("end")
+                log_box.configure(state="disabled")
+            dlg.after(0, upd)
+
+        def _work():
+            import shutil
+            ok_count = err_count = skip_count = 0
+            for i, folder in enumerate(candidates):
+                _log(f"[{i+1}/{len(candidates)}] {folder.name} …")
+                try:
+                    info = cc.scan_model_folder(folder)
+                    if not info.get("ok"):
+                        _log(f"  ✗ {info.get('error', '掃描失敗')}")
+                        err_count += 1
+                    else:
+                        ver = info["version"]
+                        lang_val = self._norm_lang(info.get("lang", "")) or "ZH"
+                        gpt_dir, sovits_dir = cc.ensure_dirs(ver)
+                        gpt_src = Path(info["gpt_path"])
+                        sov_src = Path(info["sovits_path"])
+                        # 加語言前綴避免不同語言同名模型互相覆蓋
+                        gpt_dst = gpt_dir / self._lang_tagged_name(gpt_src.name, lang_val)
+                        sov_dst = sovits_dir / self._lang_tagged_name(sov_src.name, lang_val)
+                        already = gpt_dst.exists() and sov_dst.exists()
+                        if already:
+                            _log(f"  — 已存在（{lang_val}），略過")
+                            skip_count += 1
+                        else:
+                            if not gpt_dst.exists(): shutil.copy2(gpt_src, gpt_dst)
+                            if not sov_dst.exists(): shutil.copy2(sov_src, sov_dst)
+                            ref_src = info.get("ref_path", "")
+                            ref_path = Path(ref_src) if ref_src else None
+                            if ref_path:
+                                cc.REF_DIR.mkdir(parents=True, exist_ok=True)
+                                ref_dst = cc.REF_DIR / self._lang_tagged_name(ref_path.name, lang_val)
+                                if not ref_dst.exists(): shutil.copy2(ref_path, ref_dst)
+                                ref_path = ref_dst
+                            gpt_rel = os.path.relpath(gpt_dst, ROOT)
+                            sov_rel = os.path.relpath(sov_dst, ROOT)
+                            cc.remember_model(info["name"], ver, gpt_rel, sov_rel,
+                                              ref_path or Path(""), info.get("prompt", ""))
+                            # 把語言標籤寫入 history
+                            hist = cc.load_history()
+                            for r in hist:
+                                if r.get("gpt_rel") == gpt_rel and r.get("sovits_rel") == sov_rel:
+                                    r["lang"] = lang_val; break
+                            cc.save_history(hist)
+                            _log(f"  ✓ 已匯入「{info['name']}」[{lang_val}]（{ver}）")
+                            ok_count += 1
+                except Exception as exc:
+                    _log(f"  ✗ 例外：{exc}")
+                    err_count += 1
+                dlg.after(0, lambda v=i + 1: bar.configure(value=v))
+
+            summary = f"完成：{ok_count} 成功 / {skip_count} 略過 / {err_count} 失敗"
+            _log(f"\n{summary}")
+            def _done():
+                close_btn.configure(state="normal")
+                self.set_adv_status(summary)
+                self.adv_reload()
+            dlg.after(0, _done)
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def adv_test(self):
         m = self._selected_model()
@@ -1596,9 +2355,11 @@ class App:
             ("wifi", wifi_url, bool(lan)),
             ("ts",   ts_url,   bool(ts)),
         ]:
-            color = C_GREEN if ok else t["muted"]
-            self.conn_rows[key]["dot"].config(fg=color)
-            self.conn_rows[key]["url"].config(text=url, fg=color)
+            self.conn_rows[key]["dot"].config(fg=(C_GREEN if ok else t["muted"]))
+            self.conn_rows[key]["url"].config(text=url, fg=(t["fg"] if ok else t["muted"]))
+            cp = self.conn_rows[key].get("copy")
+            if cp is not None:
+                cp.config(text=("⧉" if ok else ""), fg=t["muted"])
         self.root.after(2500, self.refresh)
 
     def on_close(self):

@@ -13,12 +13,55 @@
   <video id="video" playsinline autoplay muted></video>
 
   <script>
-    // ── 由 Kotlin 透過 URL 參數傳入實體螢幕尺寸（鼻控輸出 0–1 正規化，此處僅備用）──
-    (function () {
-      const p = new URLSearchParams(window.location.search);
-      window.__screenW = parseInt(p.get('w')) || screen.width || 1080;
-      window.__screenH = parseInt(p.get('h')) || screen.height || 1920;
-    })();
+    // ── URL 參數：螢幕尺寸 + 介面語言 ──
+    const _p = new URLSearchParams(window.location.search);
+    window.__screenW = parseInt(_p.get('w')) || screen.width || 1080;
+    window.__screenH = parseInt(_p.get('h')) || screen.height || 1920;
+    const _lang = (_p.get('lang') || 'zh-TW').toLowerCase().replace('_', '-');
+
+    // ── i18n 字串字典 ──
+    const STRINGS = {
+      'zh-tw': {
+        calibrated:    '已重新置中：請保持自然姿勢看著螢幕中央',
+        needsHttps:    '需要安全內容 (HTTPS)',
+        loading:       '載入 MediaPipe FaceMesh...',
+        loadFail:      'FaceMesh 未載入',
+        cameraReady:   'FaceMesh 就緒，開啟相機...',
+        tracking:      '鼻子頭控追蹤中',
+        initFail:      '初始化失敗：',
+      },
+      'en': {
+        calibrated:    'Recalibrated: look straight at the screen centre',
+        needsHttps:    'Secure context (HTTPS) required',
+        loading:       'Loading MediaPipe FaceMesh...',
+        loadFail:      'FaceMesh failed to load',
+        cameraReady:   'FaceMesh ready, opening camera...',
+        tracking:      'Nose head-tracking active',
+        initFail:      'Initialization failed: ',
+      },
+      'ja': {
+        calibrated:    '再キャリブレーション完了：画面中央を自然に見てください',
+        needsHttps:    'セキュアコンテキスト（HTTPS）が必要です',
+        loading:       'MediaPipe FaceMesh 読み込み中...',
+        loadFail:      'FaceMesh の読み込みに失敗しました',
+        cameraReady:   'FaceMesh 準備完了、カメラを起動中...',
+        tracking:      '鼻ヘッドトラッキング中',
+        initFail:      '初期化失敗：',
+      },
+      'ko': {
+        calibrated:    '재보정 완료: 화면 중앙을 자연스럽게 바라보세요',
+        needsHttps:    '보안 컨텍스트(HTTPS)가 필요합니다',
+        loading:       'MediaPipe FaceMesh 로딩 중...',
+        loadFail:      'FaceMesh 로드 실패',
+        cameraReady:   'FaceMesh 준비 완료, 카메라 열기...',
+        tracking:      '코 머리 추적 중',
+        initFail:      '초기화 실패: ',
+      },
+    };
+    function t(k) {
+      const base = _lang.split('-')[0];
+      return (STRINGS[_lang] || STRINGS[base] || STRINGS['zh-tw'])[k] || STRINGS['zh-tw'][k] || k;
+    }
 
     function bridgeStatus(m) { console.log('[NOSE]', m); if (window.AndroidBridge) AndroidBridge.onStatus(m); }
     function bridgeError(m) { console.error('[NOSE]', m); if (window.AndroidBridge) AndroidBridge.onError(String(m)); }
@@ -90,7 +133,7 @@
     }
 
     // 重新置中（設定頁按鈕呼叫）：把目前頭部姿勢設為中央
-    window.egRecalibrate = function () { dx0 = NaN; dy0 = NaN; bridgeStatus('已重新置中：請保持自然姿勢看著螢幕中央'); };
+    window.egRecalibrate = function () { dx0 = NaN; dy0 = NaN; bridgeStatus(t('calibrated')); };
 
     function loadScript(src) {
       return new Promise((resolve, reject) => {
@@ -102,10 +145,10 @@
 
     async function init() {
       try {
-        if (!window.isSecureContext) throw new Error('需要安全內容 (HTTPS)');
-        bridgeStatus('載入 MediaPipe FaceMesh...');
+        if (!window.isSecureContext) throw new Error(t('needsHttps'));
+        bridgeStatus(t('loading'));
         await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js');
-        if (typeof FaceMesh === 'undefined') throw new Error('FaceMesh 未載入');
+        if (typeof FaceMesh === 'undefined') throw new Error(t('loadFail'));
 
         const faceMesh = new FaceMesh({
           locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`
@@ -116,7 +159,7 @@
         });
         await faceMesh.initialize();
         faceMesh.onResults(onResults);
-        bridgeStatus('FaceMesh 就緒，開啟相機...');
+        bridgeStatus(t('cameraReady'));
 
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
         const video = document.getElementById('video');
@@ -129,9 +172,9 @@
           }
           requestAnimationFrame(pump);
         }
-        video.onloadeddata = () => { video.play(); bridgeStatus('鼻子頭控追蹤中'); requestAnimationFrame(pump); };
+        video.onloadeddata = () => { video.play(); bridgeStatus(t('tracking')); requestAnimationFrame(pump); };
       } catch (e) {
-        bridgeError('初始化失敗：' + (e.message || e));
+        bridgeError(t('initFail') + (e.message || e));
       }
     }
 
