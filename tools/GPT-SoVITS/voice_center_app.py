@@ -826,25 +826,35 @@ class App:
         gl = tk.Label(topbar, text="🌐", font=(FONT_UI, SZ_BODY)); gl.pack(side="right", padx=(0, 6))
         self._track(gl, "fg")
 
+        # ── 自製分頁列（取代 ttk.Notebook，選中可確實放大＋墊高凸出）──
         nb_frame = tk.Frame(root); nb_frame.pack(fill="both", expand=True)
         self._track(nb_frame, "bg")
-        self.nb = ttk.Notebook(nb_frame)
-        self.nb.pack(fill="both", expand=True, padx=10, pady=(6, 10))
+        self._tabbar = tk.Frame(nb_frame); self._tabbar.pack(fill="x", padx=12, pady=(6, 0))
+        self._track(self._tabbar, "bg")
+        self._content = tk.Frame(nb_frame); self._content.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self._track(self._content, "bg")
 
-        self.tab_main = tk.Frame(self.nb); self._track(self.tab_main, "bg")
-        self.tab_adv  = tk.Frame(self.nb); self._track(self.tab_adv,  "bg")
-        self.tab_help = tk.Frame(self.nb); self._track(self.tab_help, "bg")
-        self.nb.add(self.tab_main, text=self.t("tab.main"))
-        self.nb.add(self.tab_adv,  text=self.t("tab.adv"))
-        self.nb.add(self.tab_help, text=self.t("tab.help"))
+        self.tab_main = tk.Frame(self._content); self._track(self.tab_main, "bg")
+        self.tab_adv  = tk.Frame(self._content); self._track(self.tab_adv,  "bg")
+        self.tab_help = tk.Frame(self._content); self._track(self.tab_help, "bg")
+        self._tabs = [("main", self.tab_main, "tab.main"),
+                      ("adv",  self.tab_adv,  "tab.adv"),
+                      ("help", self.tab_help, "tab.help")]
+        self._tab_btns = {}
+        for key, frame, tkey in self._tabs:
+            b = tk.Label(self._tabbar, cursor="hand2", anchor="center")
+            b.bind("<Button-1>", lambda e, k=key: self.select_tab(k))
+            b.pack(side="left", padx=(0, 4), anchor="s")
+            self._tab_btns[key] = (b, tkey)
+        self._current_tab = None
 
         self._build_main(self.tab_main)
         self._build_adv(self.tab_adv)
         self._build_help(self.tab_help)
-        self.nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         self.apply_theme()
         self._sync_ui_lang_btns()
+        self.select_tab("main")
 
         # 背景初始化（不阻塞 UI）
         self.root.after(100, self._bg_init)
@@ -901,11 +911,8 @@ class App:
         # 視窗標題
         try: self.root.title(self.t("app.title"))
         except Exception: pass
-        # 分頁標題
-        try:
-            self.nb.tab(self.tab_main, text=self.t("tab.main"))
-            self.nb.tab(self.tab_adv,  text=self.t("tab.adv"))
-            self.nb.tab(self.tab_help, text=self.t("tab.help"))
+        # 分頁列（自製）
+        try: self._restyle_tabs()
         except Exception: pass
         # 已註冊 widget
         for w, key in self._i18n:
@@ -1365,7 +1372,9 @@ class App:
                   background=[("selected", C_BLUE), ("active", t["card"])],
                   foreground=[("selected", C_WHITE), ("active", t["fg"])],
                   lightcolor=[("selected", C_BLUE)], darkcolor=[("selected", C_BLUE)],
-                  bordercolor=[("selected", C_BLUE)])
+                  bordercolor=[("selected", C_BLUE)],
+                  # expand：選中的分頁往外脹大「凸出去」(左,上,右,下 多出的像素)
+                  expand=[("selected", [4, 4, 4, 0])])
         # 移除分頁的虛線焦點框（選中時會出現一圈點點、看起來像凹陷/縮小）
         try:
             style.layout("TNotebook.Tab", [
@@ -1398,6 +1407,8 @@ class App:
                 pass
         self._refresh_card_visuals()
         self._sync_ui_lang_btns()
+        try: self._restyle_tabs()
+        except Exception: pass
 
     # ── 按鈕工廠 ─────────────────────────────────────────────────
     def _btn(self, parent, text, cmd, bg, fg=C_WHITE, size=SZ_BODY):
@@ -1640,14 +1651,30 @@ class App:
         except Exception:
             pass
 
-    def _on_tab_changed(self, _evt=None):
-        try:
-            if self.nb.select() == str(self.tab_adv):
-                # 連跑兩次（立即＋下一個 idle）確保拿到真正的尺寸
-                self._fix_adv_canvas()
-                self.root.after_idle(self._fix_adv_canvas)
-        except Exception:
-            pass
+    # ── 自製分頁：樣式 + 切換 ────────────────────────────────────
+    def _restyle_tabs(self):
+        """選中分頁＝藍底白字、更大字＋更高（凸出）；未選＝panel 灰字、較矮。"""
+        t = self.theme()
+        for key, (b, tkey) in getattr(self, "_tab_btns", {}).items():
+            b.config(text=self.t(tkey))
+            if key == self._current_tab:
+                b.config(bg=C_BLUE, fg=C_WHITE, font=(FONT_UI, SZ_BODY + 2, "bold"),
+                         padx=22, pady=11)   # 大字＋高 → 明顯凸出
+            else:
+                b.config(bg=t["panel"], fg=t["muted"], font=(FONT_UI, SZ_BODY),
+                         padx=16, pady=6)
+
+    def select_tab(self, key: str):
+        if key not in self._tab_btns:
+            return
+        self._current_tab = key
+        self._restyle_tabs()
+        for k, frame, _ in self._tabs:
+            frame.pack_forget()
+        dict((k, f) for k, f, _ in self._tabs)[key].pack(fill="both", expand=True)
+        if key == "adv":
+            self._fix_adv_canvas()
+            self.root.after_idle(self._fix_adv_canvas)
 
     # ── 分頁③：說明 ─────────────────────────────────────────────
     def _build_help(self, parent):
