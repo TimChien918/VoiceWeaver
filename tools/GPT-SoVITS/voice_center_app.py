@@ -841,6 +841,7 @@ class App:
         self._build_main(self.tab_main)
         self._build_adv(self.tab_adv)
         self._build_help(self.tab_help)
+        self.nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         self.apply_theme()
         self._sync_ui_lang_btns()
@@ -1365,6 +1366,17 @@ class App:
                   foreground=[("selected", C_WHITE), ("active", t["fg"])],
                   lightcolor=[("selected", C_BLUE)], darkcolor=[("selected", C_BLUE)],
                   bordercolor=[("selected", C_BLUE)])
+        # 移除分頁的虛線焦點框（選中時會出現一圈點點、看起來像凹陷/縮小）
+        try:
+            style.layout("TNotebook.Tab", [
+                ("Notebook.tab", {"sticky": "nswe", "children": [
+                    ("Notebook.padding", {"side": "top", "sticky": "nswe", "children": [
+                        ("Notebook.label", {"side": "top", "sticky": ""})
+                    ]})
+                ]})
+            ])
+        except Exception:
+            pass
         style.configure("TScrollbar", background=t["panel"], troughcolor=t["bg"],
                         borderwidth=0, bordercolor=t["bg"], arrowcolor=t["muted"])
 
@@ -1610,7 +1622,32 @@ class App:
                                    wraplength=580, justify="left", anchor="w")
         self.adv_status.pack(fill="x", padx=20, pady=(0, 14)); self._track(self.adv_status, "muted")
 
+        self._adv_win = win   # 供切換分頁時校正寬度用
         self.adv_reload()
+
+    def _fix_adv_canvas(self):
+        """切到進階分頁時強制校正 canvas 內框寬度與捲動範圍，
+        避免 Tk 在 tab 切換時第一個 <Configure> 以 1px 觸發、把內容壓成看不見。"""
+        c = self._adv_canvas
+        if c is None:
+            return
+        try:
+            c.update_idletasks()
+            w = c.winfo_width()
+            if w > 1 and getattr(self, "_adv_win", None) is not None:
+                c.itemconfig(self._adv_win, width=w)
+            c.config(scrollregion=c.bbox("all"))
+        except Exception:
+            pass
+
+    def _on_tab_changed(self, _evt=None):
+        try:
+            if self.nb.select() == str(self.tab_adv):
+                # 連跑兩次（立即＋下一個 idle）確保拿到真正的尺寸
+                self._fix_adv_canvas()
+                self.root.after_idle(self._fix_adv_canvas)
+        except Exception:
+            pass
 
     # ── 分頁③：說明 ─────────────────────────────────────────────
     def _build_help(self, parent):
