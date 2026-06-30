@@ -280,6 +280,7 @@ def run_bootstrap(progress):
                 "wordsegment", "rotary_embedding_torch", "ToJyutping", "opencc",
                 "x_transformers", "torchmetrics<=1.5", "pydantic<=2.10.6",
                 "ctranslate2>=4.0,<5", "av>=11", "pytorch-lightning",
+                "qrcode",   # 控制台「掃描連線」用，產生 QR Code 給手機掃
             ]
             for pkg in voice_pkgs:
                 _run([ENV_PY, "-m", "pip", "install", pkg], progress, "語音元件")

@@ -221,7 +221,7 @@ try {
 
       # ── 語音額外依賴（GPT-SoVITS 9880 用，逐項安裝、失敗不中止）──
       Set-Step '安裝語音合成元件…'
-      foreach ($pkg in @('scipy','librosa==0.10.2','soundfile','numba','gradio<5','einops','ffmpeg-python','onnxruntime','tqdm','funasr','cn2an','pypinyin','g2p_en','modelscope','sentencepiece','peft<0.18.0','chardet','PyYAML','psutil','jieba','split-lang','fast_langdetect','wordsegment','rotary_embedding_torch','ToJyutping','opencc','x_transformers','torchmetrics<=1.5','pydantic<=2.10.6','ctranslate2>=4.0,<5','av>=11','pytorch-lightning')) {
+      foreach ($pkg in @('scipy','librosa==0.10.2','soundfile','numba','gradio<5','einops','ffmpeg-python','onnxruntime','tqdm','funasr','cn2an','pypinyin','g2p_en','modelscope','sentencepiece','peft<0.18.0','chardet','PyYAML','psutil','jieba','split-lang','fast_langdetect','wordsegment','rotary_embedding_torch','ToJyutping','opencc','x_transformers','torchmetrics<=1.5','pydantic<=2.10.6','ctranslate2>=4.0,<5','av>=11','pytorch-lightning','qrcode')) {
         & $PY -m pip install $pkg 2>> $LOG
       }
       # pyopenjtalk：日語前端，Windows 無預編譯輪子需 C++ 編譯——盡力而為，失敗略過

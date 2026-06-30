@@ -48,6 +48,8 @@ $args = @(
   '--distpath',$Dist,
   '--workpath',"$env:TEMP\pyi_build",
   '--specpath',"$env:TEMP\pyi_build",
+  # qrcode 在「掃描連線」功能裡才 import（try/except 內），PyInstaller 靜態分析可能漏掉 → 強制收進來
+  '--collect-all','qrcode',
   '--noupx'
 )
 foreach ($d in $addData) { $args += @('--add-data', $d) }
