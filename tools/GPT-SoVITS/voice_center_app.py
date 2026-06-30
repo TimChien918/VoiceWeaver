@@ -437,6 +437,167 @@ HELP_TEXT = """使用說明
       未安裝時語音合成服務無法啟動。
 """
 
+# ── 介面多語系（繁中／英／日／韓）：可在標題列「介面語言」獨立切換 ─────────────
+UI_LANGS = [("zh-TW", "繁體中文"), ("en", "English"), ("ja", "日本語"), ("ko", "한국어")]
+
+I18N = {
+    # 標題列
+    "ui.langLabel": {"zh-TW":"介面語言", "en":"Language", "ja":"言語", "ko":"언어"},
+    "app.title":    {"zh-TW":"VoiceWeaver 語音中心", "en":"VoiceWeaver Voice Center", "ja":"VoiceWeaver ボイスセンター", "ko":"VoiceWeaver 보이스 센터"},
+    "header.sub":   {"zh-TW":"關閉視窗即停止所有服務", "en":"Closing the window stops all services", "ja":"ウィンドウを閉じると全サービス停止", "ko":"창을 닫으면 모든 서비스 중지"},
+    # 分頁
+    "tab.main": {"zh-TW":"   控制台   ", "en":"   Console   ", "ja":"   コンソール   ", "ko":"   콘솔   "},
+    "tab.adv":  {"zh-TW":"   模型 / 進階   ", "en":"   Models / Advanced   ", "ja":"   モデル / 詳細   ", "ko":"   모델 / 고급   "},
+    "tab.help": {"zh-TW":"   說明   ", "en":"   Help   ", "ja":"   ヘルプ   ", "ko":"   도움말   "},
+    # 服務名稱
+    "svc.9880": {"zh-TW":"語音合成 (GPT-SoVITS)", "en":"Voice synthesis (GPT-SoVITS)", "ja":"音声合成 (GPT-SoVITS)", "ko":"음성 합성 (GPT-SoVITS)"},
+    "svc.9881": {"zh-TW":"本機生圖 (SD-Turbo)", "en":"Local image gen (SD-Turbo)", "ja":"ローカル画像生成 (SD-Turbo)", "ko":"로컬 이미지 생성 (SD-Turbo)"},
+    "svc.9882": {"zh-TW":"文字推論 (Qwen)", "en":"Text inference (Qwen)", "ja":"テキスト推論 (Qwen)", "ko":"텍스트 추론 (Qwen)"},
+    # 服務狀態 / 按鈕（{port} 會被代入）
+    "svc.running": {"zh-TW":"執行中 · 埠 {port}", "en":"Running · port {port}", "ja":"実行中 · ポート {port}", "ko":"실행 중 · 포트 {port}"},
+    "svc.loading": {"zh-TW":"啟動中…", "en":"Starting…", "ja":"起動中…", "ko":"시작 중…"},
+    "svc.stopped": {"zh-TW":"未啟動 · 埠 {port}", "en":"Stopped · port {port}", "ja":"停止中 · ポート {port}", "ko":"중지됨 · 포트 {port}"},
+    "btn.start": {"zh-TW":"啟動", "en":"Start", "ja":"起動", "ko":"시작"},
+    "btn.stop":  {"zh-TW":"停止", "en":"Stop", "ja":"停止", "ko":"중지"},
+    # 連線卡
+    "conn.title": {"zh-TW":"手機連線位址", "en":"Phone connection address", "ja":"スマホ接続アドレス", "ko":"휴대폰 연결 주소"},
+    "conn.sub":   {"zh-TW":"手機 App 的「電腦語音中心」填入任一位址即可連線（點位址可複製）", "en":"In the phone app's “Computer Voice Center”, enter any address to connect (tap to copy).", "ja":"スマホアプリの「PCボイスセンター」にいずれかのアドレスを入力で接続（タップでコピー）。", "ko":"휴대폰 앱의 ‘컴퓨터 보이스 센터’에 아무 주소나 입력하면 연결 (탭하여 복사)."},
+    "conn.usb":   {"zh-TW":"有線 USB", "en":"Wired USB", "ja":"有線 USB", "ko":"유선 USB"},
+    "conn.phoneLang": {"zh-TW":"手機語言", "en":"Phone language", "ja":"スマホの言語", "ko":"휴대폰 언어"},
+    "conn.qr":    {"zh-TW":"📷  掃描連線（顯示 QR Code）", "en":"📷  Scan to connect (show QR code)", "ja":"📷  スキャンで接続（QRコード表示）", "ko":"📷  스캔하여 연결 (QR 코드 표시)"},
+    "conn.detecting": {"zh-TW":"偵測中…", "en":"Detecting…", "ja":"検出中…", "ko":"감지 중…"},
+    "conn.usbNeed": {"zh-TW":"需 adb 連線", "en":"adb connection needed", "ja":"adb 接続が必要", "ko":"adb 연결 필요"},
+    "conn.noWifi":  {"zh-TW":"未連 Wi-Fi", "en":"Wi-Fi not connected", "ja":"Wi-Fi 未接続", "ko":"Wi-Fi 미연결"},
+    "conn.noTs":    {"zh-TW":"未連 Tailscale", "en":"Tailscale not connected", "ja":"Tailscale 未接続", "ko":"Tailscale 미연결"},
+    # 控制台按鈕
+    "main.sync": {"zh-TW":"🔁  同步聲音模型", "en":"🔁  Sync voice models", "ja":"🔁  音声モデルを同期", "ko":"🔁  음성 모델 동기화"},
+    "main.quit": {"zh-TW":"停止全部並結束", "en":"Stop all & quit", "ja":"全停止して終了", "ko":"모두 중지 후 종료"},
+    # 進階分頁
+    "adv.curPrefix": {"zh-TW":"目前模型：偵測中…", "en":"Current model: detecting…", "ja":"現在のモデル：検出中…", "ko":"현재 모델: 감지 중…"},
+    "adv.curFmt": {"zh-TW":"目前：{ver}  ·  {gpt}  ·  語音(9880)：{online}", "en":"Current: {ver}  ·  {gpt}  ·  Voice(9880): {online}", "ja":"現在：{ver}  ·  {gpt}  ·  音声(9880)：{online}", "ko":"현재: {ver}  ·  {gpt}  ·  음성(9880): {online}"},
+    "adv.online":  {"zh-TW":"已連線", "en":"Connected", "ja":"接続済み", "ko":"연결됨"},
+    "adv.offline": {"zh-TW":"未啟動", "en":"Stopped", "ja":"停止中", "ko":"중지됨"},
+    "adv.curFail": {"zh-TW":"目前模型：讀取失敗", "en":"Current model: read failed", "ja":"現在のモデル：読み込み失敗", "ko":"현재 모델: 읽기 실패"},
+    "adv.secVoice": {"zh-TW":"聲音模型", "en":"Voice models", "ja":"音声モデル", "ko":"음성 모델"},
+    "adv.filter":   {"zh-TW":"篩選：", "en":"Filter:", "ja":"絞り込み：", "ko":"필터:"},
+    "filter.all":   {"zh-TW":"全部", "en":"All", "ja":"すべて", "ko":"전체"},
+    "adv.switch":   {"zh-TW":"✅ 切換為此模型", "en":"✅ Switch to this", "ja":"✅ このモデルに切替", "ko":"✅ 이 모델로 전환"},
+    "adv.edit":     {"zh-TW":"✏️ 編輯", "en":"✏️ Edit", "ja":"✏️ 編集", "ko":"✏️ 편집"},
+    "adv.reload":   {"zh-TW":"重新整理", "en":"Refresh", "ja":"更新", "ko":"새로고침"},
+    "adv.delete":   {"zh-TW":"🗑 刪除", "en":"🗑 Delete", "ja":"🗑 削除", "ko":"🗑 삭제"},
+    "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
+    "adv.importBatch": {"zh-TW":"📂 批量匯入資料夾", "en":"📂 Batch import folders", "ja":"📂 フォルダを一括取込", "ko":"📂 폴더 일괄 가져오기"},
+    "adv.stopgen":  {"zh-TW":"⏹ 中止合成", "en":"⏹ Stop synthesis", "ja":"⏹ 合成を中止", "ko":"⏹ 합성 중지"},
+    "adv.secTest":  {"zh-TW":"測試合成", "en":"Test synthesis", "ja":"合成テスト", "ko":"합성 테스트"},
+    "adv.testDefault": {"zh-TW":"你好，這是測試。", "en":"Hello, this is a test.", "ja":"こんにちは、これはテストです。", "ko":"안녕하세요, 테스트입니다."},
+    "adv.audition": {"zh-TW":"🔊 試聽", "en":"🔊 Preview", "ja":"🔊 試聴", "ko":"🔊 미리듣기"},
+    "adv.play":     {"zh-TW":"▶ 播放", "en":"▶ Play", "ja":"▶ 再生", "ko":"▶ 재생"},
+    "adv.stopPlay": {"zh-TW":"⏸ 停止", "en":"⏸ Stop", "ja":"⏸ 停止", "ko":"⏸ 정지"},
+    "adv.revealMac":{"zh-TW":"📂 在 Finder 顯示", "en":"📂 Show in Finder", "ja":"📂 Finder で表示", "ko":"📂 Finder에서 보기"},
+    "adv.revealWin":{"zh-TW":"📂 在檔案總管顯示", "en":"📂 Show in Explorer", "ja":"📂 エクスプローラーで表示", "ko":"📂 탐색기에서 보기"},
+    "adv.secUsb":   {"zh-TW":"USB 工具", "en":"USB tools", "ja":"USB ツール", "ko":"USB 도구"},
+    "adv.reAdb":    {"zh-TW":"🔌 重新接手機(USB)", "en":"🔌 Reconnect phone (USB)", "ja":"🔌 スマホ再接続 (USB)", "ko":"🔌 휴대폰 재연결 (USB)"},
+    "adv.installAdb":{"zh-TW":"⬇ 安裝 adb 工具", "en":"⬇ Install adb tools", "ja":"⬇ adb ツールを導入", "ko":"⬇ adb 도구 설치"},
+    "adv.secTrain": {"zh-TW":"模型訓練", "en":"Model training", "ja":"モデル訓練", "ko":"모델 훈련"},
+    "adv.train":    {"zh-TW":"🎓 自己訓練模型（官方 WebUI）", "en":"🎓 Train your own (official WebUI)", "ja":"🎓 自分で訓練（公式 WebUI）", "ko":"🎓 직접 훈련 (공식 WebUI)"},
+    # 說明
+    "help.text": {
+        "zh-TW": HELP_TEXT,
+        "en": """How to use
+
+1. Open this app; the three services start automatically. Green = ready.
+
+2. Connect the phone (the Console tab shows the actual address, pick one):
+   • USB: phone uses http://127.0.0.1:9880
+   • Wi-Fi: use the computer IP, e.g. http://192.168.x.x:9880
+   • Remote: install Tailscale, use the 100.x address (tailscale.com/download)
+
+3. Change voice: on the “Models / Advanced” tab pick one and press “Switch”;
+   if there is no model, press “Import folder”.
+
+4. When done, just close the window → all services stop.
+
+Note: the GPT-SoVITS environment must be installed separately (~2GB);
+      voice synthesis cannot start until it is installed.
+""",
+        "ja": """使い方
+
+1. このアプリを開くと、3つのサービスが自動起動します。緑＝準備完了。
+
+2. スマホ接続（「コンソール」タブに実際のアドレス表示、いずれか）：
+   • USB：スマホに http://127.0.0.1:9880
+   • Wi-Fi：PC の IP、例 http://192.168.x.x:9880
+   • 遠隔：Tailscale を入れて 100.x アドレス（tailscale.com/download）
+
+3. 音声切替：「モデル / 詳細」タブで選び「切替」；
+   モデルが無ければ「フォルダを取込」。
+
+4. 終了時はウィンドウを閉じるだけ → 全サービス停止。
+
+注意：GPT-SoVITS 環境は別途インストールが必要（約2GB）。
+      未インストールでは音声合成は起動できません。
+""",
+        "ko": """사용 방법
+
+1. 이 앱을 열면 세 가지 서비스가 자동 시작됩니다. 초록 = 준비됨.
+
+2. 휴대폰 연결 (콘솔 탭에 실제 주소 표시, 하나 선택):
+   • USB: 휴대폰에 http://127.0.0.1:9880
+   • Wi-Fi: 컴퓨터 IP, 예 http://192.168.x.x:9880
+   • 원격: Tailscale 설치 후 100.x 주소 (tailscale.com/download)
+
+3. 음성 변경: ‘모델 / 고급’ 탭에서 하나 선택 후 ‘전환’;
+   모델이 없으면 ‘폴더 가져오기’.
+
+4. 사용 후 창을 닫으면 → 모든 서비스 중지.
+
+참고: GPT-SoVITS 환경은 별도 설치 필요 (약 2GB);
+      미설치 시 음성 합성을 시작할 수 없습니다.
+""",
+    },
+}
+
+
+def _i18n_pick(entry, lang):
+    if not entry:
+        return None
+    if lang in entry:
+        return entry[lang]
+    base = (lang or "").split("-")[0]
+    for k in entry:
+        if k.split("-")[0] == base:
+            return entry[k]
+    return entry.get("zh-TW")
+
+
+def ui_cfg_dir() -> str:
+    if IS_WIN:
+        d = APPSUP
+    else:
+        d = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+    try: os.makedirs(d, exist_ok=True)
+    except Exception: pass
+    return d
+
+
+def load_ui_lang() -> str:
+    try:
+        p = os.path.join(ui_cfg_dir(), ".ui_lang")
+        if os.path.isfile(p):
+            v = open(p, encoding="utf-8").read().strip()
+            if any(code == v for code, _ in UI_LANGS):
+                return v
+    except Exception:
+        pass
+    return "zh-TW"
+
+
+def save_ui_lang(lang: str) -> None:
+    try:
+        open(os.path.join(ui_cfg_dir(), ".ui_lang"), "w", encoding="utf-8").write(lang)
+    except Exception:
+        pass
+
 # ── 單一實例（Windows Mutex） ────────────────────────────────────────────
 _WIN_MUTEX = None
 
@@ -640,37 +801,134 @@ class App:
         self._adv_canvas = None                                    # 進階分頁的捲動 canvas
         self._bridge_lock = threading.Lock()                       # 網頁橋接合成序列化
         self._bridge_voice = None                                  # 網頁橋接：目前載入的語音 {name,lang,ref,prompt}
+        self.ui_lang = load_ui_lang()                              # 介面語言（可在標題列獨立切換、會記住）
+        self._i18n: list[tuple] = []                               # 已註冊待翻譯的 widget [(widget, key)]
+        self._help_txt = None                                      # 說明分頁 Text，retranslate 用
 
-        root.title("VoiceWeaver 語音中心")
-        root.geometry("660x720")
-        root.minsize(580, 620)
+        root.title(self.t("app.title"))
+        root.geometry("660x760")
+        root.minsize(580, 640)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._track(root, "bg")
 
         style = ttk.Style()
         style.theme_use("clam")
 
+        # ── 標題列：介面語言獨立切換（固定寬度＋只換色不變粗體 → 切換時不會位移）──
+        topbar = tk.Frame(root, pady=6); topbar.pack(fill="x", padx=12, pady=(8, 0)); self._track(topbar, "bg")
+        self._ui_lang_btns = {}
+        for code, label in reversed(UI_LANGS):
+            b = tk.Label(topbar, text=label, cursor="hand2", padx=8, pady=2, width=7,
+                         font=(FONT_UI, SZ_SMALL))
+            b.bind("<Button-1>", lambda e, c=code: self.set_ui_lang(c))
+            b.pack(side="right", padx=2)
+            self._ui_lang_btns[code] = b
+        gl = tk.Label(topbar, text="🌐", font=(FONT_UI, SZ_BODY)); gl.pack(side="right", padx=(0, 6))
+        self._track(gl, "fg")
+
         nb_frame = tk.Frame(root); nb_frame.pack(fill="both", expand=True)
         self._track(nb_frame, "bg")
         self.nb = ttk.Notebook(nb_frame)
-        self.nb.pack(fill="both", expand=True, padx=10, pady=(8, 10))
+        self.nb.pack(fill="both", expand=True, padx=10, pady=(6, 10))
 
         self.tab_main = tk.Frame(self.nb); self._track(self.tab_main, "bg")
         self.tab_adv  = tk.Frame(self.nb); self._track(self.tab_adv,  "bg")
         self.tab_help = tk.Frame(self.nb); self._track(self.tab_help, "bg")
-        self.nb.add(self.tab_main, text="   控制台   ")
-        self.nb.add(self.tab_adv,  text="   模型 / 進階   ")
-        self.nb.add(self.tab_help, text="   說明   ")
+        self.nb.add(self.tab_main, text=self.t("tab.main"))
+        self.nb.add(self.tab_adv,  text=self.t("tab.adv"))
+        self.nb.add(self.tab_help, text=self.t("tab.help"))
 
         self._build_main(self.tab_main)
         self._build_adv(self.tab_adv)
         self._build_help(self.tab_help)
 
         self.apply_theme()
+        self._sync_ui_lang_btns()
 
         # 背景初始化（不阻塞 UI）
         self.root.after(100, self._bg_init)
         self.refresh()
+
+    # ── 介面多語系 ────────────────────────────────────────────────
+    def t(self, key: str, **fmt) -> str:
+        """取目前介面語言的字串；有 {} 佔位可用 kwargs 代入。"""
+        s = _i18n_pick(I18N.get(key), self.ui_lang)
+        if s is None:
+            return key
+        return s.format(**fmt) if fmt else s
+
+    def tr(self, widget, key: str):
+        """註冊一個 widget 為可翻譯（text 屬性），立即套用目前語言，回傳該 widget。"""
+        self._i18n.append((widget, key))
+        try: widget.config(text=self.t(key))
+        except Exception: pass
+        return widget
+
+    def _sync_ui_lang_btns(self):
+        """標題列語言按鈕：目前語言高亮。"""
+        t = self.theme()
+        for code, b in getattr(self, "_ui_lang_btns", {}).items():
+            # 只換顏色、字體不變（避免寬度改變造成整排位移）
+            if code == self.ui_lang:
+                b.configure(bg=C_BLUE, fg=C_WHITE)
+            else:
+                b.configure(bg=t["panel"], fg=t["fg"])
+
+    def set_ui_lang(self, code: str):
+        if code == self.ui_lang:
+            return
+        old_default = self.t("adv.testDefault")   # 切換前的測試預設句
+        self.ui_lang = code
+        save_ui_lang(code)
+        self.retranslate()
+        # 介面語言＝主語言：同步切換「聲音模型篩選」與「測試合成」語言
+        base = code.split("-")[0]
+        new_filter = {"zh":"ZH", "en":"EN", "ja":"JA", "ko":"KO"}.get(base, "ZH")
+        try: self._set_lang_filter(new_filter)   # 模型清單只剩該語言、並重繪宮格
+        except Exception: pass
+        # 測試框若還是預設句（任何語言版本）就換成新語言預設句；使用者自行打過的就不動
+        try:
+            cur = self.test_entry.get().strip()
+            all_defaults = {(_i18n_pick(I18N["adv.testDefault"], lc)) for lc, _ in UI_LANGS}
+            if cur == "" or cur == old_default or cur in all_defaults:
+                self.test_entry.delete(0, tk.END)
+                self.test_entry.insert(0, self.t("adv.testDefault"))
+        except Exception: pass
+
+    def retranslate(self):
+        """切換語言後重畫所有已註冊文字 + 分頁 + 標題 + 說明 + 動態狀態。"""
+        # 視窗標題
+        try: self.root.title(self.t("app.title"))
+        except Exception: pass
+        # 分頁標題
+        try:
+            self.nb.tab(self.tab_main, text=self.t("tab.main"))
+            self.nb.tab(self.tab_adv,  text=self.t("tab.adv"))
+            self.nb.tab(self.tab_help, text=self.t("tab.help"))
+        except Exception: pass
+        # 已註冊 widget
+        for w, key in self._i18n:
+            try: w.config(text=self.t(key))
+            except Exception: pass
+        # 服務卡名稱
+        for port, row in self.rows.items():
+            try: row["nm"].config(text=self.t(f"svc.{port}")); row["name"] = self.t(f"svc.{port}")
+            except Exception: pass
+        # 語言篩選「全部」按鈕
+        try:
+            if "ALL" in getattr(self, "_lang_filter_btns", {}):
+                self._lang_filter_btns["ALL"].config(text=self.t("filter.all"))
+        except Exception: pass
+        # 說明分頁
+        if self._help_txt is not None:
+            try:
+                self._help_txt.config(state="normal"); self._help_txt.delete("1.0", "end")
+                self._help_txt.insert("end", self.t("help.text")); self._help_txt.config(state="disabled")
+            except Exception: pass
+        self._sync_ui_lang_btns()
+        # 動態區塊：服務狀態 / 連線位址會在下一個 refresh tick 自動以新語言重畫
+        try: self.refresh()
+        except Exception: pass
 
     # ── 背景初始化 ────────────────────────────────────────────────
     def _bg_init(self):
@@ -1095,13 +1353,20 @@ class App:
         t = self.theme()
         style = ttk.Style()
         nb_bg = t["panel"]
-        style.configure("TNotebook", background=t["bg"], borderwidth=0)
+        # Notebook 整體：邊框色設成背景色 → 去掉 clam 預設的淺色「白邊」
+        style.configure("TNotebook", background=t["bg"], borderwidth=0,
+                        bordercolor=t["bg"], lightcolor=t["bg"], darkcolor=t["bg"])
+        # 分頁：未選＝panel 底/灰字；選中＝藍底白字（清楚凸顯，不再凹陷；寬度不變故不位移）
         style.configure("TNotebook.Tab", background=t["panel"], foreground=t["muted"],
-                        font=(FONT_UI, SZ_BODY), padding=[14, 6])
+                        font=(FONT_UI, SZ_BODY), padding=[16, 8], borderwidth=0,
+                        bordercolor=t["bg"], lightcolor=t["panel"], darkcolor=t["panel"])
         style.map("TNotebook.Tab",
-                  background=[("selected", t["bg"]), ("active", t["card"])],
-                  foreground=[("selected", t["fg"]), ("active", t["fg"])])
-        style.configure("TScrollbar", background=t["panel"], troughcolor=t["bg"], borderwidth=0)
+                  background=[("selected", C_BLUE), ("active", t["card"])],
+                  foreground=[("selected", C_WHITE), ("active", t["fg"])],
+                  lightcolor=[("selected", C_BLUE)], darkcolor=[("selected", C_BLUE)],
+                  bordercolor=[("selected", C_BLUE)])
+        style.configure("TScrollbar", background=t["panel"], troughcolor=t["bg"],
+                        borderwidth=0, bordercolor=t["bg"], arrowcolor=t["muted"])
 
         for w, role in self.themed:
             try:
@@ -1120,6 +1385,7 @@ class App:
             except Exception:
                 pass
         self._refresh_card_visuals()
+        self._sync_ui_lang_btns()
 
     # ── 按鈕工廠 ─────────────────────────────────────────────────
     def _btn(self, parent, text, cmd, bg, fg=C_WHITE, size=SZ_BODY):
@@ -1150,12 +1416,10 @@ class App:
     def _build_main(self, parent):
         # 標題區
         hdr = tk.Frame(parent, pady=16); hdr.pack(fill="x", padx=20); self._track(hdr, "bg")
-        tk.Label(hdr, text="VoiceWeaver 語音中心",
-                 font=(FONT_UI, SZ_H1, "bold")).pack(side="left")
-        self._track(hdr.children[list(hdr.children)[-1]], "fg")
-        sub = tk.Label(hdr, text="關閉視窗即停止所有服務",
-                       font=(FONT_UI, SZ_SMALL)); sub.pack(side="left", padx=(10, 0), pady=(6, 0))
-        self._track(sub, "muted")
+        ttl = tk.Label(hdr, font=(FONT_UI, SZ_H1, "bold")); ttl.pack(side="left")
+        self.tr(ttl, "app.title"); self._track(ttl, "fg")
+        sub = tk.Label(hdr, font=(FONT_UI, SZ_SMALL)); sub.pack(side="left", padx=(10, 0), pady=(6, 0))
+        self.tr(sub, "header.sub"); self._track(sub, "muted")
 
         # 服務卡片
         svc_frame = tk.Frame(parent); svc_frame.pack(fill="x", padx=20, pady=(0, 12))
@@ -1171,20 +1435,19 @@ class App:
         head = tk.Frame(conn_card); head.pack(fill="x"); self._track(head, "panel")
         ico = tk.Label(head, text="📱", font=(FONT_UI, 18)); ico.pack(side="left", padx=(0, 8)); self._track(ico, "fg")
         tbox = tk.Frame(head); tbox.pack(side="left", fill="x", expand=True); self._track(tbox, "panel")
-        ct = tk.Label(tbox, text="手機連線位址", font=(FONT_UI, SZ_H2, "bold"), anchor="w")
-        ct.pack(fill="x"); self._track(ct, "fg")
-        sub = tk.Label(tbox, text="手機 App 的「電腦語音中心」填入任一位址即可連線（點位址可複製）",
-                       font=(FONT_UI, SZ_SMALL), anchor="w")
-        sub.pack(fill="x"); self._track(sub, "muted")
+        ct = tk.Label(tbox, font=(FONT_UI, SZ_H2, "bold"), anchor="w")
+        ct.pack(fill="x"); self.tr(ct, "conn.title"); self._track(ct, "fg")
+        sub = tk.Label(tbox, font=(FONT_UI, SZ_SMALL), anchor="w", justify="left", wraplength=420)
+        sub.pack(fill="x"); self.tr(sub, "conn.sub"); self._track(sub, "muted")
 
         spacer = tk.Frame(conn_card, height=8); spacer.pack(fill="x"); self._track(spacer, "panel")
 
         # 三條連線列（每列做成有底色的晶片，URL 可點擊複製）
         self.conn_rows = {}
-        for key, icon, name in [
-            ("usb",  "🔌", "有線 USB"),
-            ("wifi", "📶", "Wi-Fi"),
-            ("ts",   "🌐", "Tailscale"),
+        for key, icon, name, tkey in [
+            ("usb",  "🔌", "有線 USB",  "conn.usb"),
+            ("wifi", "📶", "Wi-Fi",     None),
+            ("ts",   "🌐", "Tailscale", None),
         ]:
             chip = tk.Frame(conn_card, padx=10, pady=8); chip.pack(fill="x", pady=3); self._track(chip, "card")
             dot = tk.Label(chip, text="●", font=(FONT_UI, 13)); dot.pack(side="left", padx=(0, 8))
@@ -1192,7 +1455,8 @@ class App:
             ic = tk.Label(chip, text=icon, font=(FONT_UI, 13)); ic.pack(side="left", padx=(0, 6)); self._track(ic, "fg")
             lbl = tk.Label(chip, text=name, font=(FONT_UI, SZ_SMALL, "bold"), width=10, anchor="w")
             lbl.pack(side="left"); self._track(lbl, "fg")
-            url_lbl = tk.Label(chip, text="偵測中…", font=(FONT_MONO, SZ_SMALL), anchor="w", cursor="hand2")
+            if tkey: self.tr(lbl, tkey)
+            url_lbl = tk.Label(chip, text=self.t("conn.detecting"), font=(FONT_MONO, SZ_SMALL), anchor="w", cursor="hand2")
             url_lbl.pack(side="left", fill="x", expand=True, padx=(4, 0)); self._track(url_lbl, "muted")
             cp = tk.Label(chip, text="⧉", font=(FONT_UI, 13), cursor="hand2")
             cp.pack(side="right"); self._track(cp, "muted")
@@ -1206,21 +1470,21 @@ class App:
         # 手機語言列
         lang_row = tk.Frame(conn_card, padx=10, pady=6); lang_row.pack(fill="x"); self._track(lang_row, "card")
         lg = tk.Label(lang_row, text="🗣", font=(FONT_UI, 13)); lg.pack(side="left", padx=(0, 6)); self._track(lg, "fg")
-        ll = tk.Label(lang_row, text="手機語言", font=(FONT_UI, SZ_SMALL, "bold"), width=10, anchor="w")
-        ll.pack(side="left"); self._track(ll, "fg")
+        ll = tk.Label(lang_row, font=(FONT_UI, SZ_SMALL, "bold"), width=10, anchor="w")
+        ll.pack(side="left"); self.tr(ll, "conn.phoneLang"); self._track(ll, "fg")
         self.phone_lang_lbl = tk.Label(lang_row, text="繁體中文", font=(FONT_UI, SZ_SMALL), anchor="w")
         self.phone_lang_lbl.pack(side="left", padx=(4, 0)); self._track(self.phone_lang_lbl, "fg")
 
         # QR Code 按鈕（全寬、醒目）
-        self._btn(conn_card, "📷  掃描連線（顯示 QR Code）", self._show_qr, C_GREEN).pack(
+        self.tr(self._btn(conn_card, "", self._show_qr, C_GREEN), "conn.qr").pack(
             fill="x", pady=(12, 2))
 
 
         # 操作按鈕
         act = tk.Frame(parent); act.pack(fill="x", padx=20, pady=(0, 8)); self._track(act, "bg")
-        self._btn(act, "🔁  同步聲音模型", self.manual_sync, C_BLUE).pack(
+        self.tr(self._btn(act, "", self.manual_sync, C_BLUE), "main.sync").pack(
             side="left", expand=True, fill="x", padx=(0, 6))
-        self._btn(act, "停止全部並結束",    self.on_close,    C_RED).pack(
+        self.tr(self._btn(act, "", self.on_close, C_RED), "main.quit").pack(
             side="left", expand=True, fill="x")
 
         self.status = tk.Label(parent, text="", font=(FONT_UI, SZ_SMALL), anchor="w")
@@ -1236,19 +1500,20 @@ class App:
         self._track(dot, "muted")
 
         info = tk.Frame(left); info.pack(side="left"); self._track(info, "panel")
-        nm = tk.Label(info, text=name, font=(FONT_UI, SZ_H2, "bold"), anchor="w")
+        disp_name = self.t(f"svc.{port}")
+        nm = tk.Label(info, text=disp_name, font=(FONT_UI, SZ_H2, "bold"), anchor="w")
         nm.pack(anchor="w"); self._track(nm, "fg")
-        st = tk.Label(info, text=f"未啟動 · 埠 {port}", font=(FONT_UI, SZ_SMALL), anchor="w")
+        st = tk.Label(info, text=self.t("svc.stopped", port=port), font=(FONT_UI, SZ_SMALL), anchor="w")
         st.pack(anchor="w"); self._track(st, "muted")
 
-        btn = tk.Label(card, text="啟動", fg=C_WHITE, bg=C_GREEN, cursor="hand2",
+        btn = tk.Label(card, text=self.t("btn.start"), fg=C_WHITE, bg=C_GREEN, cursor="hand2",
                        font=(FONT_UI, SZ_BODY, "bold"), padx=18, pady=8)
         btn.bind("<Button-1>", lambda e, p=port: self.toggle(p))
         btn.pack(side="right")
 
         self.rows[port] = {
-            "dot": dot, "status": st, "btn": btn,
-            "name": name, "script": script, "args": args, "needs": needs,
+            "dot": dot, "status": st, "btn": btn, "nm": nm,
+            "name": disp_name, "script": script, "args": args, "needs": needs,
         }
 
     # ── 分頁②：模型 / 進階 ──────────────────────────────────────
@@ -1272,24 +1537,24 @@ class App:
         canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _wheel))
         canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
 
-        def _section(title):
+        def _section(key):
             f = tk.Frame(parent); f.pack(fill="x", padx=20, pady=(16, 4)); self._track(f, "bg")
-            lb = tk.Label(f, text=title, font=(FONT_UI, SZ_H2, "bold"))
-            lb.pack(anchor="w"); self._track(lb, "fg")
+            lb = tk.Label(f, font=(FONT_UI, SZ_H2, "bold"))
+            lb.pack(anchor="w"); self.tr(lb, key); self._track(lb, "fg")
 
         # 目前模型狀態
-        self.adv_api = tk.Label(parent, text="目前模型：偵測中…",
+        self.adv_api = tk.Label(parent, text=self.t("adv.curPrefix"),
                                 font=(FONT_MONO, SZ_SMALL), anchor="w", justify="left")
         self.adv_api.pack(fill="x", padx=20, pady=(14, 0)); self._track(self.adv_api, "muted")
 
-        _section("聲音模型")
+        _section("adv.secVoice")
 
         # ── 語言篩選按鈕 ──
         self._lang_filter_btns = {}
         lang_bar = tk.Frame(parent); lang_bar.pack(fill="x", padx=20, pady=(0, 6)); self._track(lang_bar, "bg")
-        tk.Label(lang_bar, text="篩選：", font=(FONT_UI, SZ_SMALL),
-                 ).pack(side="left", padx=(0, 4)); self._track(lang_bar.children[list(lang_bar.children)[-1]], "muted")
-        for code, label in [("ALL","全部"), ("ZH","🇹🇼 中文"), ("EN","🇺🇸 English"), ("JA","🇯🇵 日本語"), ("KO","🇰🇷 한국어")]:
+        _flbl = tk.Label(lang_bar, font=(FONT_UI, SZ_SMALL)); _flbl.pack(side="left", padx=(0, 4))
+        self.tr(_flbl, "adv.filter"); self._track(_flbl, "muted")
+        for code, label in [("ALL", self.t("filter.all")), ("ZH","🇹🇼 中文"), ("EN","🇺🇸 English"), ("JA","🇯🇵 日本語"), ("KO","🇰🇷 한국어")]:
             is_sel = (code == self.lang_filter)
             bg = C_BLUE if is_sel else None
             fg = C_WHITE if is_sel else None
@@ -1309,38 +1574,37 @@ class App:
         self._track(self._model_grid_frame, "bg")
 
         row1 = tk.Frame(parent); row1.pack(fill="x", padx=20, pady=(8, 4)); self._track(row1, "bg")
-        self._btn(row1,     "✅ 切換為此模型", self.adv_switch, C_GREEN).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._neutral_btn(row1, "✏️ 編輯",   self.adv_edit).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._neutral_btn(row1, "重新整理", self.adv_reload).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._btn(row1,     "🗑 刪除",      self.adv_delete, C_RED).pack(side="left", expand=True, fill="x")
+        self.tr(self._btn(row1, "", self.adv_switch, C_GREEN), "adv.switch").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row1, "", self.adv_edit), "adv.edit").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row1, "", self.adv_reload), "adv.reload").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._btn(row1, "", self.adv_delete, C_RED), "adv.delete").pack(side="left", expand=True, fill="x")
 
         row2 = tk.Frame(parent); row2.pack(fill="x", padx=20, pady=(4, 4)); self._track(row2, "bg")
-        self._btn(row2, "📁 匯入單個資料夾", self.adv_import,       C_BLUE).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._btn(row2, "📂 批量匯入資料夾",  self.adv_import_batch, C_AMBER).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._neutral_btn(row2, "⏹ 中止合成", self.adv_stopgen).pack(side="left", expand=True, fill="x")
+        self.tr(self._btn(row2, "", self.adv_import, C_BLUE), "adv.import").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._btn(row2, "", self.adv_import_batch, C_AMBER), "adv.importBatch").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row2, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x")
 
-        _section("測試合成")
+        _section("adv.secTest")
         tr = tk.Frame(parent); tr.pack(fill="x", padx=20, pady=(4, 4)); self._track(tr, "bg")
         self.test_entry = tk.Entry(tr, font=(FONT_UI, SZ_BODY))
-        self.test_entry.insert(0, "你好，這是測試。")
+        self.test_entry.insert(0, self.t("adv.testDefault"))
         self.test_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self._track(self.test_entry, "entry")
-        self._btn(tr, "🔊 試聽", self.adv_test, C_BLUE).pack(side="left")
+        self.tr(self._btn(tr, "", self.adv_test, C_BLUE), "adv.audition").pack(side="left")
 
         ta = tk.Frame(parent); ta.pack(fill="x", padx=20, pady=(4, 4)); self._track(ta, "bg")
-        self._neutral_btn(ta, "▶ 播放",  self.adv_play).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._neutral_btn(ta, "⏸ 停止",  self.adv_stopplay).pack(side="left", expand=True, fill="x", padx=(0,4))
-        reveal_label = "📂 在檔案總管顯示" if IS_WIN else "📂 在 Finder 顯示"
-        self._neutral_btn(ta, reveal_label, self.adv_reveal).pack(side="left", expand=True, fill="x")
+        self.tr(self._neutral_btn(ta, "", self.adv_play), "adv.play").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(ta, "", self.adv_stopplay), "adv.stopPlay").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(ta, "", self.adv_reveal), ("adv.revealWin" if IS_WIN else "adv.revealMac")).pack(side="left", expand=True, fill="x")
 
-        _section("USB 工具")
+        _section("adv.secUsb")
         row3 = tk.Frame(parent); row3.pack(fill="x", padx=20, pady=(4, 4)); self._track(row3, "bg")
-        self._neutral_btn(row3, "🔌 重新接手機(USB)", self.adv_adb).pack(side="left", expand=True, fill="x", padx=(0,4))
-        self._neutral_btn(row3, "⬇ 安裝 adb 工具", lambda: self.ensure_adb(manual=True)).pack(side="left", expand=True, fill="x")
+        self.tr(self._neutral_btn(row3, "", self.adv_adb), "adv.reAdb").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row3, "", lambda: self.ensure_adb(manual=True)), "adv.installAdb").pack(side="left", expand=True, fill="x")
 
-        _section("模型訓練")
+        _section("adv.secTrain")
         row3b = tk.Frame(parent); row3b.pack(fill="x", padx=20, pady=(4, 16)); self._track(row3b, "bg")
-        self._btn(row3b, "🎓 自己訓練模型（官方 WebUI）", self.open_training, C_AMBER).pack(fill="x")
+        self.tr(self._btn(row3b, "", self.open_training, C_AMBER), "adv.train").pack(fill="x")
 
         self.adv_status = tk.Label(parent, text="", font=(FONT_UI, SZ_SMALL),
                                    wraplength=580, justify="left", anchor="w")
@@ -1357,7 +1621,8 @@ class App:
         txt.pack(side="left", fill="both", expand=True)
         sb = ttk.Scrollbar(wrap, command=txt.yview); sb.pack(side="right", fill="y")
         txt.config(yscrollcommand=sb.set); self._track(txt, "text")
-        txt.insert("end", HELP_TEXT); txt.config(state="disabled")
+        txt.insert("end", self.t("help.text")); txt.config(state="disabled")
+        self._help_txt = txt   # retranslate 用
 
     # ── 模型 / 進階 邏輯 ────────────────────────────────────────
     def set_adv_status(self, text):
@@ -1452,10 +1717,10 @@ class App:
             try:
                 ver, gpt, sov = cc.get_current_config()
                 gpt_name = os.path.basename(gpt) if gpt else "—"
-                online = "已連線" if port_up(9880) else "未啟動"
-                txt = f"目前：{ver or '—'}  ·  {gpt_name}  ·  語音(9880)：{online}"
+                online = self.t("adv.online") if port_up(9880) else self.t("adv.offline")
+                txt = self.t("adv.curFmt", ver=(ver or "—"), gpt=gpt_name, online=online)
             except Exception:
-                txt = "目前模型：讀取失敗"
+                txt = self.t("adv.curFail")
             self.root.after(0, lambda: self.adv_api.config(text=txt))
         threading.Thread(target=upd, daemon=True).start()
 
@@ -2328,28 +2593,28 @@ class App:
             loading = not up and port in self.procs and self.procs[port].poll() is None
             if up:
                 row["dot"].config(fg=C_GREEN)
-                row["status"].config(text=f"執行中 · 埠 {port}", fg=C_GREEN)
-                row["btn"].config(text="停止", bg=C_RED)
+                row["status"].config(text=self.t("svc.running", port=port), fg=C_GREEN)
+                row["btn"].config(text=self.t("btn.stop"), bg=C_RED)
             elif loading:
                 row["dot"].config(fg=C_AMBER)
-                row["status"].config(text="啟動中…", fg=C_AMBER)
-                row["btn"].config(text="停止", bg=C_RED)
+                row["status"].config(text=self.t("svc.loading"), fg=C_AMBER)
+                row["btn"].config(text=self.t("btn.stop"), bg=C_RED)
             else:
                 row["dot"].config(fg=t["muted"])
                 if "找不到" not in (row["status"].cget("text") or "") \
                         and "需先" not in (row["status"].cget("text") or "") \
                         and "等待" not in (row["status"].cget("text") or ""):
-                    row["status"].config(text=f"未啟動 · 埠 {port}", fg=t["muted"])
-                row["btn"].config(text="啟動", bg=C_GREEN)
+                    row["status"].config(text=self.t("svc.stopped", port=port), fg=t["muted"])
+                row["btn"].config(text=self.t("btn.start"), bg=C_GREEN)
 
         if not self.adb:
             self.adb = ""
         lan = lan_ip(); ts = tailscale_ip()
         adb_ok = bool(self.adb)
 
-        usb_url  = "http://127.0.0.1:9880" if adb_ok else "需 adb 連線"
-        wifi_url = f"http://{lan}:9880" if lan else "未連 Wi-Fi"
-        ts_url   = f"http://{ts}:9880" if ts else "未連 Tailscale"
+        usb_url  = "http://127.0.0.1:9880" if adb_ok else self.t("conn.usbNeed")
+        wifi_url = f"http://{lan}:9880" if lan else self.t("conn.noWifi")
+        ts_url   = f"http://{ts}:9880" if ts else self.t("conn.noTs")
 
         for key, url, ok in [
             ("usb",  usb_url,  adb_ok),
