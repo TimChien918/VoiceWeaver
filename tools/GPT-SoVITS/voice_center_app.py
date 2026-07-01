@@ -1308,18 +1308,20 @@ class App:
 
     def _install_progress(self, frac, msg):
         import time as _t
-        # 不確定步驟（frac<0，例如逐行 pip 輸出）節流，避免洪水更新
+        # 進度條全程用「來回跑動」(marquee) 表示「正在動」——因為 pip 安裝一個大套件
+        # 可能好幾分鐘卡在同一個百分比，用固定值的進度條看起來像當機。
+        # 實際進度改用「文字」顯示：里程碑 % ＋ 目前步驟（下載會帶自己的 % 與 MB）。
         now = _t.time()
-        if (frac is None or frac < 0) and (now - getattr(self, "_last_prog_t", 0)) < 0.2:
-            return
+        if (now - getattr(self, "_last_prog_t", 0)) < 0.15:
+            if not (frac is not None and frac >= 0):   # 里程碑更新一律放行，只節流逐行輸出
+                return
         self._last_prog_t = now
+        if frac is not None and frac >= 0:
+            self._iv_pct = int(max(0, min(100, frac * 100)))
+        pct = getattr(self, "_iv_pct", 0)
         def upd():
             try:
-                if frac is not None and frac >= 0:
-                    self.iv_bar.stop()
-                    self.iv_bar.config(mode="determinate")
-                    self.iv_bar["value"] = max(0, min(100, frac * 100))
-                self.iv_sub.config(text=msg)
+                self.iv_sub.config(text=f"{pct}%　{msg}")
             except Exception:
                 pass
         self.root.after(0, upd)
@@ -1673,8 +1675,12 @@ class App:
             frame.pack_forget()
         dict((k, f) for k, f, _ in self._tabs)[key].pack(fill="both", expand=True)
         if key == "adv":
+            # 多次校正 canvas 寬度/捲動範圍——避免切到進階分頁時第一個 <Configure>
+            # 以 1px 觸發、把內容壓成看不見（呈現空白）。分幾個時間點重試最保險。
             self._fix_adv_canvas()
             self.root.after_idle(self._fix_adv_canvas)
+            for _d in (40, 150, 350):
+                self.root.after(_d, self._fix_adv_canvas)
 
     # ── 分頁③：說明 ─────────────────────────────────────────────
     def _build_help(self, parent):
@@ -2705,10 +2711,21 @@ class App:
 def main():
     if not _acquire_single_instance():
         return
+    # DPI 感知：高解析(150%/175%)螢幕不再被 Windows 拉伸成模糊 → 字體邊緣清晰
+    if IS_WIN:
+        try:
+            import ctypes
+            try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            except Exception: ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
     root = tk.Tk()
+    root.withdraw()                        # 先藏起來，等版面全部建好再一次顯示 → 開啟乾淨、不會看到逐塊拼出來
     try: root.tk.call("tk", "scaling", 1.5)
     except Exception: pass
     App(root)
+    root.update_idletasks()                # 強制完成一次排版
+    root.deiconify()                       # 完整成形後才亮出視窗
     root.mainloop()
 
 
