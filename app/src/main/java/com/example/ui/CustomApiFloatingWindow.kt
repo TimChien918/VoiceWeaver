@@ -75,11 +75,11 @@ fun ApiKeysPanel(
         viewModel.ensureLlmApisSeeded()
     }
 
-    FloatingPanel(title = "API 金鑰管理", icon = Icons.Default.Api, onDismiss = onDismiss) {
+    FloatingPanel(title = I18n.tr("API 金鑰管理"), icon = Icons.Default.Api, onDismiss = onDismiss) {
 
         // ── AI 生圖（自訂 API）：供應商下拉 + API 欄位；可多筆 ──
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("🖼 AI 生圖（自訂 API）", fontSize = 12.sp, fontWeight = FontWeight.Bold,
+            Text(I18n.tr("🖼 AI 生圖（自訂 API）"), fontSize = 12.sp, fontWeight = FontWeight.Bold,
                 color = p.neonCyan, modifier = Modifier.weight(1f))
             OutlinedButton(
                 onClick = { viewModel.addImageApi(ImageProvider.GEMINI) },
@@ -88,11 +88,11 @@ fun ApiKeysPanel(
             ) {
                 Icon(Icons.Default.Add, null, tint = p.neonGreen, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("加入", color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("加入"), color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
         Text(
-            "選供應商、填 API 金鑰即可。同一供應商可加多筆（多把金鑰），生圖時自動備援；勾選 ✓＝目前使用中。",
+            I18n.tr("選供應商、填 API 金鑰即可。同一供應商可加多筆（多把金鑰），生圖時自動備援；勾選 ✓＝目前使用中。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
         )
         val selectedId = settings.imageApiSelectedId.ifBlank { imageApis.firstOrNull()?.id ?: "" }
@@ -112,7 +112,7 @@ fun ApiKeysPanel(
 
         // ── 文字 LLM（重組雲端備援）：供應商下拉 + 金鑰；可多筆，自動備援（像 agent 多供應商）──
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("💬 文字 LLM（多供應商）", fontSize = 12.sp, fontWeight = FontWeight.Bold,
+            Text(I18n.tr("💬 文字 LLM（多供應商）"), fontSize = 12.sp, fontWeight = FontWeight.Bold,
                 color = p.neonCyan, modifier = Modifier.weight(1f))
             OutlinedButton(
                 onClick = { viewModel.addLlmApi(LlmProvider.GROQ) },
@@ -121,11 +121,11 @@ fun ApiKeysPanel(
             ) {
                 Icon(Icons.Default.Add, null, tint = p.neonGreen, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("加入", color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("加入"), color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
         Text(
-            "選供應商、填金鑰即可。可加多筆（含同供應商多把金鑰），重組句子時用 ✓ 那筆，失敗自動換下一筆；全部失敗才用手機本機 AI。",
+            I18n.tr("選供應商、填金鑰即可。可加多筆（含同供應商多把金鑰），重組句子時用 ✓ 那筆，失敗自動換下一筆；全部失敗才用手機本機 AI。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
         )
         val llmSelId = settings.llmApiSelectedId.ifBlank { llmApis.firstOrNull()?.id ?: "" }
@@ -144,15 +144,14 @@ fun ApiKeysPanel(
         Divider(p)
 
         // ── 定位 / 通報 ──
-        SectionTitle("📍 定位與通報", p)
-        KeyField("Google Places（POI 反查）", settings.apiKeyGooglePlaces, { viewModel.setApiKeyGooglePlaces(it) }, p)
-        KeyField("Telegram Bot Token（緊急通報）", settings.apiKeyTelegramBotToken, { viewModel.setApiKeyTelegramBotToken(it) }, p)
-        PlainField("家人電話（危機即時通話）", settings.emergencyPhoneNumber, { viewModel.setEmergencyPhoneNumber(it) }, p, hint = "例 0912345678")
-        PlainField("視訊房伺服器（Jitsi，免登入免名字）", settings.videoCallBaseUrl, { viewModel.setVideoCallBaseUrl(it) }, p, hint = "https://meet.jit.si")
+        SectionTitle(I18n.tr("📍 定位與通報"), p)
+        KeyField(I18n.tr("Google Places（POI 反查）"), settings.apiKeyGooglePlaces, { viewModel.setApiKeyGooglePlaces(it) }, p)
+        KeyField(I18n.tr("Telegram Bot Token（緊急通報）"), settings.apiKeyTelegramBotToken, { viewModel.setApiKeyTelegramBotToken(it) }, p)
+        PlainField(I18n.tr("家人電話（危機即時通話）"), settings.emergencyPhoneNumber, { viewModel.setEmergencyPhoneNumber(it) }, p, hint = I18n.tr("例 0912345678"))
+        PlainField(I18n.tr("視訊房伺服器（Jitsi，免登入免名字）"), settings.videoCallBaseUrl, { viewModel.setVideoCallBaseUrl(it) }, p, hint = "https://meet.jit.si")
 
         Text(
-            "🔒 所有金鑰僅存在這支手機（DataStore），不會上傳、也不會被打包進原始碼。\n" +
-            "首次啟動已從本機 .env 自動帶入；留空則用內建預設。改完即時生效。",
+            I18n.tr("🔒 所有金鑰僅存在這支手機（DataStore），不會上傳、也不會被打包進原始碼。\n首次啟動已從本機 .env 自動帶入；留空則用內建預設。改完即時生效。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
         )
     }
@@ -184,27 +183,27 @@ private fun ImageApiRow(
             .padding(10.dp)
     ) {
         // 供應商
-        Text("供應商", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+        Text(I18n.tr("供應商"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             ProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
             IconButton(onClick = onUse, modifier = Modifier.size(34.dp)) {
                 Icon(
                     if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    if (isActive) "使用中" else "設為使用中",
+                    if (isActive) I18n.tr("使用中") else I18n.tr("設為使用中"),
                     tint = if (isActive) p.neonGreen else p.textMuted, modifier = Modifier.size(20.dp)
                 )
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.Delete, "刪除", tint = p.dangerRose, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Delete, I18n.tr("刪除"), tint = p.dangerRose, modifier = Modifier.size(18.dp))
             }
         }
         // API
         Text("API", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight,
             modifier = Modifier.padding(top = 4.dp))
         if (entry.provider.needsKey) {
-            KeyField("API 金鑰", entry.key, onKey, p)
+            KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
         } else {
-            Text("此供應商免金鑰，直接可用", fontSize = 11.sp, color = p.neonGreen)
+            Text(I18n.tr("此供應商免金鑰，直接可用"), fontSize = 11.sp, color = p.neonGreen)
         }
     }
 }
@@ -230,7 +229,7 @@ private fun ProviderDropdown(
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             ImageProvider.entries.forEach { prov ->
                 DropdownMenuItem(
-                    text = { Text("${prov.displayName}${if (!prov.needsKey) "（免金鑰）" else ""}") },
+                    text = { Text("${prov.displayName}${if (!prov.needsKey) I18n.tr("（免金鑰）") else ""}") },
                     onClick = { onSelect(prov); open = false }
                 )
             }
@@ -265,23 +264,23 @@ private fun LlmApiRow(
             )
             .padding(10.dp)
     ) {
-        Text("供應商", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+        Text(I18n.tr("供應商"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             LlmProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
             IconButton(onClick = onUse, modifier = Modifier.size(34.dp)) {
                 Icon(
                     if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    if (isActive) "使用中" else "設為使用中",
+                    if (isActive) I18n.tr("使用中") else I18n.tr("設為使用中"),
                     tint = if (isActive) p.neonGreen else p.textMuted, modifier = Modifier.size(20.dp)
                 )
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.Delete, "刪除", tint = p.dangerRose, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Delete, I18n.tr("刪除"), tint = p.dangerRose, modifier = Modifier.size(18.dp))
             }
         }
         Text("API", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight,
             modifier = Modifier.padding(top = 4.dp))
-        KeyField("API 金鑰", entry.key, onKey, p)
+        KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
     }
 }
 
@@ -327,7 +326,7 @@ private fun PlainField(label: String, value: String, onChange: (String) -> Unit,
     }
     OutlinedTextField(
         value = text, onValueChange = { text = it }, label = { Text(label) }, singleLine = true,
-        placeholder = if (hint.isNotBlank()) ({ Text("預設：$hint", fontSize = 10.sp, color = p.textMuted) }) else null,
+        placeholder = if (hint.isNotBlank()) ({ Text(I18n.tr("預設：%s").format(hint), fontSize = 10.sp, color = p.textMuted) }) else null,
         modifier = Modifier.fillMaxWidth().onFocusChanged { st ->
             focused = st.isFocused
             if (!st.isFocused && text != value) onChange(text)
@@ -352,7 +351,7 @@ private fun KeyField(label: String, value: String, onChange: (String) -> Unit, p
             IconButton(onClick = { visible = !visible }) {
                 Icon(
                     if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    if (visible) "隱藏" else "顯示", tint = p.textMuted, modifier = Modifier.size(18.dp)
+                    if (visible) I18n.tr("隱藏") else I18n.tr("顯示"), tint = p.textMuted, modifier = Modifier.size(18.dp)
                 )
             }
         },

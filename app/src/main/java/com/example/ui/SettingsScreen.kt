@@ -131,7 +131,7 @@ fun SettingsScreen(
     // 進階設定浮動視窗（緊急聯絡人 / 住家 / 清歷史 / 重置 / 匯入語料庫）
     var showExtended by remember { mutableStateOf(false) }
     if (showExtended) {
-        FloatingPanel(title = "進階設定", icon = Icons.Default.Tune, onDismiss = { showExtended = false }, scrollable = false) {
+        FloatingPanel(title = I18n.tr("進階設定"), icon = Icons.Default.Tune, onDismiss = { showExtended = false }, scrollable = false) {
             com.example.ui.settings.ExtendedSettingsScreen(
                 settingsRepo = viewModel.settingsRepository,
                 onClearAllHistory = { viewModel.clearAllHistory() },
@@ -147,7 +147,7 @@ fun SettingsScreen(
         val locationResult by viewModel.locationResult.collectAsState()
         val offloadPlan by viewModel.offloadPlan.collectAsState()
         LaunchedEffect(Unit) { viewModel.refreshOffloadPlan() }
-        FloatingPanel(title = "開發者模式", icon = Icons.Default.DeveloperMode, onDismiss = { showDeveloper = false }) {
+        FloatingPanel(title = I18n.tr("開發者模式"), icon = Icons.Default.DeveloperMode, onDismiss = { showDeveloper = false }) {
             DeveloperModeSection(
                 enabled = settings.developerMode,
                 offloadPlan = offloadPlan,
@@ -207,7 +207,7 @@ fun SettingsScreen(
 
             // 無障礙嚴重程度分級（醫師臨床建議）：中度/重度會隱藏複雜設定並套用大字體/識字卡預設
             item {
-                Section(title = "使用模式（依嚴重程度）", icon = Icons.Default.Accessibility, p = p) {
+                Section(title = I18n.tr("使用模式（依嚴重程度）"), icon = Icons.Default.Accessibility, p = p) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         com.example.data.SeverityMode.values().forEach { m ->
                             ChoiceRow(
@@ -224,9 +224,9 @@ fun SettingsScreen(
 
             // 雲端同步（Firebase）：與網頁版用同一個 Google 帳號共用金鑰/供應商
             item {
-                Section(title = "雲端同步（與網頁共用）", icon = Icons.Default.Cloud, p = p) {
+                Section(title = I18n.tr("雲端同步（與網頁共用）"), icon = Icons.Default.Cloud, p = p) {
                     Text(
-                        cloudUser?.let { "已登入：$it" } ?: "未登入",
+                        cloudUser?.let { I18n.tr("已登入：%s").format(it) } ?: I18n.tr("未登入"),
                         fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold
                     )
                     if (cloudStatus.isNotBlank()) {
@@ -239,9 +239,9 @@ fun SettingsScreen(
                                 onClick = { googleLauncher.launch(com.example.ai.CloudSync.googleClient(context).signInIntent) },
                                 colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
                                 modifier = Modifier.weight(1f)
-                            ) { Text("Google 登入", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                            ) { Text(I18n.tr("Google 登入"), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                             OutlinedButton(onClick = { viewModel.cloudSignInAnon() }, modifier = Modifier.weight(1f)) {
-                                Text("匿名", fontSize = 12.sp)
+                                Text(I18n.tr("匿名"), fontSize = 12.sp)
                             }
                         }
                     } else {
@@ -249,11 +249,11 @@ fun SettingsScreen(
                             onClick = { viewModel.cloudSignOut() },
                             border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("登出", fontSize = 12.sp, color = p.dangerRose) }
+                        ) { Text(I18n.tr("登出"), fontSize = 12.sp, color = p.dangerRose) }
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "用同一個 Google 帳號登入手機與網頁，API 金鑰／供應商清單／Telegram 會自動雙向同步。",
+                        I18n.tr("用同一個 Google 帳號登入手機與網頁，API 金鑰／供應商清單／Telegram 會自動雙向同步。"),
                         fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
                     )
                 }
@@ -264,9 +264,9 @@ fun SettingsScreen(
 
             // API 金鑰管理（浮動視窗）：集中管理所有 API 金鑰
             if (showComplex) item {
-                Section(title = "API 金鑰管理", icon = Icons.Default.Api, p = p) {
+                Section(title = I18n.tr("API 金鑰管理"), icon = Icons.Default.Api, p = p) {
                     AdvancedEntryRow(
-                        label = "管理所有 API 金鑰（LLM / 定位 / 通報；生圖在「AI 生圖」內）",
+                        label = I18n.tr("管理所有 API 金鑰（LLM / 定位 / 通報；生圖在「AI 生圖」內）"),
                         onClick = { showApiKeys = true }, p = p
                     )
                 }
@@ -277,9 +277,9 @@ fun SettingsScreen(
             // 進階功能入口（資料治理）。
             // ※ 故事訓練模式已搬到「語音復健」分頁，僅在開發者模式打開時顯示入口。
             if (showComplex) item {
-                Section(title = "進階功能", icon = Icons.Default.Settings, p = p) {
+                Section(title = I18n.tr("進階功能"), icon = Icons.Default.Settings, p = p) {
                     AdvancedEntryRow(
-                        label = "進階設定（緊急聯絡人 / 清歷史 / 重置 / 匯入語料庫）",
+                        label = I18n.tr("進階設定（緊急聯絡人 / 清歷史 / 重置 / 匯入語料庫）"),
                         onClick = { showExtended = true }, p = p
                     )
                 }
@@ -303,11 +303,11 @@ fun SettingsScreen(
             }
 
             item {
-                Section(title = "自訂背景", icon = Icons.Default.Image, p = p) {
+                Section(title = I18n.tr("自訂背景"), icon = Icons.Default.Image, p = p) {
                     if (settings.customBackgroundUri.isNotBlank()) {
                         AsyncImage(
                             model = settings.customBackgroundUri,
-                            contentDescription = "自訂背景預覽",
+                            contentDescription = I18n.tr("自訂背景預覽"),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -326,7 +326,7 @@ fun SettingsScreen(
                                 .border(1.dp, p.textMuted.copy(alpha = 0.22f), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("尚未設定背景", fontSize = 12.sp, color = p.textMuted)
+                            Text(I18n.tr("尚未設定背景"), fontSize = 12.sp, color = p.textMuted)
                         }
                         Spacer(Modifier.height(8.dp))
                     }
@@ -338,7 +338,7 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("選擇背景", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(I18n.tr("選擇背景"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                         OutlinedButton(
                             onClick = { viewModel.setCustomBackgroundUri("") },
@@ -460,12 +460,12 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        FontPresetChip("標準", settings.fontScale, 1.0f, { viewModel.setFontScale(1.0f) }, Modifier.weight(1f), p)
-                        FontPresetChip("大", settings.fontScale, 1.25f, { viewModel.setFontScale(1.25f) }, Modifier.weight(1f), p)
-                        FontPresetChip("特大", settings.fontScale, 1.55f, { viewModel.setFontScale(1.55f) }, Modifier.weight(1f), p)
+                        FontPresetChip(I18n.tr("標準"), settings.fontScale, 1.0f, { viewModel.setFontScale(1.0f) }, Modifier.weight(1f), p)
+                        FontPresetChip(I18n.tr("大"), settings.fontScale, 1.25f, { viewModel.setFontScale(1.25f) }, Modifier.weight(1f), p)
+                        FontPresetChip(I18n.tr("特大"), settings.fontScale, 1.55f, { viewModel.setFontScale(1.55f) }, Modifier.weight(1f), p)
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text("字體倍率會套用到整個 App，包含 AAC、定位、設定與底部導覽。", fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                    Text(I18n.tr("字體倍率會套用到整個 App，包含 AAC、定位、設定與底部導覽。"), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
                 }
             }
 
@@ -479,8 +479,8 @@ fun SettingsScreen(
                         onChange = { viewModel.setAutoSaveRehab(it) }
                     )
                     IosToggleRow(
-                        title = "鼻子頭控",
-                        sub = "前鏡頭追蹤鼻子／頭部方向移動游標；轉頭瞄準、停留即選取（Camera Mouse 式頭控）。",
+                        title = I18n.tr("鼻子頭控"),
+                        sub = I18n.tr("前鏡頭追蹤鼻子／頭部方向移動游標；轉頭瞄準、停留即選取（Camera Mouse 式頭控）。"),
                         checked = settings.eyeControlEnabled,
                         onChange = { on ->
                             if (on && !cameraPerm.status.isGranted) {
@@ -495,7 +495,7 @@ fun SettingsScreen(
                     if (settings.eyeControlEnabled) {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "轉頭移動游標，停在按鈕上約 1 秒會自動點擊（MediaPipe 鼻尖追蹤）。",
+                            I18n.tr("轉頭移動游標，停在按鈕上約 1 秒會自動點擊（MediaPipe 鼻尖追蹤）。"),
                             fontSize = 10.sp,
                             color = p.textMuted,
                             modifier = Modifier.padding(top = 6.dp)
@@ -508,29 +508,29 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("重新置中（頭部歸零）", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(I18n.tr("重新置中（頭部歸零）"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                         Text(
-                            "先用自然舒適的姿勢正對螢幕，再按此鍵把目前頭部方向設為中央；之後轉頭即可移動游標。",
+                            I18n.tr("先用自然舒適的姿勢正對螢幕，再按此鍵把目前頭部方向設為中央；之後轉頭即可移動游標。"),
                             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                     IosToggleRow(
-                        title = "本地端 AI 安全清理",
-                        sub = "推理後清除快取、暫存與背景模型記憶體；不刪除模型檔。",
+                        title = I18n.tr("本地端 AI 安全清理"),
+                        sub = I18n.tr("推理後清除快取、暫存與背景模型記憶體；不刪除模型檔。"),
                         checked = settings.autoLocalAiCleanup,
                         onChange = { viewModel.setAutoLocalAiCleanup(it) }
                     )
                     IosToggleRow(
-                        title = "AAC 意圖確認大圖卡",
-                        sub = "AI 組句後跳出大圖卡（emoji + 句子）讓不識字使用者 ✓/✗ 確認；關閉時改精簡列，但仍需點擊才朗讀。",
+                        title = I18n.tr("AAC 意圖確認大圖卡"),
+                        sub = I18n.tr("AI 組句後跳出大圖卡（emoji + 句子）讓不識字使用者 ✓/✗ 確認；關閉時改精簡列，但仍需點擊才朗讀。"),
                         checked = settings.aacIntentConfirmEnabled,
                         onChange = { viewModel.setAacIntentConfirmEnabled(it) }
                     )
                     IosToggleRow(
-                        title = "意圖卡 AI 生成專屬圖",
-                        sub = "確認卡額外用 AI 生圖畫出意圖的專屬圖片（不識字更好懂）。會花幾秒、不擋確認鈕；建議搭配本機電腦生圖。",
+                        title = I18n.tr("意圖卡 AI 生成專屬圖"),
+                        sub = I18n.tr("確認卡額外用 AI 生圖畫出意圖的專屬圖片（不識字更好懂）。會花幾秒、不擋確認鈕；建議搭配本機電腦生圖。"),
                         checked = settings.aacIntentImageEnabled,
                         onChange = { viewModel.setAacIntentImageEnabled(it) }
                     )
@@ -538,9 +538,9 @@ fun SettingsScreen(
             }
 
             if (showComplex) item {
-                Section(title = "開發者", icon = Icons.Default.DeveloperMode, p = p) {
+                Section(title = I18n.tr("開發者"), icon = Icons.Default.DeveloperMode, p = p) {
                     AdvancedEntryRow(
-                        label = "開發者模式（GPT-SoVITS / 硬體監控 / 模擬定位 / 模型下載）",
+                        label = I18n.tr("開發者模式（GPT-SoVITS / 硬體監控 / 模擬定位 / 模型下載）"),
                         onClick = { showDeveloper = true }, p = p
                     )
                 }
@@ -716,13 +716,13 @@ private fun GptSovitDeveloperPanel(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.ArrowBack, "返回開發者設定", tint = p.textMuted, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.ArrowBack, I18n.tr("返回開發者設定"), tint = p.textMuted, modifier = Modifier.size(18.dp))
             }
             Icon(Icons.Default.GraphicEq, null, tint = p.neonCyan, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("GPT-SoVITS 實驗語音", fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
-                Text("開發者模式專屬；可依句子自動切換中英文樣本。", fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                Text(I18n.tr("GPT-SoVITS 實驗語音"), fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("開發者模式專屬；可依句子自動切換中英文樣本。"), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
             }
             // 聲紋授權（醫師臨床建議）：未勾選知情同意前不可啟用語音克隆
             var showConsentDialog by remember { mutableStateOf(false) }
@@ -738,15 +738,11 @@ private fun GptSovitDeveloperPanel(
                 AlertDialog(
                     onDismissRequest = { showConsentDialog = false },
                     icon = { Icon(Icons.Default.PrivacyTip, null, tint = p.auraAmber) },
-                    title = { Text("聲紋克隆隱私知情同意", color = p.textLight) },
+                    title = { Text(I18n.tr("聲紋克隆隱私知情同意"), color = p.textLight) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                "啟用 GPT-SoVITS 語音克隆前請確認：\n" +
-                                "1. 參考音檔之聲音主體已同意其聲紋被用於本機語音合成。\n" +
-                                "2. 合成語音僅供本人輔助溝通之個人非商業用途。\n" +
-                                "3. 不得用合成語音冒充他人或散布誤導內容。\n" +
-                                "4. 錄音與模型只存於你的手機與自己的電腦，不上傳雲端。",
+                                I18n.tr("啟用 GPT-SoVITS 語音克隆前請確認：\n1. 參考音檔之聲音主體已同意其聲紋被用於本機語音合成。\n2. 合成語音僅供本人輔助溝通之個人非商業用途。\n3. 不得用合成語音冒充他人或散布誤導內容。\n4. 錄音與模型只存於你的手機與自己的電腦，不上傳雲端。"),
                                 fontSize = 12.sp, color = p.textMuted, lineHeight = 18.sp
                             )
                             Row(
@@ -754,7 +750,7 @@ private fun GptSovitDeveloperPanel(
                                 modifier = Modifier.clickable { agreeChecked = !agreeChecked }
                             ) {
                                 Checkbox(checked = agreeChecked, onCheckedChange = { agreeChecked = it })
-                                Text("我已閱讀並同意上述條款", fontSize = 12.sp, color = p.textLight)
+                                Text(I18n.tr("我已閱讀並同意上述條款"), fontSize = 12.sp, color = p.textLight)
                             }
                         }
                     },
@@ -766,11 +762,11 @@ private fun GptSovitDeveloperPanel(
                                 onEnabledChange(true)
                                 showConsentDialog = false
                             }
-                        ) { Text("同意並啟用", color = if (agreeChecked) p.neonGreen else p.textMuted) }
+                        ) { Text(I18n.tr("同意並啟用"), color = if (agreeChecked) p.neonGreen else p.textMuted) }
                     },
                     dismissButton = {
                         TextButton(onClick = { showConsentDialog = false }) {
-                            Text("取消", color = p.textMuted)
+                            Text(I18n.tr("取消"), color = p.textMuted)
                         }
                     },
                     containerColor = p.surface
@@ -790,7 +786,7 @@ private fun GptSovitDeveloperPanel(
         // 舊的「自動/中文/English」模式 chip 已移除：語言現在由文字自動偵測（中/英/日/韓），
         // 與下方多語言測試按鈕功能重複，故拿掉避免混淆。
         Text(
-            "語言會依輸入文字自動切換（中／英／日／韓），不需手動選。",
+            I18n.tr("語言會依輸入文字自動切換（中／英／日／韓），不需手動選。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
         )
         // 用本地編輯狀態，避免「值綁定到 DataStore 非同步流」造成打字/刪除被覆寫回舊值。
@@ -832,7 +828,7 @@ private fun GptSovitDeveloperPanel(
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         var testingLang by remember { mutableStateOf<com.example.ai.LocalSovitsHelper.VoiceLang?>(null) }
         var testGeneration by remember { mutableStateOf(0) }
-        Text("模型合成測試（多語言）", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+        Text(I18n.tr("模型合成測試（多語言）"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
         val langs = com.example.ai.LocalSovitsHelper.VoiceLang.values()
         androidx.compose.foundation.layout.FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -860,7 +856,7 @@ private fun GptSovitDeveloperPanel(
                     if (busy) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
                         Spacer(Modifier.width(6.dp))
-                        Text("合成中…", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(I18n.tr("合成中…"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Default.GraphicEq, null, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(5.dp))
@@ -895,10 +891,10 @@ private fun GptSovitDeveloperPanel(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Computer, null, tint = p.neonCyan, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(7.dp))
-                Text("模型由電腦設定頁管理", fontSize = 12.sp, color = p.textLight, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("模型由電腦設定頁管理"), fontSize = 12.sp, color = p.textLight, fontWeight = FontWeight.Bold)
             }
             Text(
-                "在 Mac 開啟 http://127.0.0.1:9890 匯入 .ckpt / .pth / .wav 與參考文字。App 只負責呼叫目前電腦 server 載入的模型。",
+                I18n.tr("在 Mac 開啟 http://127.0.0.1:9890 匯入 .ckpt / .pth / .wav 與參考文字。App 只負責呼叫目前電腦 server 載入的模型。"),
                 fontSize = 10.sp,
                 color = p.textMuted,
                 lineHeight = 14.sp
@@ -958,7 +954,7 @@ private fun TermuxSovitsPanel(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Computer, null, tint = p.neonCyan, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("用 Mac 跑 SoVITS（無線 / 有線）", fontSize = 12.sp, color = p.textLight, fontWeight = FontWeight.Bold)
+            Text(I18n.tr("用 Mac 跑 SoVITS（無線 / 有線）"), fontSize = 12.sp, color = p.textLight, fontWeight = FontWeight.Bold)
         }
         Text(
             "GPT-SoVITS 要 Python + PyTorch，Android 內跑不了 .pth 權重。\n" +
@@ -1008,12 +1004,12 @@ private fun TermuxSovitsPanel(
         // ── 已存電腦清單：可切換多台電腦（每台一個 chip，✚ 存目前位址）──
         val servers = com.example.ai.LocalSovitsHelper.parseServerList(serverList)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("電腦清單", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight, modifier = Modifier.weight(1f))
+            Text(I18n.tr("電腦清單"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight, modifier = Modifier.weight(1f))
             TextButton(
                 onClick = {
                     val url = apiBaseUrl.trim().trimEnd('/')
                     if (url.isNotBlank() && servers.none { it.url == url }) {
-                        val name = if (url.contains("127.0.0.1")) "USB 電腦" else "電腦 ${servers.size + 1}"
+                        val name = if (url.contains("127.0.0.1")) I18n.tr("USB 電腦") else I18n.tr("電腦 %d").format(servers.size + 1)
                         onServerListChange(
                             com.example.ai.LocalSovitsHelper.encodeServerList(
                                 servers + com.example.ai.LocalSovitsHelper.SovitsServer(name, url)
@@ -1022,10 +1018,10 @@ private fun TermuxSovitsPanel(
                     }
                 },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-            ) { Text("＋ 存目前位址", fontSize = 10.sp, color = p.neonCyan) }
+            ) { Text(I18n.tr("＋ 存目前位址"), fontSize = 10.sp, color = p.neonCyan) }
         }
         if (servers.isEmpty()) {
-            Text("尚無已存電腦。填好 API 位址後按「＋ 存目前位址」。", fontSize = 10.sp, color = p.textMuted)
+            Text(I18n.tr("尚無已存電腦。填好 API 位址後按「＋ 存目前位址」。"), fontSize = 10.sp, color = p.textMuted)
         } else {
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1039,7 +1035,7 @@ private fun TermuxSovitsPanel(
                         label = { Text("${srv.name}（${srv.url.removePrefix("http://")}）", fontSize = 10.sp) },
                         trailingIcon = {
                             Icon(
-                                Icons.Default.Close, "刪除 ${srv.name}",
+                                Icons.Default.Close, I18n.tr("刪除 %s").format(srv.name),
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clickable {
@@ -1063,7 +1059,7 @@ private fun TermuxSovitsPanel(
         // 連線健檢
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                pingResult?.label ?: "尚未測試連線",
+                pingResult?.label ?: I18n.tr("尚未測試連線"),
                 fontSize = 11.sp,
                 color = when (pingResult?.kind) {
                     com.example.ai.LocalSovitsHelper.PingResultKind.Reachable  -> p.neonGreen
@@ -1091,7 +1087,7 @@ private fun TermuxSovitsPanel(
                                             servers + com.example.ai.LocalSovitsHelper.SovitsServer("${info.hostname} (Tailscale)", url)
                                         )
                                     )
-                                    switchStatus = "已加入 Tailscale 電腦：${info.hostname}（${info.tailscaleIp}）"
+                                    switchStatus = I18n.tr("已加入 Tailscale 電腦：%s（%s）").format(info.hostname, info.tailscaleIp)
                                 }
                             }
                         }
@@ -1108,7 +1104,7 @@ private fun TermuxSovitsPanel(
                     Icon(Icons.Default.NetworkCheck, null, tint = p.neonCyan, modifier = Modifier.size(13.dp))
                 }
                 Spacer(Modifier.width(4.dp))
-                Text("測試連線", fontSize = 11.sp, color = p.neonCyan)
+                Text(I18n.tr("測試連線"), fontSize = 11.sp, color = p.neonCyan)
             }
         }
 
@@ -1123,20 +1119,20 @@ private fun TermuxSovitsPanel(
         val filteredVoices = voices.filter { it.lang == voiceLangFilter }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("角色模型", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+            Text(I18n.tr("角色模型"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
             Spacer(Modifier.width(6.dp))
             Text("（${voiceLangFilter.displayName}）", fontSize = 10.sp, color = p.neonCyan)
             Spacer(Modifier.weight(1f))
             if (voices.size > filteredVoices.size) {
-                Text("顯示 ${filteredVoices.size}/${voices.size}", fontSize = 9.sp, color = p.textMuted)
+                Text(I18n.tr("顯示 %d/%d").format(filteredVoices.size, voices.size), fontSize = 9.sp, color = p.textMuted)
             }
         }
         if (filteredVoices.isEmpty()) {
             Text(
                 if (voices.isEmpty())
-                    "電腦上尚無任何模型，請在 Mac 語音中心匯入後按上方「測試連線」重新整理。"
+                    I18n.tr("電腦上尚無任何模型，請在 Mac 語音中心匯入後按上方「測試連線」重新整理。")
                 else
-                    "目前介面語言（${voiceLangFilter.displayName}）沒有對應模型。請在 Mac 語音中心匯入含「${voiceLangFilter.tag}」標籤的模型。",
+                    I18n.tr("目前介面語言（%s）沒有對應模型。請在 Mac 語音中心匯入含「%s」標籤的模型。").format(voiceLangFilter.displayName, voiceLangFilter.tag),
                 fontSize = 11.sp, color = p.textMuted, lineHeight = 16.sp
             )
         }
@@ -1157,11 +1153,11 @@ private fun TermuxSovitsPanel(
                                 .clickable(enabled = !switching) {
                                     if (switching) return@clickable
                                     switching = true
-                                    switchStatus = "⏳ 正在切換到 ${v.displayLabel}…"
+                                    switchStatus = I18n.tr("⏳ 正在切換到 %s…").format(v.displayLabel)
                                     scope.launch {
                                         val r = com.example.ai.LocalSovitsHelper.switchModel(apiBaseUrl, v)
                                         switchStatus = r.fold(
-                                            onSuccess = { "✅ 已切換到 $it，ref/prompt 已自動跟上" },
+                                            onSuccess = { I18n.tr("✅ 已切換到 %s，ref/prompt 已自動跟上").format(it) },
                                             onFailure = { "❌ ${it.message}" }
                                         )
                                         pingResult = com.example.ai.LocalSovitsHelper.pingServer(apiBaseUrl)
@@ -1202,7 +1198,7 @@ private fun TermuxSovitsPanel(
             }
         }
         Text(
-            "切換 App 介面語言即可篩選對應聲音模型；切換約需數十秒（CPU 載權重），同語言內連續講不會重切。",
+            I18n.tr("切換 App 介面語言即可篩選對應聲音模型；切換約需數十秒（CPU 載權重），同語言內連續講不會重切。"),
             fontSize = 9.sp, color = p.textMuted, lineHeight = 13.sp
         )
         switchStatus?.let {
@@ -1219,7 +1215,7 @@ private fun TermuxSovitsPanel(
             ) {
                 Icon(Icons.Default.ContentCopy, null, tint = p.neonCyan, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(3.dp))
-                Text("複製啟動指令", fontSize = 10.sp, color = p.neonCyan, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("複製啟動指令"), fontSize = 10.sp, color = p.neonCyan, fontWeight = FontWeight.Bold)
             }
             if (currentMode == com.example.ai.LocalSovitsHelper.ConnectionMode.Wired) {
                 OutlinedButton(
@@ -1230,7 +1226,7 @@ private fun TermuxSovitsPanel(
                 ) {
                     Icon(Icons.Default.Usb, null, tint = p.neonCyan, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(3.dp))
-                    Text("複製 USB 指令", fontSize = 10.sp, color = p.neonCyan, fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("複製 USB 指令"), fontSize = 10.sp, color = p.neonCyan, fontWeight = FontWeight.Bold)
                 }
             } else {
                 OutlinedButton(
@@ -1241,7 +1237,7 @@ private fun TermuxSovitsPanel(
                 ) {
                     Icon(Icons.Default.Wifi, null, tint = p.neonCyan, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(3.dp))
-                    Text("複製查 IP", fontSize = 10.sp, color = p.neonCyan, fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("複製查 IP"), fontSize = 10.sp, color = p.neonCyan, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1292,8 +1288,8 @@ private fun GptSovitModeChip(
 private fun VoiceSampleRow(
     label: String,
     uri: String,
-    readyText: String = "已永久保存 URI 權限",
-    emptyText: String = "尚未匯入",
+    readyText: String = I18n.tr("已永久保存 URI 權限"),
+    emptyText: String = I18n.tr("尚未匯入"),
     onPick: () -> Unit,
     onClear: () -> Unit,
     p: com.example.ui.theme.AppPalette
@@ -1310,7 +1306,7 @@ private fun VoiceSampleRow(
         ) {
             Icon(Icons.Default.UploadFile, null, tint = p.neonCyan, modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(5.dp))
-            Text("匯入", fontSize = 11.sp, color = p.neonCyan)
+            Text(I18n.tr("匯入"), fontSize = 11.sp, color = p.neonCyan)
         }
         Spacer(Modifier.width(6.dp))
         IconButton(onClick = onClear, enabled = uri.isNotBlank(), modifier = Modifier.size(34.dp)) {
@@ -1360,7 +1356,7 @@ private fun GptSovitImportDialog(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan)
             ) {
-                Text("開啟系統檔案頁", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("開啟系統檔案頁"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1373,11 +1369,11 @@ private fun GptSovitImportDialog(
                         },
                         border = BorderStroke(1.dp, p.auraAmber.copy(alpha = 0.55f))
                     ) {
-                        Text("使用預設資料夾", fontSize = 12.sp, color = p.auraAmber)
+                        Text(I18n.tr("使用預設資料夾"), fontSize = 12.sp, color = p.auraAmber)
                     }
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("取消", fontSize = 12.sp, color = p.textMuted)
+                    Text(I18n.tr("取消"), fontSize = 12.sp, color = p.textMuted)
                 }
             }
         }
@@ -1577,26 +1573,26 @@ private fun OffloadPlanCard(
             Icon(Icons.Default.Computer, null, tint = tierColor, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
-                Text("電腦接手計畫：${plan.tier.title}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+                Text(I18n.tr("電腦接手計畫：%s").format(plan.tier.title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight)
                 Text(plan.tier.blurb, fontSize = 10.sp, color = p.textMuted, lineHeight = 13.sp)
             }
             IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Refresh, "重新量測", tint = p.textMuted, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Refresh, I18n.tr("重新量測"), tint = p.textMuted, modifier = Modifier.size(16.dp))
             }
         }
         if (plan.metrics.reachable) {
             Spacer(Modifier.height(6.dp))
-            val kindTxt = if (plan.metrics.kind == com.example.ai.OffloadManager.LinkKind.Wired) "有線 USB" else "無線 Wi-Fi"
-            val rttTxt = if (plan.metrics.rttMs >= 0) "、延遲 ${plan.metrics.rttMs}ms" else ""
-            Text("連線：${plan.metrics.speedLabel}（$kindTxt$rttTxt）", fontSize = 11.sp, color = p.textMuted)
+            val kindTxt = if (plan.metrics.kind == com.example.ai.OffloadManager.LinkKind.Wired) I18n.tr("有線 USB") else I18n.tr("無線 Wi-Fi")
+            val rttTxt = if (plan.metrics.rttMs >= 0) I18n.tr("、延遲 %dms").format(plan.metrics.rttMs) else ""
+            Text(I18n.tr("連線：%s（%s%s）").format(plan.metrics.speedLabel, kindTxt, rttTxt), fontSize = 11.sp, color = p.textMuted)
         } else {
             Spacer(Modifier.height(6.dp))
-            Text("未連接電腦：全部運算由手機本機處理", fontSize = 11.sp, color = p.textMuted)
+            Text(I18n.tr("未連接電腦：全部運算由手機本機處理"), fontSize = 11.sp, color = p.textMuted)
         }
         Spacer(Modifier.height(8.dp))
-        OffloadTaskRow("🔊 語音合成", plan.voice, p)
-        OffloadTaskRow("🖼 生圖", plan.image, p)
-        OffloadTaskRow("💬 文字重組", plan.text, p)
+        OffloadTaskRow(I18n.tr("🔊 語音合成"), plan.voice, p)
+        OffloadTaskRow(I18n.tr("🖼 生圖"), plan.image, p)
+        OffloadTaskRow(I18n.tr("💬 文字重組"), plan.text, p)
     }
 }
 
@@ -1616,7 +1612,7 @@ private fun OffloadTaskRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, fontSize = 12.sp, color = p.textLight)
-        Text("由 ${target.label} 處理", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+        Text(I18n.tr("由 %s 處理").format(target.label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 
@@ -1719,7 +1715,7 @@ private fun DeveloperModeSection(
         }
     }
 
-    Section(title = "開發者模式", icon = Icons.Default.DeveloperMode, p = p) {
+    Section(title = I18n.tr("開發者模式"), icon = Icons.Default.DeveloperMode, p = p) {
         importDialog?.let { state ->
             GptSovitImportDialog(
                 state = state,
@@ -1730,8 +1726,8 @@ private fun DeveloperModeSection(
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("效能監控與 Hugging Face 模型管理", fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
-                Text("關閉時不取樣，避免額外耗電。", fontSize = 10.sp, color = p.textMuted)
+                Text(I18n.tr("效能監控與 Hugging Face 模型管理"), fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("關閉時不取樣，避免額外耗電。"), fontSize = 10.sp, color = p.textMuted)
             }
             Switch(checked = enabled, onCheckedChange = onEnabledChange)
         }
@@ -1745,7 +1741,7 @@ private fun DeveloperModeSection(
 
             // AI 生圖（需要電腦/雲端）：移到開發者模式集中管理
             AdvancedEntryRow(
-                label = "🖼 AI 生圖（輸入描述生成圖片、可設背景；本機電腦或雲端）",
+                label = I18n.tr("🖼 AI 生圖（輸入描述生成圖片、可設背景；本機電腦或雲端）"),
                 onClick = onOpenImageGen, p = p
             )
             Spacer(Modifier.height(12.dp))
@@ -1860,7 +1856,7 @@ private fun DeveloperModeSection(
                 ) {
                     Icon(Icons.Default.GraphicEq, null, tint = p.neonCyan, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("開啟 GPT-SoVITS 匯入與中英語音切換", fontSize = 12.sp, color = p.neonCyan)
+                    Text(I18n.tr("開啟 GPT-SoVITS 匯入與中英語音切換"), fontSize = 12.sp, color = p.neonCyan)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -1885,10 +1881,10 @@ private fun DeveloperModeSection(
                     CompactMetricTile("FPS", "%.0f".format(last?.frameRateHz ?: 0f), p.neonGreen, Modifier.weight(1f), p)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CompactMetricTile("系統 RAM", "%.0f%%".format(last?.ramUsedPercent ?: 0f), p.neonCyan, Modifier.weight(1f), p)
-                    CompactMetricTile("電量", "%.0f%%".format(last?.batteryPercent ?: 0f), p.neonGreen, Modifier.weight(1f), p)
-                    CompactMetricTile("電池溫", "%.1f°".format(last?.batteryTempC ?: 0f), p.auraAmber, Modifier.weight(1f), p)
-                    CompactMetricTile("網路",
+                    CompactMetricTile(I18n.tr("系統 RAM"), "%.0f%%".format(last?.ramUsedPercent ?: 0f), p.neonCyan, Modifier.weight(1f), p)
+                    CompactMetricTile(I18n.tr("電量"), "%.0f%%".format(last?.batteryPercent ?: 0f), p.neonGreen, Modifier.weight(1f), p)
+                    CompactMetricTile(I18n.tr("電池溫"), "%.1f°".format(last?.batteryTempC ?: 0f), p.auraAmber, Modifier.weight(1f), p)
+                    CompactMetricTile(I18n.tr("網路"),
                         last?.let { it.networkEstimatedKbps.takeIf { v -> v > 0 } ?: it.networkDownKbps }
                             ?.let { if (it >= 1000) "%.0fM".format(it / 1000) else "%.0fK".format(it) } ?: "—",
                         p.neonCyan, Modifier.weight(1f), p)
@@ -1906,17 +1902,17 @@ private fun DeveloperModeSection(
 
             // ── 趨勢圖：本 App CPU + 網路 ──
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricChart("本 App CPU 趨勢",
+                MetricChart(I18n.tr("本 App CPU 趨勢"),
                     "%.1f%%".format(last?.appCpuPercent ?: 0f),
                     metrics, { it.appCpuPercent }, p.dangerRose, p)
-                MetricChart("網路下載速度",
+                MetricChart(I18n.tr("網路下載速度"),
                     networkLabel(last),
                     metrics, { maxOf(it.networkDownKbps, it.networkEstimatedKbps) },
                     p.neonCyan, p)
             }
 
             Spacer(Modifier.height(14.dp))
-            Text("Hugging Face 公開模型下載", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+            Text(I18n.tr("Hugging Face 公開模型下載"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = hfUrl,
@@ -1937,7 +1933,7 @@ private fun DeveloperModeSection(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "不需要帳號或 API key；只有公開直連 URL 可下載。MediaPipe 推理目前會啟用 .task 格式。",
+                I18n.tr("不需要帳號或 API key；只有公開直連 URL 可下載。MediaPipe 推理目前會啟用 .task 格式。"),
                 fontSize = 10.sp,
                 color = p.textMuted,
                 lineHeight = 14.sp
@@ -1950,7 +1946,7 @@ private fun DeveloperModeSection(
                     border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.55f)),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (modelProbeState is ModelProbeState.Testing) "測試中" else "測試連線", fontSize = 12.sp, color = p.neonCyan)
+                    Text(if (modelProbeState is ModelProbeState.Testing) I18n.tr("測試中") else I18n.tr("測試連線"), fontSize = 12.sp, color = p.neonCyan)
                 }
                 Button(
                     onClick = { onDownload(hfUrl) },
@@ -1960,7 +1956,7 @@ private fun DeveloperModeSection(
                 ) {
                     Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("下載 URL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(I18n.tr("下載 URL"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(
                     onClick = onCancel,
@@ -1968,7 +1964,7 @@ private fun DeveloperModeSection(
                     border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("取消", fontSize = 12.sp, color = p.dangerRose)
+                    Text(I18n.tr("取消"), fontSize = 12.sp, color = p.dangerRose)
                 }
             }
             ProbeStatus(modelProbeState, p)
@@ -2006,7 +2002,7 @@ private fun networkLabel(sample: DeviceMetricSample?): String {
     return when {
         effective >= 1000f -> "%.1f Mbps".format(effective / 1000f)
         effective > 0f -> "%.0f Kbps".format(effective)
-        else -> "未知"
+        else -> I18n.tr("未知")
     }
 }
 
@@ -2046,7 +2042,7 @@ private fun ModelStatusBlock(
                 }
             }
         }
-        is ModelDownloadState.Ready -> StatusRow("本地 AI 模型已就緒", Icons.Default.CheckCircle, p.neonGreen, p)
+        is ModelDownloadState.Ready -> StatusRow(I18n.tr("本地 AI 模型已就緒"), Icons.Default.CheckCircle, p.neonGreen, p)
         is ModelDownloadState.Error -> {
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
@@ -2085,7 +2081,7 @@ private fun ModelStatusBlock(
                 }
             }
         }
-        ModelDownloadState.Idle -> StatusRow("尚未啟動模型載入", Icons.Default.Info, p.textMuted, p)
+        ModelDownloadState.Idle -> StatusRow(I18n.tr("尚未啟動模型載入"), Icons.Default.Info, p.textMuted, p)
     }
 }
 

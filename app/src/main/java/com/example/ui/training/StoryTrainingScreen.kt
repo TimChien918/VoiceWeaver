@@ -1,5 +1,7 @@
 package com.example.ui.training
 
+import com.example.ui.I18n
+
 import android.Manifest
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -86,21 +88,21 @@ fun StoryTrainingScreen(
         sttLauncher.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "請說出你的故事…")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, I18n.tr("請說出你的故事…"))
         })
     }
 
     if (!developerMode) {
         LockedNotice(
-            title = "復健訓練模式 · 未啟用",
-            body = "請到「設定 → 開發者選項」打開後再回來。"
+            title = I18n.tr("復健訓練模式 · 未啟用"),
+            body = I18n.tr("請到「設定 → 開發者選項」打開後再回來。")
         )
         return
     }
     if (deviceTier != DeviceTier.HIGH_END) {
         LockedNotice(
-            title = "設備 RAM 不足",
-            body = "故事訓練會載入 LLM 評論模型，需要 8GB 以上 RAM。\n您的裝置目前判定為：${deviceTier.name}。"
+            title = I18n.tr("設備 RAM 不足"),
+            body = I18n.tr("故事訓練會載入 LLM 評論模型，需要 8GB 以上 RAM。\n您的裝置目前判定為：%s。").format(deviceTier.name)
         )
         return
     }
@@ -117,7 +119,7 @@ fun StoryTrainingScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("▌ 圖片說故事", color = p.textLight,
+                    Text(I18n.tr("▌ 圖片說故事"), color = p.textLight,
                          fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.darkBg),
@@ -125,7 +127,7 @@ fun StoryTrainingScreen(
                     IconButton(onClick = {
                         promptIdx++; userText = ""; aiFeedback = null; lastScore = 0
                     }) {
-                        Icon(Icons.Default.Refresh, "換一組", tint = p.neonCyan)
+                        Icon(Icons.Default.Refresh, I18n.tr("換一組"), tint = p.neonCyan)
                     }
                 }
             )
@@ -137,7 +139,7 @@ fun StoryTrainingScreen(
         ) {
             item {
                 Text(
-                    "請看圖說一段故事：「${prompt.title}」",
+                    I18n.tr("請看圖說一段故事：「%s」").format(prompt.title),
                     color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 8.dp)
                 )
@@ -147,7 +149,7 @@ fun StoryTrainingScreen(
                 OutlinedTextField(
                     value = userText,
                     onValueChange = { userText = it },
-                    placeholder = { Text("用文字或語音說出這個故事…", color = p.textMuted) },
+                    placeholder = { Text(I18n.tr("用文字或語音說出這個故事…"), color = p.textMuted) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = p.textLight,
@@ -159,7 +161,7 @@ fun StoryTrainingScreen(
                         IconButton(onClick = { launchStt() }) {
                             Icon(
                                 Icons.Default.Mic,
-                                contentDescription = "語音輸入",
+                                contentDescription = I18n.tr("語音輸入"),
                                 tint = if (isListening) p.neonCyan else p.textMuted
                             )
                         }
@@ -194,7 +196,7 @@ fun StoryTrainingScreen(
                         containerColor = p.neonGreen, contentColor = p.darkBg
                     )
                 ) {
-                    Text(if (loadingAi) "AI 評論中…" else "請 AI 評論", fontWeight = FontWeight.Bold)
+                    Text(if (loadingAi) I18n.tr("AI 評論中…") else I18n.tr("請 AI 評論"), fontWeight = FontWeight.Bold)
                 }
             }
             aiFeedback?.let { fb ->
@@ -206,12 +208,12 @@ fun StoryTrainingScreen(
                             .border(1.dp, p.neonGreen, RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
-                        Text("AI 老師", color = p.neonGreen,
+                        Text(I18n.tr("AI 老師"), color = p.neonGreen,
                              fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Spacer(Modifier.height(4.dp))
                         Text(fb, color = p.textLight, fontSize = 14.sp)
                         Spacer(Modifier.height(6.dp))
-                        Text("本次評分：$lastScore / 100", color = p.textMuted, fontSize = 12.sp)
+                        Text(I18n.tr("本次評分：%s / 100").format(lastScore), color = p.textMuted, fontSize = 12.sp)
                     }
                 }
             }
@@ -300,8 +302,8 @@ private suspend fun generateFeedback(
 
     val ai = result?.takeIf { it.isNotBlank() }
     return ai ?: when {
-        baseScore >= 80 -> "太棒了！您把這個故事完整說出來了，繼續保持 💪"
-        baseScore >= 50 -> "說得不錯！下次可以再多提到「${prompt.expectedKeywords.first()}」等關鍵字 🌱"
-        else            -> "您願意開口練習就很棒了，再試一次，慢慢來 🌿"
+        baseScore >= 80 -> I18n.tr("太棒了！您把這個故事完整說出來了，繼續保持 💪")
+        baseScore >= 50 -> I18n.tr("說得不錯！下次可以再多提到「%s」等關鍵字 🌱").format(prompt.expectedKeywords.first())
+        else            -> I18n.tr("您願意開口練習就很棒了，再試一次，慢慢來 🌿")
     }
 }
