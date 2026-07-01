@@ -262,8 +262,11 @@ def run_bootstrap(progress):
                 ["diffusers==0.31.0", "transformers>=4.43,<=4.50", "accelerate"],
                 ["fastapi", "uvicorn"],
             ]
-            for g in core_groups:
+            for gi, g in enumerate(core_groups):
+                progress(0.45 + 0.15 * (gi / len(core_groups)),
+                         f"安裝核心依賴（{gi + 1}/{len(core_groups)}）：{g[-1]} …")
                 _run([ENV_PY, "-m", "pip", "install"] + g, progress, "核心依賴")
+            progress(0.60, "驗證核心 AI 依賴…")
             chk = _run([ENV_PY, "-c",
                         "import torch, diffusers, transformers, fastapi, PIL"], None)
             if chk != 0:
@@ -282,7 +285,10 @@ def run_bootstrap(progress):
                 "ctranslate2>=4.0,<5", "av>=11", "pytorch-lightning",
                 "qrcode",   # 控制台「掃描連線」用，產生 QR Code 給手機掃
             ]
-            for pkg in voice_pkgs:
+            _nvp = len(voice_pkgs)
+            for _i, pkg in enumerate(voice_pkgs):
+                progress(0.62 + 0.18 * (_i / _nvp),
+                         f"安裝語音元件（{_i + 1}/{_nvp}）：{pkg} …")
                 _run([ENV_PY, "-m", "pip", "install", pkg], progress, "語音元件")
             # pyopenjtalk：日語前端用，Windows 無預編譯輪子需 C++ 編譯——盡力而為，失敗略過
             progress(0.80, "安裝日語元件（可選，失敗會自動略過）…")
@@ -1295,38 +1301,62 @@ class App:
         tk.Label(self.iv, text="VoiceWeaver 首次安裝", font=(FONT_UI, SZ_H1, "bold"),
                  bg=t["bg"], fg=t["fg"]).pack(pady=(110, 8))
         tk.Label(self.iv, text="正在自動下載並安裝本機 AI 環境（約 2GB）——只需這一次。",
-                 font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 26))
-        self.iv_bar = ttk.Progressbar(self.iv, length=440, mode="indeterminate")
-        self.iv_bar.pack(pady=(0, 12)); self.iv_bar.start(14)
+                 font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 10))
+        # 大字百分比
+        self.iv_pct_lbl = tk.Label(self.iv, text="0%", font=(FONT_UI, SZ_H1 + 8, "bold"),
+                                   bg=t["bg"], fg=C_BLUE)
+        self.iv_pct_lbl.pack(pady=(4, 6))
+        # 真・進度條（會逐步填滿，不是來回跑的方塊）
+        self.iv_bar = ttk.Progressbar(self.iv, length=460, mode="determinate", maximum=1000)
+        self.iv_bar.pack(pady=(0, 12))
         self.iv_sub = tk.Label(self.iv, text="準備中…", font=(FONT_MONO, SZ_SMALL),
                                bg=t["bg"], fg=t["muted"])
         self.iv_sub.pack()
         self.iv_hint = tk.Label(
             self.iv, text="完成後會自動開啟控制台，安裝期間請保持網路連線。",
             font=(FONT_UI, SZ_SMALL), bg=t["bg"], fg=C_DIMMED)
-        self.iv_hint.pack(pady=(30, 0))
+        self.iv_hint.pack(pady=(26, 0))
+        # 進度動畫：往「里程碑目標」緩動填滿；某步驟耗時較久時微幅前進，讓它一直在填、不會停死。
+        self._iv_target = 0.0
+        self._iv_shown = 0.0
+        self._iv_running = True
+        self._iv_animate()
+
+    def _iv_animate(self):
+        if not getattr(self, "_iv_running", False):
+            return
+        try:
+            tgt = getattr(self, "_iv_target", 0.0)
+            shown = getattr(self, "_iv_shown", 0.0)
+            if shown < tgt:
+                shown += max(0.004, (tgt - shown) * 0.12)          # 緩動逼近里程碑
+                if shown > tgt:
+                    shown = tgt
+            elif tgt < 1.0:
+                shown = min(shown + (1.0 - shown) * 0.004, tgt + 0.05, 0.985)  # 等待時極緩前進
+            self._iv_shown = shown
+            self.iv_bar["value"] = int(shown * 1000)
+            self.iv_pct_lbl.config(text=f"{int(shown * 100)}%")
+        except Exception:
+            pass
+        self.root.after(90, self._iv_animate)
 
     def _install_progress(self, frac, msg):
         import time as _t
-        # 進度條全程用「來回跑動」(marquee) 表示「正在動」——因為 pip 安裝一個大套件
-        # 可能好幾分鐘卡在同一個百分比，用固定值的進度條看起來像當機。
-        # 實際進度改用「文字」顯示：里程碑 % ＋ 目前步驟（下載會帶自己的 % 與 MB）。
+        # 只設定「目標里程碑」；進度條由 _iv_animate 緩動填滿。目標只增不減。
+        if frac is not None and frac >= 0:
+            self._iv_target = max(getattr(self, "_iv_target", 0.0), min(1.0, frac))
         now = _t.time()
         if (now - getattr(self, "_last_prog_t", 0)) < 0.15:
-            if not (frac is not None and frac >= 0):   # 里程碑更新一律放行，只節流逐行輸出
-                return
+            return
         self._last_prog_t = now
-        if frac is not None and frac >= 0:
-            self._iv_pct = int(max(0, min(100, frac * 100)))
-        pct = getattr(self, "_iv_pct", 0)
         def upd():
-            try:
-                self.iv_sub.config(text=f"{pct}%　{msg}")
-            except Exception:
-                pass
+            try: self.iv_sub.config(text=msg)
+            except Exception: pass
         self.root.after(0, upd)
 
     def _finish_install(self):
+        self._iv_running = False
         try: self.iv.destroy()
         except Exception: pass
         self.set_status("安裝完成，啟動服務中…")
@@ -1334,9 +1364,8 @@ class App:
         find_adb_bg(callback=self._on_adb_found)
 
     def _install_failed(self, err: str):
+        self._iv_running = False   # 停止進度動畫，進度條停在失敗處
         try:
-            self.iv_bar.stop()
-            self.iv_bar.config(mode="determinate"); self.iv_bar["value"] = 0
             self.iv_sub.config(text=f"安裝未完成：{err}", fg=C_RED)
             self.iv_hint.config(text=f"詳細紀錄：{_INSTALL_LOG}")
             bar = tk.Frame(self.iv, bg=self.theme()["bg"]); bar.pack(pady=(20, 0))
