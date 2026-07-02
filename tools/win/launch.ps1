@@ -37,9 +37,9 @@ $CONTROL_VER   = '3'                                       # 控制程式碼版�
 $ENV_TAR_LOCAL = Join-Path $RES 'gpt-sovits-env.tar.gz'
 $ENV_URL       = $env:VW_ENV_URL                           # 可選：預打包環境的下載網址
 
-# Miniforge 安裝程式（官方）
-$MF_VER  = '24.11.3-2'
-$MF_URL  = "https://github.com/conda-forge/miniforge/releases/download/$MF_VER/Miniforge3-$MF_VER-Windows-x86_64.exe"
+# Python 執行環境：python-build-standalone（免安裝、解壓即用、內含 pip）——比 Miniforge NSIS 可靠
+$PBS_TAG = '20260623'
+$PBS_URL = "https://github.com/astral-sh/python-build-standalone/releases/download/$PBS_TAG/cpython-3.10.20+$PBS_TAG-x86_64-pc-windows-msvc-install_only.tar.gz"
 
 # Python / 依賴版本
 $PY_VERSION = '3.10'
@@ -178,23 +178,24 @@ try {
       if (Test-Path $unpack) { Set-Step 'conda-unpack 重定位…'; & $unpack 2>> $LOG }
     }
     else {
-      # ── 自建：Miniforge → 建環境 → pip 裝依賴（全自動，無需任何人預打包）──
-      if (-not (Test-Path (Join-Path $CONDA 'condabin\conda.bat'))) {
-        $mf = Join-Path $env:TEMP 'Miniforge3-setup.exe'
-        Download $MF_URL $mf 'Miniforge（含 Python，約 90MB）'
-        Set-Step '安裝 Miniforge（靜默）…'
-        & $mf '/InstallationType=JustMe' '/AddToPath=0' '/RegisterPython=0' '/S' "/D=$CONDA" 2>> $LOG | Out-Null
-        # /S 為非同步，等 conda.bat 出現
-        for ($i = 0; $i -lt 120 -and -not (Test-Path (Join-Path $CONDA 'condabin\conda.bat')); $i++) {
-          Start-Sleep -Seconds 2; Set-Step '安裝 Miniforge（靜默）…'
-        }
+      # ── 自建：python-build-standalone（解壓即用）→ pip 裝依賴（全自動，無需任何人預打包）──
+      if (-not (Test-Path $PY)) {
+        $tgz = Join-Path $env:TEMP 'vw_python.tar.gz'
+        Download $PBS_URL $tgz 'Python 執行環境（約 38MB）'
+        Set-Step '解壓 Python 執行環境…'
+        $extractTmp = Join-Path $TOOLS '_pyextract'
+        if (Test-Path $extractTmp) { Remove-Item -Recurse -Force $extractTmp -EA SilentlyContinue }
+        New-Item -ItemType Directory -Force $extractTmp | Out-Null
+        & tar.exe -xzf "$tgz" -C "$extractTmp" 2>> $LOG
+        if ($LASTEXITCODE -ne 0) { throw '解壓 Python 執行環境失敗' }
+        $srcPy = Join-Path $extractTmp 'python'
+        if (-not (Test-Path (Join-Path $srcPy 'python.exe'))) { throw 'Python 環境結構非預期' }
+        if (Test-Path $ENV_DIR) { Remove-Item -Recurse -Force $ENV_DIR -EA SilentlyContinue }
+        Move-Item $srcPy $ENV_DIR
+        Remove-Item -Recurse -Force $extractTmp -EA SilentlyContinue
+        Remove-Item -Force $tgz -EA SilentlyContinue
       }
-      $condaBat = Join-Path $CONDA 'condabin\conda.bat'
-      if (-not (Test-Path $condaBat)) { throw 'Miniforge 安裝失敗' }
-
-      Set-Step "建立 Python $PY_VERSION 環境…"
-      & $condaBat create -y -p $ENV_DIR "python=$PY_VERSION" 2>> $LOG
-      if (-not (Test-Path $PY)) { throw '建立環境失敗' }
+      if (-not (Test-Path $PY)) { throw 'Python 執行環境建立失敗' }
 
       & $PY -m pip install --upgrade pip 2>> $LOG
 
