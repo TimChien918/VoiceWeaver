@@ -59,9 +59,12 @@ CONTROL_VER = "3"
 
 # GPT-SoVITS 推論引擎程式碼來源（官方上游，使用者已授權）
 GPTSOVITS_CODE_URL = "https://codeload.github.com/RVC-Boss/GPT-SoVITS/zip/refs/heads/main"
-# Miniforge（官方 conda-forge 發行版，內含 Python）
-_MF_VER   = "24.11.3-2"
-MF_URL    = f"https://github.com/conda-forge/miniforge/releases/download/{_MF_VER}/Miniforge3-{_MF_VER}-Windows-x86_64.exe"
+# Python 執行環境：python-build-standalone（免安裝、解壓即用、內含 pip）。
+# 比 Miniforge 的 NSIS 安裝可靠得多——後者在部分機器上會靜默失敗、產不出 python.exe。
+# 我們所有 AI 套件都用 pip 裝（不靠 conda），所以不需要 conda。
+_PBS_TAG  = "20260623"
+PBS_URL   = ("https://github.com/astral-sh/python-build-standalone/releases/download/"
+             f"{_PBS_TAG}/cpython-3.10.20+{_PBS_TAG}-x86_64-pc-windows-msvc-install_only.tar.gz")
 # 可選：預打包環境（conda-pack 產物）的下載網址；設了就走「下載既成環境」快速路徑
 ENV_TAR_URL = os.environ.get("VW_ENV_URL", "")
 PY_VERSION = "3.10"
@@ -221,30 +224,40 @@ def run_bootstrap(progress):
                 progress(0.7, "環境重定位（conda-unpack）…")
                 _run([unpack], progress, "重定位")
         else:
-            # 自建：Miniforge → conda 建環境 → pip
-            conda_bat = os.path.join(CONDA_DIR, "condabin", "conda.bat")
-            if not os.path.isfile(conda_bat):
-                mf = os.path.join(os.environ.get("TEMP", TOOLS_DIR), "Miniforge3-setup.exe")
-                _download(MF_URL, mf, progress, "下載 Miniforge", 0.02, 0.18)
-                progress(0.2, "安裝 Miniforge（靜默，約 1 分鐘）…")
-                # /S 為非同步安裝
-                subprocess.Popen([mf, "/InstallationType=JustMe", "/AddToPath=0",
-                                  "/RegisterPython=0", "/S", f"/D={CONDA_DIR}"], **POPEN_KW)
-                import time as _t
-                for _ in range(150):
-                    if os.path.isfile(conda_bat):
-                        break
-                    _t.sleep(2)
-            if not os.path.isfile(conda_bat):
-                raise RuntimeError("Miniforge 安裝失敗")
-
-            progress(0.35, f"建立 Python {PY_VERSION} 環境…")
-            rc = _run([conda_bat, "create", "-y", "-p", ENV_DIR, f"python={PY_VERSION}"],
-                      progress, "建立環境")
+            # 自建：python-build-standalone（解壓即用）→ pip 裝依賴
             if not os.path.isfile(ENV_PY):
-                raise RuntimeError(f"建立環境失敗（rc={rc}）")
+                tgz = os.path.join(os.environ.get("TEMP", TOOLS_DIR), "vw_python.tar.gz")
+                _download(PBS_URL, tgz, progress, "下載 Python 執行環境", 0.02, 0.26)
+                progress(0.30, "解壓 Python 執行環境…")
+                import tarfile
+                extract_tmp = os.path.join(TOOLS_DIR, "_pyextract")
+                if os.path.isdir(extract_tmp):
+                    shutil.rmtree(extract_tmp, ignore_errors=True)
+                with tarfile.open(tgz, "r:gz") as tf:
+                    tf.extractall(extract_tmp)
+                src = os.path.join(extract_tmp, "python")   # 壓縮檔頂層是 python/
+                if not os.path.isfile(os.path.join(src, "python.exe")):
+                    raise RuntimeError("Python 環境壓縮檔結構非預期")
+                if os.path.isdir(ENV_DIR):
+                    shutil.rmtree(ENV_DIR, ignore_errors=True)
+                shutil.move(src, ENV_DIR)
+                shutil.rmtree(extract_tmp, ignore_errors=True)
+                try: os.remove(tgz)
+                except OSError: pass
+            if not os.path.isfile(ENV_PY):
+                raise RuntimeError("Python 執行環境建立失敗")
 
+            progress(0.35, "升級 pip…")
             _run([ENV_PY, "-m", "pip", "install", "--upgrade", "pip"], progress, "pip")
+
+            # ── 約束檔：把 torch/torchaudio 鎖死在 2.4.1 ──
+            #    否則後面某些語音套件（pytorch-lightning / x_transformers …）會把 torch 升成最新，
+            #    torchaudio 卻留在 2.4.1 → 版本不合，libtorchaudio.pyd 載入失敗、語音引擎起不來。
+            #    -c 約束檔會讓「每一次」pip install 都不准動 torch/torchaudio 的版本。
+            constraints = os.path.join(TOOLS_DIR, "constraints-win.txt")
+            with open(constraints, "w", encoding="utf-8") as _cf:
+                _cf.write("torch==2.4.1\ntorchaudio==2.4.1\n")
+            CO = ["-c", constraints]
 
             # ── 核心依賴：torch/diffusers/transformers 用「互相相容」的釘選版本 ──
             #    torch 2.4.1：避開新版 torchaudio 強制 torchcodec(需 FFmpeg DLL) 的問題；
@@ -265,7 +278,7 @@ def run_bootstrap(progress):
             for gi, g in enumerate(core_groups):
                 progress(0.45 + 0.15 * (gi / len(core_groups)),
                          f"安裝核心依賴（{gi + 1}/{len(core_groups)}）：{g[-1]} …")
-                _run([ENV_PY, "-m", "pip", "install"] + g, progress, "核心依賴")
+                _run([ENV_PY, "-m", "pip", "install"] + CO + g, progress, "核心依賴")
             progress(0.60, "驗證核心 AI 依賴…")
             chk = _run([ENV_PY, "-c",
                         "import torch, diffusers, transformers, fastapi, PIL"], None)
@@ -289,11 +302,16 @@ def run_bootstrap(progress):
             for _i, pkg in enumerate(voice_pkgs):
                 progress(0.62 + 0.18 * (_i / _nvp),
                          f"安裝語音元件（{_i + 1}/{_nvp}）：{pkg} …")
-                _run([ENV_PY, "-m", "pip", "install", pkg], progress, "語音元件")
+                _run([ENV_PY, "-m", "pip", "install"] + CO + [pkg], progress, "語音元件")
             # pyopenjtalk：日語前端用，Windows 無預編譯輪子需 C++ 編譯——盡力而為，失敗略過
             progress(0.80, "安裝日語元件（可選，失敗會自動略過）…")
-            if _run([ENV_PY, "-m", "pip", "install", "pyopenjtalk"], progress, "日語元件") != 0:
+            if _run([ENV_PY, "-m", "pip", "install"] + CO + ["pyopenjtalk"], progress, "日語元件") != 0:
                 _ilog("pyopenjtalk 安裝失敗（需 C++ 編譯器）——已略過，不影響生圖/文字/中文語音。")
+            # 最後確保 torch/torchaudio 就是 2.4.1（若中途被某套件動過就強制修正）
+            progress(0.82, "確認 torch 版本一致…")
+            _run([ENV_PY, "-m", "pip", "install"] + CO +
+                 ["--index-url", torch_index, "torch==2.4.1", "torchaudio==2.4.1"],
+                 progress, "torch 版本校正")
             # jieba_fast：中文前端直接 import 它，但 Windows 無預編譯輪子 → 用 jieba 做相容 shim
             _install_jieba_fast_shim()
 
