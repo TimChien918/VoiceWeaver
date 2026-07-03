@@ -844,8 +844,9 @@ class App:
         self._start_net_watcher()
 
         root.title(self.t("app.title"))
-        root.geometry("660x760")
-        root.minsize(580, 640)
+        root.minsize(560, 560)
+        # 實際視窗大小在 fit_to_content() 依內容量測後設定（預設 760 高裝不下整個控制台）。
+        root.geometry("680x820")
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._track(root, "bg")
 
@@ -2795,6 +2796,23 @@ class App:
                 cp.config(text=("⧉" if ok else ""), fg=t["muted"])
         self.root.after(2500, self.refresh)
 
+    def fit_to_content(self):
+        """依實際內容量測出需要的視窗大小，夾在螢幕可視範圍內並置中。
+        原本寫死 660x760 裝不下整個控制台（連線卡下方的按鈕/狀態列會被切掉）。"""
+        try:
+            self.root.update_idletasks()
+            need_w = max(680, self.root.winfo_reqwidth())
+            need_h = self.root.winfo_reqheight()
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            w = min(need_w, int(sw * 0.95))
+            h = min(need_h + 8, int(sh * 0.90))     # 留一點邊，避免貼齊工作列
+            x = max(0, (sw - w) // 2)
+            y = max(0, (sh - h) // 2 - 24)
+            self.root.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
+
     def on_close(self):
         self.set_status(self.t("status.stopping"))
         self.root.update_idletasks()
@@ -2821,8 +2839,9 @@ def main():
     root.withdraw()                        # 先藏起來，等版面全部建好再一次顯示 → 開啟乾淨、不會看到逐塊拼出來
     try: root.tk.call("tk", "scaling", 1.5)
     except Exception: pass
-    App(root)
+    app = App(root)
     root.update_idletasks()                # 強制完成一次排版
+    app.fit_to_content()                   # 依實際內容調整視窗大小（否則底部按鈕/狀態列會被切掉）
     root.deiconify()                       # 完整成形後才亮出視窗
     root.mainloop()
 
