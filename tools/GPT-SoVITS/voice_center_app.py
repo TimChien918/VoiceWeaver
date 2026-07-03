@@ -428,12 +428,13 @@ FONT_UI   = "Microsoft JhengHei UI" if IS_WIN else "PingFang TC"
 FONT_MONO = "Consolas" if IS_WIN else "Menlo"
 SZ_H1, SZ_H2, SZ_BODY, SZ_SMALL = 18, 13, 12, 10
 
+# 色盤層次：bg < panel < card（card 一定比 panel 亮——hover/選中才看得出來）。
 THEMES = {
-    "dark":  dict(bg="#1a1a2e", panel="#16213e", card="#0f3460",
-                  fg="#e0e0e0", muted="#7a7a9a", border="#2a2a4a",
-                  listbg="#16213e", listsel="#533483"),
-    "light": dict(bg="#f0f4ff", panel="#ffffff", card="#e8eeff",
-                  fg="#1a1a3e", muted="#6666aa", border="#c8d0f0",
+    "dark":  dict(bg="#12121f", panel="#1c2333", card="#2a3350",
+                  fg="#e8e8f0", muted="#8b8ba8", border="#2a2a44",
+                  listbg="#1c2333", listsel="#533483"),
+    "light": dict(bg="#eef1fa", panel="#ffffff", card="#e2e8fb",
+                  fg="#1a1f36", muted="#6b7394", border="#d5dcf2",
                   listbg="#ffffff", listsel="#6c63ff"),
 }
 C_GREEN  = "#00c96e"
@@ -483,6 +484,12 @@ I18N = {
     "svc.stopped": {"zh-TW":"未啟動 · 埠 {port}", "en":"Stopped · port {port}", "ja":"停止中 · ポート {port}", "ko":"중지됨 · 포트 {port}"},
     "btn.start": {"zh-TW":"啟動", "en":"Start", "ja":"起動", "ko":"시작"},
     "btn.stop":  {"zh-TW":"停止", "en":"Stop", "ja":"停止", "ko":"중지"},
+    "svc.needPy":      {"zh-TW":"等待 Python 環境…", "en":"Waiting for Python environment…", "ja":"Python 環境を待機中…", "ko":"Python 환경 대기 중…"},
+    "svc.needInstall": {"zh-TW":"找不到 {script}（需安裝 GPT-SoVITS）", "en":"{script} not found (GPT-SoVITS required)", "ja":"{script} が見つかりません（GPT-SoVITS が必要）", "ko":"{script} 없음 (GPT-SoVITS 필요)"},
+    "svc.needModel":   {"zh-TW":"需先匯入聲音模型（進階分頁）", "en":"Import a voice model first (Advanced tab)", "ja":"先に音声モデルを取り込んでください（詳細タブ）", "ko":"먼저 음성 모델을 가져오세요 (고급 탭)"},
+    "svc.startFail":   {"zh-TW":"啟動失敗：{err}", "en":"Failed to start: {err}", "ja":"起動失敗：{err}", "ko":"시작 실패: {err}"},
+    "status.stopping": {"zh-TW":"正在停止所有服務…", "en":"Stopping all services…", "ja":"全サービスを停止中…", "ko":"모든 서비스 중지 중…"},
+    "status.starting": {"zh-TW":"啟動 {name} …", "en":"Starting {name}…", "ja":"{name} を起動中…", "ko":"{name} 시작 중…"},
     # 連線卡
     "conn.title": {"zh-TW":"手機連線位址", "en":"Phone connection address", "ja":"スマホ接続アドレス", "ko":"휴대폰 연결 주소"},
     "conn.sub":   {"zh-TW":"手機 App 的「電腦語音中心」填入任一位址即可連線（點位址可複製）", "en":"In the phone app's “Computer Voice Center”, enter any address to connect (tap to copy).", "ja":"スマホアプリの「PCボイスセンター」にいずれかのアドレスを入力で接続（タップでコピー）。", "ko":"휴대폰 앱의 ‘컴퓨터 보이스 센터’에 아무 주소나 입력하면 연결 (탭하여 복사)."},
@@ -633,10 +640,14 @@ def _acquire_single_instance() -> bool:
     _WIN_MUTEX = ctypes.windll.kernel32.CreateMutexW(None, False, "VoiceWeaverVoiceCenterMutex_v1")
     if ctypes.windll.kernel32.GetLastError() == 183:   # ERROR_ALREADY_EXISTS
         try:
-            hwnd = ctypes.windll.user32.FindWindowW(None, "VoiceWeaver 語音中心")
-            if hwnd:
-                ctypes.windll.user32.ShowWindow(hwnd, 9)
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
+            # 視窗標題會隨介面語言變（繁中/英/日/韓），四種都要試——
+            # 否則使用者切過語言後，第二次雙擊無法把既有視窗帶到前景。
+            for _title in (v for v in I18N.get("app.title", {}).values()):
+                hwnd = ctypes.windll.user32.FindWindowW(None, _title)
+                if hwnd:
+                    ctypes.windll.user32.ShowWindow(hwnd, 9)
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    break
         except Exception:
             pass
         return False
@@ -828,6 +839,9 @@ class App:
         self.ui_lang = load_ui_lang()                              # 介面語言（可在標題列獨立切換、會記住）
         self._i18n: list[tuple] = []                               # 已註冊待翻譯的 widget [(widget, key)]
         self._help_txt = None                                      # 說明分頁 Text，retranslate 用
+        self._net = {"lan": "", "ts": ""}                          # 網路位址快取（背景執行緒更新）
+        self._sync_running = False                                 # 模型同步進行中旗標（防重複併發）
+        self._start_net_watcher()
 
         root.title(self.t("app.title"))
         root.geometry("660x760")
@@ -1447,6 +1461,7 @@ class App:
                 elif role == "fg":       cfg = {"bg": w.master.cget("bg"), "fg": t["fg"]}
                 elif role == "muted":    cfg = {"bg": w.master.cget("bg"), "fg": t["muted"]}
                 elif role == "neutralbtn": cfg = {"bg": t["panel"], "fg": t["fg"]}
+                elif role == "sep":      cfg = {"bg": t["border"]}
                 elif role == "list":     cfg = {"bg": t["listbg"], "fg": t["fg"],
                                                 "selectbackground": t["listsel"], "selectforeground": C_WHITE}
                 elif role == "entry":    cfg = {"bg": t["panel"], "fg": t["fg"], "insertbackground": t["fg"]}
@@ -1472,6 +1487,9 @@ class App:
         b = tk.Label(parent, text=text, cursor="hand2",
                      font=(FONT_UI, size), padx=14, pady=8)
         b.bind("<Button-1>", lambda e: cmd())
+        # 滑入亮起（讀當下主題，深/淺色都正確）——沒有 hover 回饋按鈕像是死的
+        b.bind("<Enter>", lambda e: b.configure(bg=self.theme()["card"]))
+        b.bind("<Leave>", lambda e: b.configure(bg=self.theme()["panel"]))
         self._track(b, "neutralbtn")
         return b
 
@@ -1559,8 +1577,11 @@ class App:
         self.tr(self._btn(act, "", self.on_close, C_RED), "main.quit").pack(
             side="left", expand=True, fill="x")
 
+        # 頁腳：細分隔線 + 狀態列，讓底部有明確的視覺收尾
+        sep = tk.Frame(parent, height=1); sep.pack(fill="x", padx=20, pady=(8, 0))
+        self._track(sep, "sep")
         self.status = tk.Label(parent, text="", font=(FONT_UI, SZ_SMALL), anchor="w")
-        self.status.pack(fill="x", padx=20, pady=(4, 12)); self._track(self.status, "muted")
+        self.status.pack(fill="x", padx=20, pady=(6, 12)); self._track(self.status, "muted")
 
     def _service_card(self, parent, port, name, script, args, needs):
         t = self.theme()
@@ -2408,20 +2429,25 @@ class App:
         row = self.rows[port]
         py = get_py()
         if not py:
-            row["status"].config(text="等待 Python 環境…", fg=C_AMBER); return
+            row["sticky"] = True
+            row["status"].config(text=self.t("svc.needPy"), fg=C_AMBER); return
         script_path = os.path.join(ROOT, row["script"])
         if not os.path.isfile(script_path):
-            row["status"].config(text=f"找不到 {row['script']}（需安裝 GPT-SoVITS）", fg=C_AMBER); return
+            row["sticky"] = True
+            row["status"].config(text=self.t("svc.needInstall", script=row["script"]), fg=C_AMBER); return
         if row["needs"] and not have_voice_models():
-            row["status"].config(text="需先匯入聲音模型（進階分頁）", fg=C_AMBER); return
+            row["sticky"] = True
+            row["status"].config(text=self.t("svc.needModel"), fg=C_AMBER); return
         try:
             cmd = self._build_cmd(port)
             p = subprocess.Popen(cmd, cwd=ROOT,
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **POPEN_KW)
             self.procs[port] = p
-            self.set_status(f"啟動 {row['name']} …")
+            row["sticky"] = False
+            self.set_status(self.t("status.starting", name=row["name"]))
         except Exception as exc:
-            row["status"].config(text=f"啟動失敗：{exc}", fg=C_RED)
+            row["sticky"] = True
+            row["status"].config(text=self.t("svc.startFail", err=exc), fg=C_RED)
 
     def stop(self, port):
         p = self.procs.pop(port, None)
@@ -2669,6 +2695,11 @@ class App:
         if not self.adb:
             self.set_status("尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）")
             return
+        # 防重入：自動同步（服務啟動後）與 adb 偵測後各排一次、加上手動按鈕，
+        # 可能同時觸發 → 兩個 adb push/pull 併發互踩。進行中就跳過。
+        if self._sync_running:
+            return
+        self._sync_running = True
         via = f"無線 {wifi_ip}" if wifi_ip else "USB"
         self.set_status(f"同步聲音模型中（{via}）…（首次較久）")
         def work():
@@ -2693,9 +2724,26 @@ class App:
                     msg = out_tail[-1] if out_tail else "同步完成"
             except Exception as exc:
                 msg = f"同步失敗：{exc}"
+            finally:
+                self._sync_running = False
             self.root.after(0, lambda: self.set_status(msg))
             if have_voice_models() and not port_up(9880):
                 self.root.after(0, lambda: self.start("9880"))
+        threading.Thread(target=work, daemon=True).start()
+
+    # ── 網路位址背景快取 ─────────────────────────────────────────
+    def _start_net_watcher(self):
+        """LAN / Tailscale IP 由背景執行緒每 5 秒更新一次快取，refresh() 只讀快取。
+        絕不在 UI 執行緒 spawn 子程序（tailscale CLI / ipconfig），避免介面週期性卡頓。"""
+        def work():
+            import time as _t
+            while True:
+                try:
+                    self._net["lan"] = lan_ip()
+                    self._net["ts"] = tailscale_ip()
+                except Exception:
+                    pass
+                _t.sleep(5)
         threading.Thread(target=work, daemon=True).start()
 
     # ── 刷新循環 ─────────────────────────────────────────────────
@@ -2709,6 +2757,7 @@ class App:
             up      = port_up(int(port))
             loading = not up and port in self.procs and self.procs[port].poll() is None
             if up:
+                row["sticky"] = False          # 服務起來了 → 解除保留的錯誤/提示文字
                 row["dot"].config(fg=C_GREEN)
                 row["status"].config(text=self.t("svc.running", port=port), fg=C_GREEN)
                 row["btn"].config(text=self.t("btn.stop"), bg=C_RED)
@@ -2718,15 +2767,16 @@ class App:
                 row["btn"].config(text=self.t("btn.stop"), bg=C_RED)
             else:
                 row["dot"].config(fg=t["muted"])
-                if "找不到" not in (row["status"].cget("text") or "") \
-                        and "需先" not in (row["status"].cget("text") or "") \
-                        and "等待" not in (row["status"].cget("text") or ""):
+                # sticky＝start() 留下的錯誤/提示（缺環境、缺模型…），別被例行刷新蓋掉。
+                # 舊版用「中文子字串嗅探」判斷，英文介面下永遠不匹配 → 提示每 2.5 秒被洗掉。
+                if not row.get("sticky"):
                     row["status"].config(text=self.t("svc.stopped", port=port), fg=t["muted"])
                 row["btn"].config(text=self.t("btn.start"), bg=C_GREEN)
 
-        if not self.adb:
-            self.adb = ""
-        lan = lan_ip(); ts = tailscale_ip()
+        # 網路位址一律讀快取（由背景執行緒更新）——
+        # 在 UI 執行緒跑 tailscale_ip()/lan_ip() 會 spawn 子程序（最壞 3 秒 timeout），
+        # 每 2.5 秒凍一次介面，就是「操作起來粗糙」的元凶。
+        lan = self._net.get("lan", ""); ts = self._net.get("ts", "")
         adb_ok = bool(self.adb)
 
         usb_url  = "http://127.0.0.1:9880" if adb_ok else self.t("conn.usbNeed")
@@ -2746,11 +2796,12 @@ class App:
         self.root.after(2500, self.refresh)
 
     def on_close(self):
-        self.set_status("正在停止所有服務…")
+        self.set_status(self.t("status.stopping"))
         self.root.update_idletasks()
         for port, *_ in SERVICES:
             self.stop(port)
-        self.stop("9890")
+        # 註：不可停不屬於我們的埠（舊版曾停 9890——stop() 會 taskkill 任何佔用者，
+        # 可能誤殺使用者電腦上無關的程式）。9879 橋接是行程內執行緒，隨行程結束。
         self.root.destroy()
 
 
