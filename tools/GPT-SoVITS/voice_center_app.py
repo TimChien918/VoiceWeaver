@@ -490,6 +490,8 @@ I18N = {
     "svc.startFail":   {"zh-TW":"啟動失敗：{err}", "en":"Failed to start: {err}", "ja":"起動失敗：{err}", "ko":"시작 실패: {err}"},
     "status.stopping": {"zh-TW":"正在停止所有服務…", "en":"Stopping all services…", "ja":"全サービスを停止中…", "ko":"모든 서비스 중지 중…"},
     "status.starting": {"zh-TW":"啟動 {name} …", "en":"Starting {name}…", "ja":"{name} を起動中…", "ko":"{name} 시작 중…"},
+    "status.ready":    {"zh-TW":"{name} 已就緒", "en":"{name} is ready", "ja":"{name} の準備完了", "ko":"{name} 준비 완료"},
+    "status.allReady": {"zh-TW":"全部服務已就緒", "en":"All services ready", "ja":"全サービス準備完了", "ko":"모든 서비스 준비 완료"},
     # 連線卡
     "conn.title": {"zh-TW":"手機連線位址", "en":"Phone connection address", "ja":"スマホ接続アドレス", "ko":"휴대폰 연결 주소"},
     "conn.sub":   {"zh-TW":"手機 App 的「電腦語音中心」填入任一位址即可連線（點位址可複製）", "en":"In the phone app's “Computer Voice Center”, enter any address to connect (tap to copy).", "ja":"スマホアプリの「PCボイスセンター」にいずれかのアドレスを入力で接続（タップでコピー）。", "ko":"휴대폰 앱의 ‘컴퓨터 보이스 센터’에 아무 주소나 입력하면 연결 (탭하여 복사)."},
@@ -2817,6 +2819,21 @@ class App:
                 if not row.get("sticky"):
                     row["status"].config(text=self.t("svc.stopped", port=port), fg=t["muted"])
                 row["btn"].config(text=self.t("btn.start"), bg=C_GREEN)
+
+        # 狀態列自我修正：start() 設的「啟動 X…」在服務真的起來後不會自己更新（會卡在「啟動中」）。
+        # 若目前狀態列正好是某個「已就緒」服務的啟動訊息，就換成「已就緒」。用 t() 比對 → i18n 安全，
+        # 且只在文字「還是那句啟動訊息」時才動，不會蓋掉同步/錯誤等其他訊息。
+        try:
+            cur = self.status.cget("text") or ""
+            for _p, _r in self.rows.items():
+                if cur == self.t("status.starting", name=_r["name"]) and port_up(int(_p)):
+                    allup = all(port_up(int(pp)) for pp in self.rows
+                                if not self.rows[pp].get("sticky"))
+                    self.set_status(self.t("status.allReady") if allup
+                                    else self.t("status.ready", name=_r["name"]))
+                    break
+        except Exception:
+            pass
 
         # 網路位址一律讀快取（由背景執行緒更新）——
         # 在 UI 執行緒跑 tailscale_ip()/lan_ip() 會 spawn 子程序（最壞 3 秒 timeout），
