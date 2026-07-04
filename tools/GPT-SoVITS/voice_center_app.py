@@ -1020,15 +1020,54 @@ class App:
 
     def _on_adb_found(self, path: str):
         self.adb = path
-        if path:
-            self.root.after(500, self._adb_reverse_bg)
-            self.root.after(1500, self._maybe_autosync)
+        if not path:
+            return
+        def warm_then_watch():
+            # 冷啟時第一次 `adb devices` 要先啟 daemon（實測約 5 秒），一次性偵測常因此錯過手機。
+            # 先把 daemon 暖機起來，之後查裝置才即時、可靠。
+            try:
+                subprocess.run([path, "start-server"], capture_output=True, timeout=25, **POPEN_KW)
+            except Exception:
+                pass
+            self.root.after(0, self._adb_reverse_bg)
+            self.root.after(0, self._start_device_watcher)   # USB 一接上就自動同步（含開 App 後才插）
+            self.root.after(0, self._maybe_autosync)          # 無 USB 時的一次性無線嘗試
+        threading.Thread(target=warm_then_watch, daemon=True).start()
+
+    def _start_device_watcher(self):
+        """背景每 4 秒偵測 USB 手機：新接上（或拔了重插）就自動雙向同步。
+        解決兩件事：(1) 開 App 時手機還沒插好，之後插上會自動同步；
+        (2) 冷啟 adb daemon 需數秒，單次偵測常錯過。"""
+        if getattr(self, "_dev_watch_on", False):
+            return
+        self._dev_watch_on = True
+        def work():
+            import time as _t
+            last = None
+            while True:
+                try:
+                    serial = self._usb_serial() if self.adb else ""
+                    if serial:
+                        if serial != last and not self._sync_running:
+                            last = serial
+                            self.root.after(0, lambda s=serial: self._on_usb_connected(s))
+                    else:
+                        last = None       # 拔線 → 重置，重插會再觸發
+                except Exception:
+                    pass
+                _t.sleep(4)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_usb_connected(self, serial: str):
+        self.set_status(f"偵測到手機（USB {serial[:14]}）→ 自動同步聲音模型…")
+        self._adb_reverse_bg()
+        threading.Thread(target=lambda: self._arm_wireless(serial), daemon=True).start()
+        self.sync_models()
 
     def _start_all_services(self):
         self._detect_device_bg()
         for port, name, script, args, needs in SERVICES:
             self.start(port)
-        self.root.after(500, self._maybe_autosync)
         self._start_lang_server()
 
     def _start_lang_server(self):
@@ -2539,18 +2578,22 @@ class App:
         return self._load_phone_ip()
 
     def _usb_serial(self) -> str:
-        """目前 USB 裝置序號（無線 serial 含 . 或 :）；無則空字串。"""
+        """目前 USB 裝置序號（無線 serial 含 . 或 :）；無則空字串。
+        timeout 放寬到 12 秒並重試一次——冷啟時第一次要啟 daemon 約 5 秒，6 秒 timeout 會擦邊漏掉。"""
         if not self.adb:
             return ""
-        try:
-            out = subprocess.run([self.adb, "devices"], capture_output=True, text=True, timeout=6, **POPEN_KW).stdout
-            for l in out.splitlines()[1:]:
-                if "\tdevice" in l:
-                    s = l.split("\t")[0]
-                    if "." not in s and ":" not in s:
-                        return s
-        except Exception:
-            pass
+        for _attempt in range(2):
+            try:
+                out = subprocess.run([self.adb, "devices"], capture_output=True,
+                                     text=True, timeout=12, **POPEN_KW).stdout
+                for l in out.splitlines()[1:]:
+                    if "\tdevice" in l:
+                        s = l.split("\t")[0]
+                        if "." not in s and ":" not in s:
+                            return s
+                return ""   # 有回應但無 USB 裝置
+            except Exception:
+                continue    # timeout/例外 → 再試一次（daemon 剛啟動）
         return ""
 
     def _read_wlan_ip(self, serial: str) -> str:
@@ -2646,14 +2689,12 @@ class App:
         self._save_phone_ip(ip)
 
     def _maybe_autosync(self):
+        """只負責「無 USB 時的一次性無線嘗試」。USB 由 _start_device_watcher 持續處理。"""
         if not self.adb: return
         def _check():
             try:
-                usb = self._usb_serial()
-                if usb:
-                    self.root.after(0, self.sync_models)                 # 有線（USB）
-                    self._arm_wireless(usb)                              # 學習手機 Wi-Fi 端點＋填欄位
-                    return
+                if self._usb_serial():
+                    return                                               # 有 USB → 交給裝置監看
                 ip = self._autodetect_phone_ip_blocking()                # 沒 USB → 全自動偵測
                 if ip:
                     self._save_phone_ip(ip)
@@ -2667,25 +2708,27 @@ class App:
         threading.Thread(target=_check, daemon=True).start()
 
     def manual_sync(self):
-        """手動同步：USB 優先；沒插線則用 IP 欄位（可手動改），空白就先自動偵測。"""
-        usb = self._usb_serial()
-        if usb:
-            self.sync_models()
-            threading.Thread(target=lambda: self._arm_wireless(usb), daemon=True).start()
+        """手動同步：USB 優先；沒插線則用 IP 欄位（可手動改），空白就先自動偵測。
+        偵測全程在背景執行緒（_usb_serial 冷啟可能等到 12 秒），避免凍住 UI。"""
+        if not self.adb:
+            # adb 還沒就緒（或沒安裝）→ 先裝/找 adb，好了再由裝置監看自動同步
+            self.set_status("正在準備 USB 工具（adb）…")
+            self.ensure_adb(manual=True)
             return
-        ip = self._current_ip_field()
-        if ip:
-            self._save_phone_ip(ip)
-            self.sync_models(ip)
-            return
-        self.set_status("未接 USB 且 IP 欄位空白，自動偵測中…")
+        self.set_status("偵測手機中…")
         def work():
-            found = self._autodetect_phone_ip_blocking()
-            if found:
-                self._save_phone_ip(found)
-                self.root.after(0, lambda: (self.phone_ip_var.set(found), self.sync_models(found)))
+            usb = self._usb_serial()
+            if usb:
+                threading.Thread(target=lambda: self._arm_wireless(usb), daemon=True).start()
+                self.root.after(0, self.sync_models)
+                return
+            ip = self._current_ip_field() or self._autodetect_phone_ip_blocking()
+            if ip:
+                self._save_phone_ip(ip)
+                self.root.after(0, lambda: (self.phone_ip_var.set(ip), self.sync_models(ip)))
             else:
-                self.root.after(0, lambda: self.set_status("找不到手機——請在 IP 欄位手動輸入，或用 USB 接一次"))
+                self.root.after(0, lambda: self.set_status(
+                    "找不到手機——請確認 USB 已接且手機已開「USB 偵錯」並允許授權，或在 IP 欄位手動輸入"))
         threading.Thread(target=work, daemon=True).start()
 
     def sync_models(self, wifi_ip: str = ""):
@@ -2696,9 +2739,10 @@ class App:
         if not self.adb:
             self.set_status("尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）")
             return
-        # 防重入：自動同步（服務啟動後）與 adb 偵測後各排一次、加上手動按鈕，
-        # 可能同時觸發 → 兩個 adb push/pull 併發互踩。進行中就跳過。
+        # 防重入：自動同步（裝置偵測）與手動按鈕可能同時觸發 → 兩個 adb push/pull 併發互踩。
+        # 進行中就跳過，但要回饋（否則使用者按了沒反應會以為「無法同步」）。
         if self._sync_running:
+            self.set_status("聲音模型同步已在進行中，請稍候…")
             return
         self._sync_running = True
         via = f"無線 {wifi_ip}" if wifi_ip else "USB"
