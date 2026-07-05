@@ -1,5 +1,7 @@
 package com.example.ai
 
+import com.example.ui.I18n
+
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
@@ -71,7 +73,7 @@ class ModelDownloader(private val context: Context) {
     ): Result<Unit> {
         val cleanUrl = normalizeModelUrl(url)
         if (!cleanUrl.startsWith("https://huggingface.co/") && !cleanUrl.startsWith("https://")) {
-            return Result.failure(IllegalArgumentException("請貼上公開 HTTPS 模型下載 URL"))
+            return Result.failure(IllegalArgumentException(I18n.tr("請貼上公開 HTTPS 模型下載 URL")))
         }
         return downloadFromUrls(listOf(cleanUrl), onProgress)
     }
@@ -79,7 +81,7 @@ class ModelDownloader(private val context: Context) {
     suspend fun probeUrl(url: String): Result<ModelProbeResult> = withContext(Dispatchers.IO) {
         val cleanUrl = normalizeModelUrl(url)
         if (!cleanUrl.startsWith("https://")) {
-            return@withContext Result.failure(IllegalArgumentException("請貼上 HTTPS 模型 URL"))
+            return@withContext Result.failure(IllegalArgumentException(I18n.tr("請貼上 HTTPS 模型 URL")))
         }
         var currentUrl = cleanUrl
         var conn: HttpURLConnection? = null

@@ -1,5 +1,7 @@
 package com.example.work
 
+import com.example.ui.I18n
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -39,8 +41,8 @@ object RehabScheduler {
             val mgr = context.getSystemService(NotificationManager::class.java)
             if (mgr.getNotificationChannel(CHANNEL_ID) == null) {
                 mgr.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "復健提醒", NotificationManager.IMPORTANCE_DEFAULT)
-                        .apply { description = "每日語音復健練習提醒" }
+                    NotificationChannel(CHANNEL_ID, I18n.tr("復健提醒"), NotificationManager.IMPORTANCE_DEFAULT)
+                        .apply { description = I18n.tr("每日語音復健練習提醒") }
                 )
             }
         }
@@ -95,8 +97,8 @@ class ReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         )
         val notif = NotificationCompat.Builder(applicationContext, RehabScheduler.CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("該練習語音復健囉 🎤")
-            .setContentText("每天一點點，持續進步。點我開始今天的練習。")
+            .setContentTitle(I18n.tr("該練習語音復健囉 🎤"))
+            .setContentText(I18n.tr("每天一點點，持續進步。點我開始今天的練習。"))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

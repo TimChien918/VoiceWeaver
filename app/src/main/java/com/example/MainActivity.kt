@@ -1,5 +1,7 @@
 package com.example
 
+import com.example.ui.I18n
+
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
@@ -70,11 +72,11 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(currentRoute, eyeSettings.eyeControlEnabled, eyeSettings.eyeControlMode) {
                         if (!eyeSettings.eyeControlEnabled) return@LaunchedEffect
                         val tabs = listOf(
-                            "重組" to "main",
-                            "語音復健" to "rehab",
-                            "報告" to "report",
-                            "歷史" to "history",
-                            "設定" to "settings"
+                            I18n.tr("重組") to "main",
+                            I18n.tr("語音復健") to "rehab",
+                            I18n.tr("報告") to "report",
+                            I18n.tr("歷史") to "history",
+                            I18n.tr("設定") to "settings"
                         )
                         viewModel.registerScanTargets(tabs.map { (label, route) ->
                             VoiceWeaverViewModel.ScanTarget(label) { navController.go(route) }

@@ -1,5 +1,7 @@
 package com.example.ai
 
+import com.example.ui.I18n
+
 import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
@@ -357,7 +359,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             gazeX = x,
             gazeY = y,
             mode = EyeInteractionMode.GAZE_DWELL,   // 只有鼻子頭控 + 停留點擊一種模式
-            message = "鼻子頭控追蹤中：轉頭移動游標"
+            message = I18n.tr("鼻子頭控追蹤中：轉頭移動游標")
         )
     }
 
@@ -366,7 +368,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun recalibrateEyeGestures() {
         // nose_tracker.html 暴露 egRecalibrate()，由 MainActivity 執行 JS 把目前頭部姿勢設為中央
-        _eyeControlState.value = _eyeControlState.value.copy(message = "已重新置中：保持自然姿勢，轉頭即可移動游標")
+        _eyeControlState.value = _eyeControlState.value.copy(message = I18n.tr("已重新置中：保持自然姿勢，轉頭即可移動游標"))
     }
 
     // 給 LocationTracker 用的住家錨點。在 init {} 訂閱 settings flow 之後寫入；
@@ -560,7 +562,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                     triggerEmergencyReport(text)
                 } else {
                     _speakGate.value = SpeakGate.Locked(
-                        "內容涉及高風險意圖，語音輸出已鎖定。請照護者協助確認。"
+                        I18n.tr("內容涉及高風險意圖，語音輸出已鎖定。請照護者協助確認。")
                     )
                 }
             }
@@ -573,18 +575,18 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 同時開啟「與家人對話」危機介入視窗（含前後鏡頭 + 即時音檔）。
      */
     fun triggerEmergencyReport(text: String, poiTag: String = "") {
-        _speakGate.value = SpeakGate.Locked("偵測到高風險訊息，正在通報緊急聯絡人…")
+        _speakGate.value = SpeakGate.Locked(I18n.tr("偵測到高風險訊息，正在通報緊急聯絡人…"))
         viewModelScope.launch {
             val outcome = runCatching {
                 emergencyTrigger.interceptAndReport(text, poiTag = poiTag)
             }.getOrNull()
             _speakGate.value = when (outcome) {
                 is com.example.safety.EmergencyTrigger.Outcome.Sent ->
-                    SpeakGate.Locked("⚠ 已通報緊急聯絡人。語音輸出已鎖定，請照護者協助。\n如有立即危險請撥打 1925 安心專線或 119。")
+                    SpeakGate.Locked(I18n.tr("⚠ 已通報緊急聯絡人。語音輸出已鎖定，請照護者協助。\n如有立即危險請撥打 1925 安心專線或 119。"))
                 is com.example.safety.EmergencyTrigger.Outcome.Failed ->
-                    SpeakGate.Locked("⚠ 偵測到高風險訊息，但通報傳送失敗（${outcome.reason.take(40)}）。請直接撥打 1925 安心專線或 119。")
+                    SpeakGate.Locked(I18n.tr("⚠ 偵測到高風險訊息，但通報傳送失敗（%s）。請直接撥打 1925 安心專線或 119。").format(outcome.reason.take(40)))
                 else ->
-                    SpeakGate.Locked("⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 1925 安心專線或 119。")
+                    SpeakGate.Locked(I18n.tr("⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 1925 安心專線或 119。"))
             }
         }
         // 開啟與家人即時對話的危機介入視窗（安撫情緒）
@@ -633,11 +635,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             "userInfo.displayName=%22VoiceWeaver%22"
         _crisisConv.value = CrisisConvState(
             active = true,
-            status = "正在通知家人…",
+            status = I18n.tr("正在通知家人…"),
             videoCallUrl = callUrl,
             messages = listOf(
-                CrisisChatMsg(CrisisSender.System, "已通知家人，請稍等。你並不孤單，我們一起慢慢呼吸。"),
-                CrisisChatMsg(CrisisSender.System, "可點下方「開始即時視訊通話」與家人面對面。")
+                CrisisChatMsg(CrisisSender.System, I18n.tr("已通知家人，請稍等。你並不孤單，我們一起慢慢呼吸。")),
+                CrisisChatMsg(CrisisSender.System, I18n.tr("可點下方「開始即時視訊通話」與家人面對面。"))
             )
         )
         // 前後鏡頭快照 + 視訊房連結送家人
@@ -661,10 +663,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             )
             _crisisConv.value = _crisisConv.value.copy(
                 photosSent = sent,
-                status = "已把現場畫面與視訊連結傳給家人"
+                status = I18n.tr("已把現場畫面與視訊連結傳給家人")
             )
             crisisAppend(CrisisChatMsg(CrisisSender.System,
-                if (sent > 0) "已把現場前後鏡頭畫面傳給家人，並送出視訊通話連結。" else "已把視訊通話連結傳給家人。"))
+                if (sent > 0) I18n.tr("已把現場前後鏡頭畫面傳給家人，並送出視訊通話連結。") else I18n.tr("已把視訊通話連結傳給家人。")))
         }
         // 輪詢家人回覆 + 指令（/call /camera /end）
         crisisPollOffset = 0L
@@ -676,7 +678,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                         crisisPollOffset = newOffset
                         replies.forEach { handleFamilyReply(it.text, chat) }
                         if (replies.isNotEmpty()) {
-                            _crisisConv.value = _crisisConv.value.copy(status = "家人正在陪你 💙")
+                            _crisisConv.value = _crisisConv.value.copy(status = I18n.tr("家人正在陪你 💙"))
                         }
                     }
                 kotlinx.coroutines.delay(3_000)
@@ -689,13 +691,13 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         val cmd = raw.trim().lowercase()
         when {
             cmd == "/call" -> {
-                crisisAppend(CrisisChatMsg(CrisisSender.System, "家人發起視訊通話，正在自動加入…"))
+                crisisAppend(CrisisChatMsg(CrisisSender.System, I18n.tr("家人發起視訊通話，正在自動加入…")))
                 // 強制使用者加入：+1 讓 UI 觀察到並開啟視訊房
                 _crisisConv.value = _crisisConv.value.copy(forceJoinCall = _crisisConv.value.forceJoinCall + 1)
                 com.example.net.TelegramClient.sendEmergency("✅ 已要求使用者加入視訊。", chat)
             }
             cmd.startsWith("/cam") -> {  // /camera /camra 都接受
-                crisisAppend(CrisisChatMsg(CrisisSender.System, "家人要求再次拍攝現場，拍攝中…"))
+                crisisAppend(CrisisChatMsg(CrisisSender.System, I18n.tr("家人要求再次拍攝現場，拍攝中…")))
                 val photos = runCatching { crisisMedia.captureBothCameras() }.getOrDefault(emptyList())
                 var sent = 0
                 photos.forEach { f ->
@@ -704,16 +706,16 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                     runCatching { f.delete() }
                 }
                 crisisAppend(CrisisChatMsg(CrisisSender.System,
-                    if (sent > 0) "已再次把現場畫面傳給家人。" else "再次拍攝失敗（請確認相機權限）。"))
+                    if (sent > 0) I18n.tr("已再次把現場畫面傳給家人。") else I18n.tr("再次拍攝失敗（請確認相機權限）。")))
             }
             cmd == "/end" -> {
-                crisisAppend(CrisisChatMsg(CrisisSender.System, "家人已結束對話，好好照顧自己 💙"))
+                crisisAppend(CrisisChatMsg(CrisisSender.System, I18n.tr("家人已結束對話，好好照顧自己 💙")))
                 com.example.net.TelegramClient.sendEmergency("🟢 對話已結束。", chat)
                 kotlinx.coroutines.delay(1_200)
                 closeCrisisConversation()
             }
             cmd.startsWith("/") -> {
-                crisisAppend(CrisisChatMsg(CrisisSender.System, "（未知指令：$raw）可用 /call /camera /end"))
+                crisisAppend(CrisisChatMsg(CrisisSender.System, I18n.tr("（未知指令：%s）可用 /call /camera /end").format(raw)))
             }
             else -> crisisAppend(CrisisChatMsg(CrisisSender.Family, raw))
         }
@@ -724,7 +726,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         if (_crisisConv.value.recordingVoice) return
         viewModelScope.launch {
             if (!crisisMedia.startVoice()) {
-                crisisAppend(CrisisChatMsg(CrisisSender.System, "（無法錄音，請確認麥克風權限）"))
+                crisisAppend(CrisisChatMsg(CrisisSender.System, I18n.tr("（無法錄音，請確認麥克風權限）")))
                 return@launch
             }
             _crisisConv.value = _crisisConv.value.copy(recordingVoice = true)
@@ -736,7 +738,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 com.example.net.TelegramClient.sendVoiceClip(clip, "🎙 使用者的語音訊息", crisisChatId())
                 runCatching { clip.delete() }
             } else {
-                crisisAppend(CrisisChatMsg(CrisisSender.System, "語音太短，未送出。"))
+                crisisAppend(CrisisChatMsg(CrisisSender.System, I18n.tr("語音太短，未送出。")))
             }
         }
     }
@@ -1865,7 +1867,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             val selected = _rehabState.value.chips.getOrNull(target).orEmpty()
             _eyeControlState.value = _eyeControlState.value.copy(
                 dwellProgress = 0f,
-                message = "凝視選取：$selected"
+                message = I18n.tr("凝視選取：%s").format(selected)
             )
             speakRehabChip(target)
         }
