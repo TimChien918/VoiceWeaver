@@ -78,7 +78,24 @@ def env_installed() -> bool:
 IS_WIN = (os.name == "nt")
 IS_MAC = (sys.platform == "darwin")
 ADB_BIN = "adb.exe" if IS_WIN else "adb"
-POPEN_KW = {"creationflags": 0x08000000} if IS_WIN else {}
+_CREATE_NO_WINDOW = 0x08000000
+_BELOW_NORMAL_PRIORITY = 0x00004000   # BELOW_NORMAL_PRIORITY_CLASS
+POPEN_KW = {"creationflags": _CREATE_NO_WINDOW} if IS_WIN else {}
+
+# AI 服務（torch）預設會吃滿所有核心，在低核心數機器上會把整台電腦卡到當機。
+# 保留至少 1~2 個核心給作業系統／UI，讓機器在合成時仍可操作。
+def _service_env() -> dict:
+    env = dict(os.environ)
+    cores = os.cpu_count() or 4
+    n = str(max(1, cores - 2) if cores <= 6 else cores - 3)   # 4 核→2、6 核→4、8 核→5…
+    for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+              "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "TORCH_NUM_THREADS",
+              "VOICEWEAVER_NUM_THREADS"):
+        env[k] = n
+    return env
+
+# 服務程序用「低於一般」的優先權啟動 → 即使 torch 吃滿核心，系統/滑鼠仍搶得到 CPU、不會整台凍住。
+_SERVICE_POPEN_KW = ({"creationflags": _CREATE_NO_WINDOW | _BELOW_NORMAL_PRIORITY} if IS_WIN else {})
 
 _PT_PLATFORM = "windows" if IS_WIN else ("darwin" if IS_MAC else "linux")
 PLATFORM_TOOLS_URL = f"https://dl.google.com/android/repository/platform-tools-latest-{_PT_PLATFORM}.zip"
@@ -1068,9 +1085,27 @@ class App:
 
     def _start_all_services(self):
         self._detect_device_bg()
-        for port, name, script, args, needs in SERVICES:
-            self.start(port)
         self._start_lang_server()
+        # 逐一啟動，不要三個服務一起載入模型——每個載入都會吃 ~85% CPU + 數 GB 記憶體，
+        # 在低核心/記憶體機器上同時載入會直接把電腦壓當機。等前一個起來再啟下一個。
+        self._start_services_sequential(0)
+
+    def _start_services_sequential(self, idx: int):
+        ports = [s[0] for s in SERVICES]
+        if idx >= len(ports):
+            return
+        port = ports[idx]
+        self.start(port)
+        launched = port in self.procs          # 沒啟動（缺模型等）就快速跳到下一個
+        def wait_next(elapsed=0):
+            done = (not launched) or port_up(int(port)) or elapsed >= 90000 \
+                   or (port in self.procs and self.procs[port].poll() is not None)
+            delay = 1500 if not launched else 2500
+            if done:
+                self.root.after(delay, lambda: self._start_services_sequential(idx + 1))
+            else:
+                self.root.after(2500, lambda: wait_next(elapsed + 2500))
+        self.root.after(300, wait_next)
 
     def _start_lang_server(self):
         """port 9879：手機語言同步 + 網頁橋接（皆帶 CORS，供 github.io 網頁從 localhost/Tailscale 呼叫）
@@ -2482,8 +2517,10 @@ class App:
             row["status"].config(text=self.t("svc.needModel"), fg=C_AMBER); return
         try:
             cmd = self._build_cmd(port)
-            p = subprocess.Popen(cmd, cwd=ROOT,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **POPEN_KW)
+            # 限制 torch 執行緒 + 低優先權 → 語音/生圖服務啟動時不會把電腦吃到當機
+            p = subprocess.Popen(cmd, cwd=ROOT, env=_service_env(),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 **_SERVICE_POPEN_KW)
             self.procs[port] = p
             row["sticky"] = False
             self.set_status(self.t("status.starting", name=row["name"]))
