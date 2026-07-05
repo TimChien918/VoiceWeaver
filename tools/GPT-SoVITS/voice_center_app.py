@@ -840,6 +840,15 @@ def resolve_existing(path: str) -> str:
 class App:
     def __init__(self, root: tk.Tk):
         self.root = root
+        # 對話框尺寸倍率：固定像素的 Toplevel 在高 DPI（Tk scaling>1.5）下會裝不下 → 依縮放放大。
+        # 基準 1.5（版面設計時的縮放）；Mac 維持 1.5 → 倍率 1.0（不受影響）。
+        try:
+            self._geo_mult = max(1.0, float(root.tk.call("tk", "scaling")) / 1.5)
+        except Exception:
+            self._geo_mult = 1.0
+        # 偵測到的手機 Wi-Fi IP（供無線同步用）。之前漏建這個 StringVar → 自動偵測 IP 時
+        # self.phone_ip_var.set(...) 直接 AttributeError 崩潰（無 USB 走無線那條路必踩）。
+        self.phone_ip_var = tk.StringVar()
         self.procs: dict[str, subprocess.Popen] = {}
         self.rows: dict[str, dict] = {}
         self.adb: str = ""
@@ -2080,7 +2089,7 @@ class App:
 
         dlg = tk.Toplevel(self.root)
         dlg.title(title)
-        dlg.geometry("660x560")
+        dlg.geometry(f"{int(660 * self._geo_mult)}x{int(560 * self._geo_mult)}")
         dlg.resizable(False, False)
         dlg.configure(bg=t["bg"])
         dlg.transient(self.root); dlg.grab_set()
@@ -2318,7 +2327,7 @@ class App:
         t = self.theme()
         dlg = tk.Toplevel(self.root)
         dlg.title("批量匯入進度")
-        dlg.geometry("520x360")
+        dlg.geometry(f"{int(520 * self._geo_mult)}x{int(360 * self._geo_mult)}")
         dlg.configure(bg=t["bg"])
         dlg.transient(self.root)
         dlg.grab_set()
@@ -2952,17 +2961,30 @@ def main():
     if not _acquire_single_instance():
         return
     # DPI 感知：高解析(150%/175%)螢幕不再被 Windows 拉伸成模糊 → 字體邊緣清晰
+    win_dpi = 96
     if IS_WIN:
         try:
             import ctypes
             try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
             except Exception: ctypes.windll.user32.SetProcessDPIAware()
+            # 讀實際螢幕 DPI（96=100%、144=150%、168=175%…），用來換算正確的 Tk 縮放
+            try:
+                dc = ctypes.windll.user32.GetDC(0)
+                win_dpi = ctypes.windll.gdi32.GetDeviceCaps(dc, 88) or 96   # 88 = LOGPIXELSX
+                ctypes.windll.user32.ReleaseDC(0, dc)
+            except Exception:
+                win_dpi = 96
         except Exception:
             pass
     root = tk.Tk()
     root.withdraw()                        # 先藏起來，等版面全部建好再一次顯示 → 開啟乾淨、不會看到逐塊拼出來
-    try: root.tk.call("tk", "scaling", 1.5)
-    except Exception: pass
+    # Tk 縮放：Windows 依「實際螢幕 DPI」換算（否則寫死 1.5 在 100%/175% 螢幕上會過大或過小、視窗被切）；
+    #          Mac/Linux 維持既有 1.5（Retina 表現正常）。
+    try:
+        scaling = max(1.0, win_dpi / 72.0) if IS_WIN else 1.5
+        root.tk.call("tk", "scaling", scaling)
+    except Exception:
+        pass
     app = App(root)
     root.update_idletasks()                # 強制完成一次排版
     app.fit_to_content()                   # 依實際內容調整視窗大小（否則底部按鈕/狀態列會被切掉）
