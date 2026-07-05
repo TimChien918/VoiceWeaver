@@ -43,6 +43,26 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+# ── 輸出多語系（由 App 以環境變數 VOICEWEAVER_LANG 傳入；狀態列顯示對應語言）──
+_LANG = (os.environ.get("VOICEWEAVER_LANG", "zh-TW") or "zh-TW").split("-")[0]
+_STR = {
+    "pair":       {"en": "[sync] Wireless pairing {t}: {o}", "ja": "[sync] 無線ペアリング {t}：{o}", "ko": "[sync] 무선 페어링 {t}: {o}"},
+    "pair_fail":  {"en": "[sync] Wireless pairing failed: {e}", "ja": "[sync] 無線ペアリング失敗：{e}", "ko": "[sync] 무선 페어링 실패: {e}"},
+    "connect":    {"en": "[sync] Wireless connect {t}: {o}", "ja": "[sync] 無線接続 {t}：{o}", "ko": "[sync] 무선 연결 {t}: {o}"},
+    "no_adb":     {"en": "[sync] adb not found; skipping voice-model sync", "ja": "[sync] adb が見つからず、音声モデル同期をスキップ", "ko": "[sync] adb 없음, 음성 모델 동기화 건너뜀"},
+    "no_dev":     {"en": "[sync] No available device; skipping voice-model sync", "ja": "[sync] 利用可能な端末なし、同期をスキップ", "ko": "[sync] 사용 가능한 기기 없음, 동기화 건너뜀"},
+    "no_resp":    {"en": "[sync] Phone not responding; skipped (no deletion)", "ja": "[sync] スマホ無応答、スキップ（削除なし）", "ko": "[sync] 휴대폰 무응답, 건너뜀 (삭제 안 함)"},
+    "start":      {"en": "[sync] Device {s}: starting two-way sync ↔ {r}", "ja": "[sync] 端末 {s}：双方向同期を開始 ↔ {r}", "ko": "[sync] 기기 {s}: 양방향 동기화 시작 ↔ {r}"},
+    "folders":    {"en": "[sync] Sync folders (auto-found {n}): {l}", "ja": "[sync] 同期フォルダ（自動探索 {n}）：{l}", "ko": "[sync] 동기화 폴더 (자동 탐색 {n}): {l}"},
+    "cap":        {"en": "[sync] ⚠ Would delete {d} files (over the {c} cap) — looks abnormal, skipping deletion this round", "ja": "[sync] ⚠ {d} 個の削除を検出（上限 {c} 超過）、異常のため今回は削除せず", "ko": "[sync] ⚠ {d}개 삭제 감지 (상한 {c} 초과), 이상으로 이번엔 삭제 안 함"},
+    "done":       {"en": "[sync] Done: PC→phone {a}, phone→PC {b}, deleted(PC {dl}/phone {dp}), unchanged {u}", "ja": "[sync] 完了：PC→スマホ {a}、スマホ→PC {b}、削除(PC {dl}/スマホ {dp})、未変更 {u}", "ko": "[sync] 완료: PC→폰 {a}, 폰→PC {b}, 삭제(PC {dl}/폰 {dp}), 변경 없음 {u}"},
+    "done_first": {"en": " (first run: union only, no deletion)", "ja": "（初回：統合のみ削除なし）", "ko": " (첫 실행: 통합만, 삭제 없음)"},
+}
+def _t(key: str, **kw) -> str:
+    row = _STR.get(key, {})
+    tmpl = row.get(_LANG)          # 查無語言（含 zh）→ 用下面各處保留的中文預設
+    return tmpl.format(**kw) if tmpl else None
+
 LOCAL_ROOT = os.path.dirname(os.path.abspath(__file__))
 PHONE_ROOT = "/sdcard/VoiceWeaver/voice_models"
 STATE_FILE = os.path.join(LOCAL_ROOT, ".sync_state.json")   # 本機基準快照（每台電腦各自一份）
@@ -242,9 +262,9 @@ def adb_pair(adb: str, target: str, code: str) -> None:
     """Android 11+ 無線偵錯首次配對。target=HOST:PORT（「無線偵錯」頁的配對 IP:埠），code=6 位配對碼。"""
     try:
         out = subprocess.run([adb, "pair", target, code], capture_output=True, text=True, timeout=25, **POPEN_KW).stdout
-        print(f"[sync] 無線配對 {target}：{out.strip()}", flush=True)
+        print(_t("pair", t=target, o=out.strip()) or f"[sync] 無線配對 {target}：{out.strip()}", flush=True)
     except Exception as e:
-        print(f"[sync] 無線配對失敗：{e}", flush=True)
+        print(_t("pair_fail", e=e) or f"[sync] 無線配對失敗：{e}", flush=True)
 
 
 def adb_connect(adb: str, target: str) -> str:
@@ -256,7 +276,7 @@ def adb_connect(adb: str, target: str) -> str:
         out = subprocess.run([adb, "connect", target], capture_output=True, text=True, timeout=12, **POPEN_KW).stdout
     except Exception:
         return ""
-    print(f"[sync] 無線連線 {target}：{out.strip()}", flush=True)
+    print(_t("connect", t=target, o=out.strip()) or f"[sync] 無線連線 {target}：{out.strip()}", flush=True)
     return target if ("connected to" in out or "already connected" in out) else ""
 
 
@@ -269,7 +289,7 @@ def main() -> int:
 
     adb = find_adb()
     if not adb:
-        print("[sync] 找不到 adb，略過聲音模型同步", flush=True)
+        print(_t("no_adb") or "[sync] 找不到 adb，略過聲音模型同步", flush=True)
         return 0
 
     # ── 無線（Wi-Fi）連線：像 USB 但走無線，不需雲端、不需常開伺服器 ──
@@ -286,17 +306,17 @@ def main() -> int:
 
     serial = pick_device(adb, override)
     if not serial:
-        print("[sync] 沒有可用裝置，略過聲音模型同步", flush=True)
+        print(_t("no_dev") or "[sync] 沒有可用裝置，略過聲音模型同步", flush=True)
         return 0
     if not phone_reachable(adb, serial):
-        print("[sync] 手機無回應，略過（不刪除）", flush=True)
+        print(_t("no_resp") or "[sync] 手機無回應，略過（不刪除）", flush=True)
         return 0
-    print(f"[sync] 裝置 {serial}：開始雙向同步 ↔ {PHONE_ROOT}", flush=True)
+    print(_t("start", s=serial, r=PHONE_ROOT) or f"[sync] 裝置 {serial}：開始雙向同步 ↔ {PHONE_ROOT}", flush=True)
     adb_sh(adb, serial, f"mkdir -p '{PHONE_ROOT}'")
 
     # 自動探索要同步的子資料夾（取代寫死清單，使新增的權重版本/錄音自動納入）
     subdirs = discover_subdirs(adb, serial)
-    print(f"[sync] 同步資料夾（自動探索 {len(subdirs)}）：{', '.join(subdirs)}", flush=True)
+    print(_t("folders", n=len(subdirs), l=', '.join(subdirs)) or f"[sync] 同步資料夾（自動探索 {len(subdirs)}）：{', '.join(subdirs)}", flush=True)
 
     baseline = load_baseline()
     first_run = baseline is None
@@ -343,7 +363,7 @@ def main() -> int:
     total_del = len(del_local) + len(del_phone)
     cap = max(20, len(baseline) // 2)
     if total_del > cap:
-        print(f"[sync] ⚠ 偵測到要刪除 {total_del} 個檔（超過上限 {cap}），疑似異常，本輪不刪除", flush=True)
+        print(_t("cap", d=total_del, c=cap) or f"[sync] ⚠ 偵測到要刪除 {total_del} 個檔（超過上限 {cap}），疑似異常，本輪不刪除", flush=True)
         del_local, del_phone = [], []
 
     pushed = sum(1 for s, r in copy_push if push(adb, serial, s, r))
@@ -360,9 +380,14 @@ def main() -> int:
             present.add(f"{sub}/{rel}")
     save_baseline(present)
 
-    print(f"[sync] 完成：電腦→手機 {pushed}、手機→電腦 {pulled}、"
-          f"刪除(電腦 {dl}/手機 {dp})、未變 {skipped}"
-          + ("（首次：只聯集不刪除）" if first_run else ""), flush=True)
+    _done = _t("done", a=pushed, b=pulled, dl=dl, dp=dp, u=skipped)
+    if _done:
+        if first_run: _done += (_t("done_first") or "")
+        print(_done, flush=True)
+    else:
+        print(f"[sync] 完成：電腦→手機 {pushed}、手機→電腦 {pulled}、"
+              f"刪除(電腦 {dl}/手機 {dp})、未變 {skipped}"
+              + ("（首次：只聯集不刪除）" if first_run else ""), flush=True)
     return 0
 
 

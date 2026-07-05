@@ -483,6 +483,46 @@ HELP_TEXT = """使用說明
 UI_LANGS = [("zh-TW", "繁體中文"), ("en", "English"), ("ja", "日本語"), ("ko", "한국어")]
 
 I18N = {
+    "初始化中…": {"zh-TW":"初始化中…", "en":"Initializing…", "ja":"初期化中…", "ko":"초기화 중…"},
+    "背景補裝語音引擎…": {"zh-TW":"背景補裝語音引擎…", "en":"Installing voice engine in background…", "ja":"バックグラウンドで音声エンジンを導入中…", "ko":"백그라운드에서 음성 엔진 설치 중…"},
+    "語音引擎已就緒": {"zh-TW":"語音引擎已就緒", "en":"Voice engine ready", "ja":"音声エンジン準備完了", "ko":"음성 엔진 준비됨"},
+    "這個連線方式目前不可用，無法複製": {"zh-TW":"這個連線方式目前不可用，無法複製", "en":"This connection isn't available; can't copy", "ja":"この接続方法は現在利用できません、コピー不可", "ko":"이 연결 방식은 현재 불가, 복사 불가"},
+    "已啟用 GPU 加速（NVIDIA CUDA）": {"zh-TW":"已啟用 GPU 加速（NVIDIA CUDA）", "en":"GPU acceleration on (NVIDIA CUDA)", "ja":"GPU アクセラレーション有効（NVIDIA CUDA）", "ko":"GPU 가속 켜짐 (NVIDIA CUDA)"},
+    "安裝完成，啟動服務中…": {"zh-TW":"安裝完成，啟動服務中…", "en":"Install complete; starting services…", "ja":"インストール完了、サービス起動中…", "ko":"설치 완료, 서비스 시작 중…"},
+    "請先點選一個模型卡片": {"zh-TW":"請先點選一個模型卡片", "en":"Please select a model card first", "ja":"先にモデルカードを選択してください", "ko":"먼저 모델 카드를 선택하세요"},
+    "未找到任何含有 .ckpt / .pth 的子資料夾": {"zh-TW":"未找到任何含有 .ckpt / .pth 的子資料夾", "en":"No subfolder with .ckpt / .pth found", "ja":"'.ckpt / .pth' を含むサブフォルダなし", "ko":".ckpt / .pth 포함 하위 폴더 없음"},
+    "合成測試中…": {"zh-TW":"合成測試中…", "en":"Testing synthesis…", "ja":"合成テスト中…", "ko":"합성 테스트 중…"},
+    "中止合成中…": {"zh-TW":"中止合成中…", "en":"Stopping synthesis…", "ja":"合成を中止中…", "ko":"합성 중지 중…"},
+    "重新接手機(USB)中…": {"zh-TW":"重新接手機(USB)中…", "en":"Reconnecting phone (USB)…", "ja":"スマホ再接続(USB)中…", "ko":"휴대폰 재연결(USB) 중…"},
+    "找不到 webui.py（需安裝完整 GPT-SoVITS）": {"zh-TW":"找不到 webui.py（需安裝完整 GPT-SoVITS）", "en":"webui.py not found (needs full GPT-SoVITS)", "ja":"webui.py が見つかりません（完全版 GPT-SoVITS が必要）", "ko":"webui.py 없음 (전체 GPT-SoVITS 필요)"},
+    "官方訓練介面已開啟": {"zh-TW":"官方訓練介面已開啟", "en":"Official training UI opened", "ja":"公式訓練 UI を開きました", "ko":"공식 훈련 UI 열림"},
+    "正在啟動官方訓練介面，約 10 秒後自動開啟…": {"zh-TW":"正在啟動官方訓練介面，約 10 秒後自動開啟…", "en":"Starting official training UI; opens in ~10s…", "ja":"公式訓練 UI を起動中、約10秒で開きます…", "ko":"공식 훈련 UI 시작 중, 약 10초 후 열림…"},
+    "正在安裝 USB 工具（adb）…": {"zh-TW":"正在安裝 USB 工具（adb）…", "en":"Installing USB tools (adb)…", "ja":"USB ツール(adb)を導入中…", "ko":"USB 도구(adb) 설치 중…"},
+    "自動偵測手機 IP 中…": {"zh-TW":"自動偵測手機 IP 中…", "en":"Auto-detecting phone IP…", "ja":"スマホ IP を自動検出中…", "ko":"휴대폰 IP 자동 감지 중…"},
+    "找不到手機 IP——請用 USB 接一次，或在欄位手動輸入": {"zh-TW":"找不到手機 IP——請用 USB 接一次，或在欄位手動輸入", "en":"Phone IP not found — connect via USB once, or enter it manually", "ja":"スマホ IP 未検出——一度 USB 接続、または手動入力", "ko":"휴대폰 IP 못 찾음 — USB로 한 번 연결하거나 수동 입력"},
+    "正在準備 USB 工具（adb）…": {"zh-TW":"正在準備 USB 工具（adb）…", "en":"Preparing USB tools (adb)…", "ja":"USB ツール(adb)を準備中…", "ko":"USB 도구(adb) 준비 중…"},
+    "偵測手機中…": {"zh-TW":"偵測手機中…", "en":"Detecting phone…", "ja":"スマホを検出中…", "ko":"휴대폰 감지 중…"},
+    "找不到同步程式（sync_voice_models.py）": {"zh-TW":"找不到同步程式（sync_voice_models.py）", "en":"Sync program not found (sync_voice_models.py)", "ja":"同期プログラムなし（sync_voice_models.py）", "ko":"동기화 프로그램 없음 (sync_voice_models.py)"},
+    "尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）": {"zh-TW":"尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）", "en":"adb not detected; can't sync — connect via USB or install adb (Advanced tab)", "ja":"adb 未検出、同期不可——USB 接続か adb 導入（詳細タブ）", "ko":"adb 미감지, 동기화 불가 — USB 연결 또는 adb 설치(고급 탭)"},
+    "聲音模型同步已在進行中，請稍候…": {"zh-TW":"聲音模型同步已在進行中，請稍候…", "en":"Voice-model sync already running; please wait…", "ja":"音声モデル同期は進行中です、お待ちを…", "ko":"음성 모델 동기화 진행 중, 잠시만요…"},
+    "未知錯誤": {"zh-TW":"未知錯誤", "en":"Unknown error", "ja":"不明なエラー", "ko":"알 수 없는 오류"},
+    "同步完成": {"zh-TW":"同步完成", "en":"Sync complete", "ja":"同期完了", "ko":"동기화 완료"},
+    "提示：先用 USB 接一次（會自動開啟無線並記住 IP），之後免插線即可全自動無線同步": {"zh-TW":"提示：先用 USB 接一次（會自動開啟無線並記住 IP），之後免插線即可全自動無線同步", "en":"Tip: connect via USB once (it enables wireless & remembers the IP); after that, sync wirelessly with no cable.", "ja":"ヒント：一度 USB 接続（無線を有効化し IP を記憶）、以後はケーブル無しで自動無線同期。", "ko":"팁: USB로 한 번 연결(무선 활성화·IP 기억), 이후엔 케이블 없이 자동 무선 동기화."},
+    "找不到手機——請確認 USB 已接且手機已開「USB 偵錯」並允許授權，或在 IP 欄位手動輸入": {"zh-TW":"找不到手機——請確認 USB 已接且手機已開「USB 偵錯」並允許授權，或在 IP 欄位手動輸入", "en":"Phone not found — check USB is connected, USB debugging is on and authorized, or enter the IP manually", "ja":"スマホ未検出——USB 接続・USB デバッグ許可を確認、または IP を手動入力", "ko":"휴대폰 못 찾음 — USB 연결·USB 디버깅 허용 확인, 또는 IP 수동 입력"},
+    "偵測到手機（USB %s）→ 自動同步聲音模型…": {"zh-TW":"偵測到手機（USB %s）→ 自動同步聲音模型…", "en":"Phone detected (USB %s) → auto-syncing voice models…", "ja":"スマホ検出（USB %s）→ 音声モデルを自動同期…", "ko":"휴대폰 감지 (USB %s) → 음성 모델 자동 동기화…"},
+    "已複製：%s": {"zh-TW":"已複製：%s", "en":"Copied: %s", "ja":"コピー：%s", "ko":"복사됨: %s"},
+    "讀取模型清單失敗：%s": {"zh-TW":"讀取模型清單失敗：%s", "en":"Failed to read model list: %s", "ja":"モデル一覧の読込失敗：%s", "ko":"모델 목록 읽기 실패: %s"},
+    "顯示 %d/%d 個模型（篩選：%s）": {"zh-TW":"顯示 %d/%d 個模型（篩選：%s）", "en":"Showing %d/%d models (filter: %s)", "ja":"%d/%d 個のモデルを表示（絞込：%s）", "ko":"%d/%d개 모델 표시 (필터: %s)"},
+    "切換為「%s」中…": {"zh-TW":"切換為「%s」中…", "en":"Switching to \"%s\"…", "ja":"「%s」に切替中…", "ko":"\"%s\"(으)로 전환 중…"},
+    "匯入「%s」中…": {"zh-TW":"匯入「%s」中…", "en":"Importing \"%s\"…", "ja":"「%s」を取込中…", "ko":"\"%s\" 가져오는 중…"},
+    "更新「%s」中…": {"zh-TW":"更新「%s」中…", "en":"Updating \"%s\"…", "ja":"「%s」を更新中…", "ko":"\"%s\" 업데이트 중…"},
+    "啟動失敗：%s": {"zh-TW":"啟動失敗：%s", "en":"Start failed: %s", "ja":"起動失敗：%s", "ko":"시작 실패: %s"},
+    "已停止 %s": {"zh-TW":"已停止 %s", "en":"Stopped %s", "ja":"%s を停止", "ko":"%s 중지됨"},
+    "已自動填入手機 IP：%s": {"zh-TW":"已自動填入手機 IP：%s", "en":"Auto-filled phone IP: %s", "ja":"スマホ IP を自動入力：%s", "ko":"휴대폰 IP 자동 입력: %s"},
+    "已轉為無線連線（%s:5555），拔掉 USB 也能同步": {"zh-TW":"已轉為無線連線（%s:5555），拔掉 USB 也能同步", "en":"Switched to wireless (%s:5555) — sync works without USB now", "ja":"無線に切替（%s:5555）、USB 無しでも同期可", "ko":"무선으로 전환 (%s:5555), USB 없이도 동기화"},
+    "未接 USB，自動無線同步（%s）…": {"zh-TW":"未接 USB，自動無線同步（%s）…", "en":"No USB; auto wireless sync (%s)…", "ja":"USB 未接続、自動無線同期（%s）…", "ko":"USB 없음, 자동 무선 동기화 (%s)…"},
+    "同步聲音模型中（%s）…（首次較久）": {"zh-TW":"同步聲音模型中（%s）…（首次較久）", "en":"Syncing voice models (%s)… (first time is slower)", "ja":"音声モデル同期中（%s）…（初回は長め）", "ko":"음성 모델 동기화 중 (%s)… (처음은 느림)"},
+    "同步失敗：%s": {"zh-TW":"同步失敗：%s", "en":"Sync failed: %s", "ja":"同期失敗：%s", "ko":"동기화 실패: %s"},
     # 標題列
     "ui.langLabel": {"zh-TW":"介面語言", "en":"Language", "ja":"言語", "ko":"언어"},
     "app.title":    {"zh-TW":"VoiceWeaver 語音中心", "en":"VoiceWeaver Voice Center", "ja":"VoiceWeaver ボイスセンター", "ko":"VoiceWeaver 보이스 센터"},
@@ -1015,7 +1055,7 @@ class App:
         if IS_FROZEN:
             self._activate_install()   # 指向已安裝的 AI 環境
             self._ensure_engine_bg()   # 語音引擎若上次安裝缺漏，背景補齊（不擋生圖/文字）
-        self.set_status("初始化中…")
+        self.set_status(self.t("初始化中…"))
         self._start_all_services()
         find_adb_bg(callback=self._on_adb_found)
 
@@ -1026,10 +1066,10 @@ class App:
             return
         def work():
             try:
-                self.root.after(0, lambda: self.set_status("背景補裝語音引擎…"))
+                self.root.after(0, lambda: self.set_status(self.t("背景補裝語音引擎…")))
                 _provision_gptsovits_engine(lambda f, m: None)
                 _install_jieba_fast_shim()
-                self.root.after(0, lambda: self.set_status("語音引擎已就緒"))
+                self.root.after(0, lambda: self.set_status(self.t("語音引擎已就緒")))
                 if have_voice_models() and not port_up(9880):
                     self.root.after(0, lambda: self.start("9880"))
             except Exception as exc:
@@ -1088,7 +1128,7 @@ class App:
         threading.Thread(target=work, daemon=True).start()
 
     def _on_usb_connected(self, serial: str):
-        self.set_status(f"偵測到手機（USB {serial[:14]}）→ 自動同步聲音模型…")
+        self.set_status(self.t("偵測到手機（USB %s）→ 自動同步聲音模型…").format(serial[:14]))
         self._adb_reverse_bg()
         # 不再併發 _arm_wireless——tcpip 會瞬斷 USB 害同步失敗。改成同步完成後才開無線。
         self.sync_models(arm_serial=serial)
@@ -1336,13 +1376,13 @@ class App:
             return
         url = info["url"].cget("text")
         if not url.startswith("http"):
-            self.set_status("這個連線方式目前不可用，無法複製")
+            self.set_status(self.t("這個連線方式目前不可用，無法複製"))
             return
         try:
             self.root.clipboard_clear(); self.root.clipboard_append(url)
         except Exception:
             pass
-        self.set_status(f"已複製：{url}")
+        self.set_status(self.t("已複製：%s").format(url))
         cp = info.get("copy")
         if cp is not None:
             cp.config(text="✓", fg=C_GREEN)
@@ -1392,7 +1432,7 @@ class App:
                     capture_output=True, text=True, timeout=30, **POPEN_KW)
                 if (r.stdout or "").strip() == "cuda":
                     os.environ["VOICEWEAVER_DEVICE"] = "cuda"   # 行程共用，cc 也讀得到
-                    self.root.after(0, lambda: self.set_status("已啟用 GPU 加速（NVIDIA CUDA）"))
+                    self.root.after(0, lambda: self.set_status(self.t("已啟用 GPU 加速（NVIDIA CUDA）")))
             except Exception:
                 pass
         threading.Thread(target=work, daemon=True).start()
@@ -1478,7 +1518,7 @@ class App:
         self._iv_running = False
         try: self.iv.destroy()
         except Exception: pass
-        self.set_status("安裝完成，啟動服務中…")
+        self.set_status(self.t("安裝完成，啟動服務中…"))
         self._start_all_services()
         find_adb_bg(callback=self._on_adb_found)
 
@@ -1917,7 +1957,7 @@ class App:
         if not CC_OK: return
         try: self.adv_history = cc.load_history()
         except Exception as exc:
-            self.set_adv_status(f"讀取模型清單失敗：{exc}"); self.adv_history = []
+            self.set_adv_status(self.t("讀取模型清單失敗：%s").format(exc)); self.adv_history = []
 
         # 套用語言篩選
         if self.lang_filter == "ALL":
@@ -1936,7 +1976,7 @@ class App:
 
         total = len(self.adv_history); shown = len(self.adv_filtered)
         if total != shown:
-            self.set_adv_status(f"顯示 {shown}/{total} 個模型（篩選：{self.lang_filter}）")
+            self.set_adv_status(self.t("顯示 %d/%d 個模型（篩選：%s）").format(shown, total, self.lang_filter))
 
         def upd():
             try:
@@ -1951,7 +1991,7 @@ class App:
 
     def _selected_model(self):
         if self._selected_card_idx is None or self._selected_card_idx >= len(self.adv_filtered):
-            self.set_adv_status("請先點選一個模型卡片"); return None
+            self.set_adv_status(self.t("請先點選一個模型卡片")); return None
         return self.adv_filtered[self._selected_card_idx]
 
     # ── 宮格卡片 ──────────────────────────────────────────────────
@@ -2054,7 +2094,7 @@ class App:
     def adv_switch(self):
         m = self._selected_model()
         if not m: return
-        self.set_adv_status(f"切換為「{m.get('name')}」中…")
+        self.set_adv_status(self.t("切換為「%s」中…").format(m.get('name')))
         def task():
             from pathlib import Path
             gpt_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["gpt_rel"])), ROOT)
@@ -2214,7 +2254,7 @@ class App:
         edited = self._model_edit_dialog("匯入聲音模型", initial)
         if not edited: return
 
-        self.set_adv_status(f"匯入「{edited['name']}」中…")
+        self.set_adv_status(self.t("匯入「%s」中…").format(edited['name']))
         def task():
             ver = edited["version"]
             lang_val = edited.get("lang", "") or "ZH"
@@ -2261,7 +2301,7 @@ class App:
         edited = self._model_edit_dialog("編輯聲音模型", m)
         if not edited: return
 
-        self.set_adv_status(f"更新「{edited['name']}」中…")
+        self.set_adv_status(self.t("更新「%s」中…").format(edited['name']))
         def task():
             ver = edited["version"]
             gpt_src = Path(edited["gpt_path"])
@@ -2320,7 +2360,7 @@ class App:
         ])
 
         if not candidates:
-            self.set_adv_status("未找到任何含有 .ckpt / .pth 的子資料夾")
+            self.set_adv_status(self.t("未找到任何含有 .ckpt / .pth 的子資料夾"))
             return
 
         # ── 進度視窗 ──
@@ -2422,7 +2462,7 @@ class App:
         m = self._selected_model()
         if not m: return
         text = self.test_entry.get().strip() or "你好。"
-        self.set_adv_status("合成測試中…")
+        self.set_adv_status(self.t("合成測試中…"))
         def task():
             from pathlib import Path
             lang = "_ZH"
@@ -2448,7 +2488,7 @@ class App:
         self._run_bg(task)
 
     def adv_stopgen(self):
-        self.set_adv_status("中止合成中…")
+        self.set_adv_status(self.t("中止合成中…"))
         self._run_bg(lambda: cc.api_stop_generation())
 
     def adv_play(self):
@@ -2463,7 +2503,7 @@ class App:
     def adv_adb(self):
         if not self.adb:
             self.ensure_adb(manual=True); return
-        self.set_adv_status("重新接手機(USB)中…")
+        self.set_adv_status(self.t("重新接手機(USB)中…"))
         def task():
             try:
                 out = subprocess.run([self.adb, "devices"], capture_output=True, text=True,
@@ -2481,22 +2521,22 @@ class App:
     def open_training(self):
         webui = os.path.join(ROOT, "webui.py")
         if not os.path.exists(webui):
-            self.set_adv_status("找不到 webui.py（需安裝完整 GPT-SoVITS）"); return
+            self.set_adv_status(self.t("找不到 webui.py（需安裝完整 GPT-SoVITS）")); return
         if port_up(9874):
             webbrowser.open("http://127.0.0.1:9874")
-            self.set_adv_status("官方訓練介面已開啟"); return
-        self.set_adv_status("正在啟動官方訓練介面，約 10 秒後自動開啟…")
+            self.set_adv_status(self.t("官方訓練介面已開啟")); return
+        self.set_adv_status(self.t("正在啟動官方訓練介面，約 10 秒後自動開啟…"))
         try:
             subprocess.Popen([get_py() or sys.executable, "webui.py"], cwd=ROOT,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **POPEN_KW)
         except Exception as exc:
-            self.set_adv_status(f"啟動失敗：{exc}"); return
+            self.set_adv_status(self.t("啟動失敗：%s").format(exc)); return
         def wait_open():
             import time as _t
             for _ in range(30):
                 if port_up(9874):
                     webbrowser.open("http://127.0.0.1:9874")
-                    self.root.after(0, lambda: self.set_adv_status("官方訓練介面已開啟")); return
+                    self.root.after(0, lambda: self.set_adv_status(self.t("官方訓練介面已開啟"))); return
                 _t.sleep(1)
         threading.Thread(target=wait_open, daemon=True).start()
 
@@ -2552,7 +2592,7 @@ class App:
                     subprocess.run(["kill", pid], capture_output=True, timeout=4)
         except Exception: pass
         name = self.rows[port]["name"] if port in self.rows else f"服務 {port}"
-        self.set_status(f"已停止 {name}")
+        self.set_status(self.t("已停止 %s").format(name))
 
     def toggle(self, port):
         if port_up(int(port)) or port in self.procs:
@@ -2568,7 +2608,7 @@ class App:
 
     def ensure_adb(self, manual=False):
         if self.adb and not manual: return
-        self.set_status("正在安裝 USB 工具（adb）…")
+        self.set_status(self.t("正在安裝 USB 工具（adb）…"))
         def cb(path):
             self.adb = path
             msg = "USB 工具(adb)已就緒" if path else "adb 安裝失敗，請檢查網路"
@@ -2714,14 +2754,14 @@ class App:
 
     def autodetect_phone_ip(self):
         """背景自動偵測並填入 IP 欄位（UI 按鈕 / 啟動時呼叫）。"""
-        self.set_status("自動偵測手機 IP 中…")
+        self.set_status(self.t("自動偵測手機 IP 中…"))
         def work():
             ip = self._autodetect_phone_ip_blocking()
             if ip:
                 self._save_phone_ip(ip)
-                self.root.after(0, lambda: (self.phone_ip_var.set(ip), self.set_status(f"已自動填入手機 IP：{ip}")))
+                self.root.after(0, lambda: (self.phone_ip_var.set(ip), self.set_status(self.t("已自動填入手機 IP：%s").format(ip))))
             else:
-                self.root.after(0, lambda: self.set_status("找不到手機 IP——請用 USB 接一次，或在欄位手動輸入"))
+                self.root.after(0, lambda: self.set_status(self.t("找不到手機 IP——請用 USB 接一次，或在欄位手動輸入")))
         threading.Thread(target=work, daemon=True).start()
 
     def _arm_wireless(self, serial: str) -> None:
@@ -2752,7 +2792,7 @@ class App:
                                    capture_output=True, text=True, timeout=8, **POPEN_KW)
                 out = (r.stdout or "") + (r.stderr or "")
                 if "connected" in out.lower():     # connected / already connected 皆算成功
-                    self.root.after(0, lambda i=ip: self.set_status(f"已轉為無線連線（{i}:5555），拔掉 USB 也能同步"))
+                    self.root.after(0, lambda i=ip: self.set_status(self.t("已轉為無線連線（%s:5555），拔掉 USB 也能同步").format(i)))
                     break
                 time.sleep(1.0)
         except Exception:
@@ -2769,7 +2809,7 @@ class App:
                 if ip:
                     self._save_phone_ip(ip)
                     self.root.after(0, lambda: (self.phone_ip_var.set(ip),
-                                                self.set_status(f"未接 USB，自動無線同步（{ip}）…"),
+                                                self.set_status(self.t("未接 USB，自動無線同步（%s）…").format(ip)),
                                                 self.sync_models(ip)))
                 else:
                     self.root.after(0, lambda: self.set_status(
@@ -2782,10 +2822,10 @@ class App:
         偵測全程在背景執行緒（_usb_serial 冷啟可能等到 12 秒），避免凍住 UI。"""
         if not self.adb:
             # adb 還沒就緒（或沒安裝）→ 先裝/找 adb，好了再由裝置監看自動同步
-            self.set_status("正在準備 USB 工具（adb）…")
+            self.set_status(self.t("正在準備 USB 工具（adb）…"))
             self.ensure_adb(manual=True)
             return
-        self.set_status("偵測手機中…")
+        self.set_status(self.t("偵測手機中…"))
         def work():
             usb = self._usb_serial()
             if usb:
@@ -2805,19 +2845,19 @@ class App:
         絕不可在同步進行中做 tcpip——它會重啟手機 adbd、瞬斷 USB，害正在傳的同步失敗。"""
         script = os.path.join(ROOT, "sync_voice_models.py")
         if not os.path.exists(script):
-            self.set_status("找不到同步程式（sync_voice_models.py）")
+            self.set_status(self.t("找不到同步程式（sync_voice_models.py）"))
             return
         if not self.adb:
-            self.set_status("尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）")
+            self.set_status(self.t("尚未偵測到 adb，無法同步——請用 USB 接上手機或先安裝 adb（進階分頁）"))
             return
         # 防重入：自動同步（裝置偵測）與手動按鈕可能同時觸發 → 兩個 adb push/pull 併發互踩。
         # 進行中就跳過，但要回饋（否則使用者按了沒反應會以為「無法同步」）。
         if self._sync_running:
-            self.set_status("聲音模型同步已在進行中，請稍候…")
+            self.set_status(self.t("聲音模型同步已在進行中，請稍候…"))
             return
         self._sync_running = True
         via = f"無線 {wifi_ip}" if wifi_ip else "USB"
-        self.set_status(f"同步聲音模型中（{via}）…（首次較久）")
+        self.set_status(self.t("同步聲音模型中（%s）…（首次較久）").format(via))
         def work():
             try:
                 py = get_py() or sys.executable
@@ -2825,6 +2865,7 @@ class App:
                 env["ADB"] = self.adb
                 env["PYTHONUTF8"] = "1"
                 env["PYTHONIOENCODING"] = "utf-8"
+                env["VOICEWEAVER_LANG"] = self.ui_lang    # 同步腳本輸出用目前介面語言
                 cmd = [py, script]
                 if wifi_ip:
                     cmd += ["--wifi", wifi_ip]
@@ -2834,12 +2875,12 @@ class App:
                 out_tail = [l for l in (r.stdout or "").splitlines() if l.strip()]
                 err_tail = [l for l in (r.stderr or "").splitlines() if l.strip()]
                 if r.returncode != 0:
-                    detail = err_tail[-1] if err_tail else (out_tail[-1] if out_tail else "未知錯誤")
-                    msg = f"同步失敗：{detail}"
+                    detail = err_tail[-1] if err_tail else (out_tail[-1] if out_tail else self.t("未知錯誤"))
+                    msg = self.t("同步失敗：%s").format(detail)
                 else:
-                    msg = out_tail[-1] if out_tail else "同步完成"
+                    msg = out_tail[-1] if out_tail else self.t("同步完成")
             except Exception as exc:
-                msg = f"同步失敗：{exc}"
+                msg = self.t("同步失敗：%s").format(exc)
             finally:
                 self._sync_running = False
             self.root.after(0, lambda: self.set_status(msg))
