@@ -2718,6 +2718,7 @@ class App:
     def _arm_wireless(self, serial: str) -> None:
         """讀手機 Wi-Fi IP 並（每個 App 生命週期只做一次）開啟無線 adb（埠 5555）。
         ⚠️ 只能在「沒有同步在進行」時呼叫——tcpip 會重啟手機 adbd、瞬斷 USB。"""
+        import time
         if not self.adb or not serial or self._sync_running:
             return
         ip = self._read_wlan_ip(serial)
@@ -2726,9 +2727,25 @@ class App:
         self._save_phone_ip(ip)                    # 記住 IP（不需 tcpip，供 Wi-Fi 位址顯示/手動無線同步）
         if getattr(self, "_wireless_armed", False):
             return                                  # tcpip 每次都會瞬斷連線，本次執行只切一次就好
+        # 安全網：只有「手機 Wi-Fi 與電腦在同一區網」時才切無線，否則 tcpip 斷了 USB 又連不回 → 白白斷線。
+        comp_lan = lan_ip()
+        def _pfx(x): return x.rsplit(".", 1)[0] if x.count(".") == 3 else ""
+        if not comp_lan or _pfx(comp_lan) != _pfx(ip):
+            return                                  # 不同網段（或電腦沒接 Wi-Fi）→ 不動 USB，保持穩定連線
         try:
             subprocess.run([self.adb, "-s", serial, "tcpip", "5555"], capture_output=True, timeout=8, **POPEN_KW)
             self._wireless_armed = True
+            # ⚠️ tcpip 會重啟手機 adbd → 瞬斷 USB。若不立刻用 Wi-Fi 接回，使用者會看到手機「同步後自動斷線」。
+            #     等 adbd 重啟，再 adb connect 到 ip:5555，把連線無縫轉成無線（畫面持續顯示已連線）。
+            time.sleep(1.5)
+            for _ in range(4):
+                r = subprocess.run([self.adb, "connect", f"{ip}:5555"],
+                                   capture_output=True, text=True, timeout=8, **POPEN_KW)
+                out = (r.stdout or "") + (r.stderr or "")
+                if "connected" in out.lower():     # connected / already connected 皆算成功
+                    self.root.after(0, lambda i=ip: self.set_status(f"已轉為無線連線（{i}:5555），拔掉 USB 也能同步"))
+                    break
+                time.sleep(1.0)
         except Exception:
             pass
 
