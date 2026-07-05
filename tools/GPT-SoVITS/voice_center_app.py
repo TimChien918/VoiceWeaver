@@ -860,6 +860,7 @@ class App:
         self._help_txt = None                                      # 說明分頁 Text，retranslate 用
         self._net = {"lan": "", "ts": ""}                          # 網路位址快取（背景執行緒更新）
         self._sync_running = False                                 # 模型同步進行中旗標（防重複併發）
+        self._wireless_armed = False                               # 本次執行是否已切過 tcpip（避免重複瞬斷）
         self._start_net_watcher()
 
         root.title(self.t("app.title"))
@@ -1080,8 +1081,8 @@ class App:
     def _on_usb_connected(self, serial: str):
         self.set_status(f"偵測到手機（USB {serial[:14]}）→ 自動同步聲音模型…")
         self._adb_reverse_bg()
-        threading.Thread(target=lambda: self._arm_wireless(serial), daemon=True).start()
-        self.sync_models()
+        # 不再併發 _arm_wireless——tcpip 會瞬斷 USB 害同步失敗。改成同步完成後才開無線。
+        self.sync_models(arm_serial=serial)
 
     def _start_all_services(self):
         self._detect_device_bg()
@@ -2715,17 +2716,21 @@ class App:
         threading.Thread(target=work, daemon=True).start()
 
     def _arm_wireless(self, serial: str) -> None:
-        """USB 連接時：讀手機 Wi-Fi IP 並開啟無線 adb（埠 5555），記住端點供日後無線同步。"""
-        if not self.adb or not serial:
+        """讀手機 Wi-Fi IP 並（每個 App 生命週期只做一次）開啟無線 adb（埠 5555）。
+        ⚠️ 只能在「沒有同步在進行」時呼叫——tcpip 會重啟手機 adbd、瞬斷 USB。"""
+        if not self.adb or not serial or self._sync_running:
             return
         ip = self._read_wlan_ip(serial)
         if not ip:
             return
+        self._save_phone_ip(ip)                    # 記住 IP（不需 tcpip，供 Wi-Fi 位址顯示/手動無線同步）
+        if getattr(self, "_wireless_armed", False):
+            return                                  # tcpip 每次都會瞬斷連線，本次執行只切一次就好
         try:
             subprocess.run([self.adb, "-s", serial, "tcpip", "5555"], capture_output=True, timeout=8, **POPEN_KW)
+            self._wireless_armed = True
         except Exception:
             pass
-        self._save_phone_ip(ip)
 
     def _maybe_autosync(self):
         """只負責「無 USB 時的一次性無線嘗試」。USB 由 _start_device_watcher 持續處理。"""
@@ -2758,8 +2763,7 @@ class App:
         def work():
             usb = self._usb_serial()
             if usb:
-                threading.Thread(target=lambda: self._arm_wireless(usb), daemon=True).start()
-                self.root.after(0, self.sync_models)
+                self.root.after(0, lambda s=usb: self.sync_models(arm_serial=s))
                 return
             ip = self._current_ip_field() or self._autodetect_phone_ip_blocking()
             if ip:
@@ -2770,7 +2774,9 @@ class App:
                     "找不到手機——請確認 USB 已接且手機已開「USB 偵錯」並允許授權，或在 IP 欄位手動輸入"))
         threading.Thread(target=work, daemon=True).start()
 
-    def sync_models(self, wifi_ip: str = ""):
+    def sync_models(self, wifi_ip: str = "", arm_serial: str = ""):
+        """arm_serial：USB 同步完成「後」才開無線 adb（tcpip）。
+        絕不可在同步進行中做 tcpip——它會重啟手機 adbd、瞬斷 USB，害正在傳的同步失敗。"""
         script = os.path.join(ROOT, "sync_voice_models.py")
         if not os.path.exists(script):
             self.set_status("找不到同步程式（sync_voice_models.py）")
@@ -2813,6 +2819,9 @@ class App:
             self.root.after(0, lambda: self.set_status(msg))
             if have_voice_models() and not port_up(9880):
                 self.root.after(0, lambda: self.start("9880"))
+            # 同步「完全結束後」才開無線 adb（tcpip 會瞬斷 USB，不能在同步中做）
+            if arm_serial:
+                self._arm_wireless(arm_serial)
         threading.Thread(target=work, daemon=True).start()
 
     # ── 網路位址背景快取 ─────────────────────────────────────────
