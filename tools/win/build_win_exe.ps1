@@ -52,6 +52,10 @@ $args = @(
   '--collect-all','qrcode',
   '--noupx'
 )
+# 內嵌版本/產品資訊：未簽章 exe 仍可能被 SmartScreen 攔，但「其他資訊」會顯示
+# 「VoiceWeaver 語音中心」產品名而非空白檔名，看起來正常許多（詳見 README_WINDOWS.md）。
+$verFile = Join-Path $WinDir 'version_info.txt'
+if (Test-Path $verFile) { $args += @('--version-file', $verFile) }
 foreach ($d in $addData) { $args += @('--add-data', $d) }
 $args += "$GS\voice_center_app.py"
 

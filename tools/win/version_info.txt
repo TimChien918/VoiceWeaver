@@ -1,0 +1,36 @@
+# PyInstaller 版本資訊（讓 exe 內嵌產品名/版本）。
+# 即使 SmartScreen 仍可能對未簽章 exe 跳警告，「其他資訊」會顯示「VoiceWeaver 語音中心」
+# 這個產品名，而不是空白／原始檔名，看起來正常許多。
+# 有這份檔，build_win_exe.ps1 會用 --version-file 帶入。
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 1, 0, 0),
+    prodvers=(1, 1, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '040404b0',
+          [
+            StringStruct('CompanyName', 'VoiceWeaver'),
+            StringStruct('FileDescription', 'VoiceWeaver 語音中心'),
+            StringStruct('FileVersion', '1.1.0.0'),
+            StringStruct('InternalName', 'VoiceWeaver語音中心'),
+            StringStruct('LegalCopyright', 'VoiceWeaver'),
+            StringStruct('OriginalFilename', 'VoiceWeaver語音中心.exe'),
+            StringStruct('ProductName', 'VoiceWeaver 語音中心'),
+            StringStruct('ProductVersion', '1.1.0.0'),
+          ],
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct('Translation', [0x0404, 1200])]),
+  ],
+)
