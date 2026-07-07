@@ -2,16 +2,19 @@
 
 # 🗣️ VoiceWeaver
 
-**為失語症、語言復健與臨場表達困難者打造的 AI 溝通輔助 App**
+**為失語症、語言復健與臨場表達困難者打造的 AI 溝通輔助生態系**
 
-把零碎的詞 ＋ 所在地點 ＋ 相機看到的東西，交給 AI 重組成自然句；AI 評分語音復健；鼻控無障礙操作。
+把零碎的詞 ＋ 所在地點 ＋ 相機看到的東西，交給 AI 重組成自然句；
+AI 全判讀語音復健評分；鼻控無障礙操作；自己的聲音自己合成。
 
-![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-3DDC84?logo=android&logoColor=white)
+![Platform](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)
+![Web](https://img.shields.io/badge/網頁版-Live-0a84ff)
+![Desktop](https://img.shields.io/badge/語音中心-macOS%20%7C%20Windows-8a2be2)
+![i18n](https://img.shields.io/badge/介面語言-繁中%20%7C%20EN%20%7C%20日%20%7C%20한-ff9500)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
-![minSdk](https://img.shields.io/badge/minSdk-24-blue)
-![Web companion](https://img.shields.io/badge/網頁版-Live-0a84ff)
 
-[🌐 網頁版 Live Demo](https://timchien918.github.io/VoiceWeaver-Web/) ·
+[🌐 網頁版 Live](https://timchien918.github.io/VoiceWeaver-Web/) ·
+[📦 下載安裝檔（Releases）](https://github.com/TimChien918/VoiceWeaver/releases) ·
 [網頁版原始碼](https://github.com/TimChien918/VoiceWeaver-Web) ·
 [GPT-SoVITS 模型手冊](docs/GPT_SOVITS_MODEL_GUIDE.md)
 
@@ -19,41 +22,32 @@
 
 ---
 
-VoiceWeaver 有兩個版本，用同一個 Google 帳號登入即可雙向同步 API 金鑰與設定：
+## 三個入口，一套生態
 
-| 版本 | 說明 | 連結 |
+| 入口 | 說明 | 取得方式 |
 | --- | --- | --- |
-| **Android App**（本專案） | 完整功能：離線推理、相機、定位、鼻控、語音復健、GPT-SoVITS | — |
-| **網頁輕量版** | 純瀏覽器／API，免安裝，可直接用 | [Live Demo](https://timchien918.github.io/VoiceWeaver-Web/) |
+| **📱 Android App** | 完整功能：離線推理、相機、定位、鼻控、語音復健、GPT-SoVITS 角色語音 | [Releases → `v1.3.0-android`](https://github.com/TimChien918/VoiceWeaver/releases/tag/v1.3.0-android) 或自行建置 |
+| **🌐 網頁輕量版** | 純瀏覽器免安裝；可把語音／生圖／文字運算丟給自己的電腦跑 | [直接開啟](https://timchien918.github.io/VoiceWeaver-Web/) |
+| **🖥 語音中心（macOS / Windows）** | 桌面 App：GPT-SoVITS 語音合成、SD-Turbo 生圖、Qwen 文字推論、聲音模型管理與手機同步 | [Releases → `v1.2.1-mac`](https://github.com/TimChien918/VoiceWeaver/releases/tag/v1.2.1-mac) / [`v1.1.0-win`](https://github.com/TimChien918/VoiceWeaver/releases/tag/v1.1.0-win) |
 
-## 目錄
-
-- [功能總覽](#功能總覽)
-- [快速開始](#快速開始)
-- [技術架構](#技術架構)
-- [核心流程](#核心流程)
-- [GPT-SoVITS 自訂語音（電腦端）](#gpt-sovits-自訂語音電腦端)
-- [設定項目](#設定項目)
-- [權限](#權限)
-- [專案結構](#專案結構)
-- [隱私與授權](#隱私與授權)
+- 手機與網頁用**同一個 Google 帳號**登入即雙向同步 API 金鑰、供應商清單與設定。
+- 三個入口的介面都支援**繁體中文／English／日本語／한국어**一鍵切換；切換語言會連動語音模型篩選與朗讀語言。
 
 ## 功能總覽
 
 | 分類 | 重點功能 |
 | --- | --- |
-| **語音重組** | 語音／文字輸入、碎詞整理、AI 重組自然句、TTS 朗讀、多語朗讀（中英日韓）、一鍵複製分享、我的最愛快捷 |
-| **AAC 圖卡** | 分類搜尋、組合句、情境推薦、自訂金額、自訂圖卡（JSON 格式）、強意圖保護 |
-| **語音復健** | AI 全判讀（語氣/斷句/語義，非字元差異）、錯誤字高亮、整段分句逐句練習、streak 連續天數、每日定時提醒、歷史統計 |
-| **成績單** | Firestore 同步復健日誌、趨勢折線圖、連續天數、正向情緒統計、CSV／PDF 匯出、Telegram 排程推送 |
-| **定位情境** | 手動地點、GPS、住家錨點、Geocoder、Overpass、離線 POI（台灣／美國） |
+| **語音重組** | 語音／文字輸入、碎詞整理、AI 重組自然句、TTS 朗讀、多語朗讀（中英日韓）、複製分享、我的最愛 |
+| **AAC 圖卡** | 分類搜尋、組合句、情境推薦、大圖卡模式、自訂金額、自訂圖卡（JSON）、強意圖保護 |
+| **語音復健** | AI 全判讀（語意／流暢／語氣，非字元差異）、**每次評分獨立且低溫求穩**、錯誤字高亮、整段分句逐句練、streak 連續天數、每日提醒 |
+| **成績單** | Firestore 同步日誌、趨勢折線圖、正向情緒統計、CSV／PDF 匯出、Telegram 排程推送 |
+| **定位情境** | GPS、住家錨點、Geocoder、Overpass、離線 POI（台灣／美國） |
 | **相機辨識** | 前／後攝影機、AI 認物品、加入情境 |
-| **雲端同步** | Firebase 登入，API 金鑰／供應商清單與網頁版即時互通；Telegram 設定雲端保存 |
-| **無障礙** | 鼻控（靈敏度即時調整面板）、超大字體、高對比模式（黑底黃文）、停留點選（dwell）、字體倍率、TTS 語速 |
-| **安全通報** | 危機關鍵字偵測、GPS 定位、Telegram 即時通知 |
-| **GPT-SoVITS** | 電腦端 API server、USB／Wi-Fi 連線、自訂語音、中英自動切換 |
+| **無障礙** | 鼻控游標（MediaPipe 鼻尖追蹤、靈敏度即時調整）、dwell 停留點選、超大字、高對比 |
+| **安全通報** | 危機關鍵字偵測 → GPS ＋ Telegram 即時通知家人、視訊通話、語音安全鎖定 |
+| **角色語音** | GPT-SoVITS 自訂聲音（電腦跑、手機／網頁連線），依介面語言自動篩選對應語言的模型 |
 
-## 快速開始
+## 快速開始（自行建置 Android App）
 
 ```bash
 # 1. 取得原始碼
@@ -68,163 +62,131 @@ cp .env.example .env
 # 3. 雲端同步（選用）：到 Firebase Console 下載 google-services.json 放進 app/
 #    （已被 gitignore，不入版控）
 
-# 4. 建置（需要 JDK 17+；Android Studio 內建 JBR 21 最方便）
+# 4. 建置（需要 JDK 17+；Android Studio 內建 JBR 最方便）
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew :app:assembleDebug      # 打包 Debug APK
 ./gradlew :app:installDebug       # 安裝到已連線裝置
 ```
 
-> **需要 JDK 17+**。用系統 JDK 8 會出現 `Gradle requires JVM 17 or later`，請改用 Android Studio 內建 JBR。
+> **需要 JDK 17+**。系統 JDK 8 會出現 `Gradle requires JVM 17 or later`，請改用 Android Studio 內建 JBR。
+
+## 🖥 語音中心（macOS / Windows 桌面 App）
+
+自帶 Python 環境的桌面應用（Tkinter），下載 `.dmg`／`.exe` 安裝即用，首次開啟自動解壓環境（約 2GB）。
+一個視窗管理三個 AI 服務＋手機連線＋聲音模型：
+
+| 埠 | 服務 | 說明 |
+| --- | --- | --- |
+| `9880` | 語音合成（GPT-SoVITS） | 需自備聲音模型；手機／網頁的角色語音由此輸出 |
+| `9881` | 本機生圖（SD-Turbo） | 首次生圖自動下載模型（免金鑰） |
+| `9882` | 文字推論（Qwen2.5-1.5B） | 句子重組／復健評分的「電腦接手」來源 |
+| `9879` | 橋接（含 CORS） | 手機語言同步 ＋ 網頁版的語音／生圖／文字代理 |
+
+**聲音模型管理**：2 欄宮格清單、語言篩選（中／英／日／韓，跟手機介面語言自動連動）、單個與批量資料夾匯入、完整欄位編輯（.ckpt／.pth／參考音檔／參考文字，換音檔自動帶入逐字稿）、語言自動偵測（依參考文字的文字種類：諺文→韓、假名→日、漢字→中、拉丁→英）。
+
+**手機連線三選一**：
+| 方式 | 設定 |
+| --- | --- |
+| 有線 USB（推薦） | 插線即可，自動 `adb reverse`；首次同步後自動開啟無線並記住 IP |
+| 無線 Wi-Fi | App 填 `http://<電腦IP>:9880`，或掃語音中心的 QR Code 自動填入 |
+| Tailscale（外網） | 填 `100.x` 位址；4G／5G 也能連 |
+
+**聲音模型隨身同步**：模型放手機 `/sdcard/VoiceWeaver/voice_models/`，USB 連接時電腦自動雙向同步（聯集、防誤刪安全閥）。換一台電腦，插上手機就能把聲音帶過去。
+
+> 打包腳本：`tools/dmg/build_dmg.sh`（macOS）、`tools/win/build_win.ps1`（Windows）。安全網會強制剔除任何模型權重，**安裝檔絕不內含聲音模型**。
+
+## 🌐 網頁版（免安裝）
+
+- 純瀏覽器＋自備 API 金鑰即可用：重組、AAC、復健評分、成績單、生圖。
+- **讓電腦幫忙跑運算**：設定頁啟用後，語音（GPT-SoVITS 角色聲音）、生圖（SD-Turbo）、文字（Qwen）都交給你的電腦，連不上自動退回雲端／瀏覽器。
+  - 同一台電腦：免設定，直接「偵測連線」（走 `127.0.0.1:9879`）。
+  - 遠端：電腦跑 `tailscale serve --bg 9879`，網頁填 `https://主機.xxx.ts.net`。
+  - ⚠️ 受瀏覽器混合內容限制，HTTPS 網頁無法連區網 `http://192.168.x.x`——僅同機與 Tailscale 兩種連法。
 
 ## 技術架構
 
-- **語言／UI**：Kotlin + Jetpack Compose
-- **資料**：Room（歷史／復健）、DataStore（設定）
-- **雲端**：Firebase Auth（Google／匿名）+ Firestore（金鑰、設定、復健日誌與網頁版共用結構）
-- **背景任務**：WorkManager（每日復健提醒、成績單排程推送）
-- **感測**：CameraX + ML Kit（影像標籤）、FusedLocation（GPS）、SpeechRecognizer（語音轉文字）
-- **推理分層**（依裝置能力與網路自動選擇）：
+- **Android**：Kotlin + Jetpack Compose；Room（歷史／復健）＋ DataStore（設定）；WorkManager（提醒／推送）；CameraX + ML Kit；Vosk（離線 STT，逐字信心度）
+- **雲端**：Firebase Auth（Google／匿名）＋ Firestore（金鑰、設定、復健日誌，與網頁版共用結構）
+- **多語系**：strings.xml 四語資源 ＋ `I18n.tr()` 執行期翻譯層（覆蓋 lambda／ViewModel 內的動態訊息）；網頁 `data-i18n` 屬性驅動；語音中心 `I18N` 字典＋標題列語言切換（記住選擇）
+- **推理分層**（依裝置能力與網路自動路由）：
 
   | 層級 | 引擎 | 說明 |
   | --- | --- | --- |
-  | 電腦端 offload | `OffloadManager` → GPT-SoVITS / 電腦 LLM | 走區域網路 |
-  | 雲端 | `CloudInferenceEngine` | Groq / OpenRouter / Cohere / Gemini |
-  | 裝置端 AI | `MediaPipeLLMEngine` | Gemma 3n E2B / Qwen（MediaPipe） |
+  | 電腦接手 | `OffloadManager` → 語音中心 9880/9881/9882 | USB／區網／Tailscale，實測 RTT 分級 |
+  | 雲端 | `CloudInferenceEngine` | Gemini / Groq / OpenRouter / Cohere…，多金鑰固定順序備援 |
+  | 裝置端 | `MediaPipeLLMEngine` | Gemma 3n E2B / Qwen（MediaPipe .task） |
   | 備援 | `RegexTemplateEngine` | 規則模板，零依賴 |
 
-- **語音復健評分四層備援**：電腦 offload → 雲端 LLM → 裝置端 Gemma → Levenshtein（所有引擎均實作 `InferenceEngine.scoreRehab()`）
+- **復健評分（四層備援、刻意求穩）**：電腦 Qwen → 雲端 LLM → 裝置端 Gemma → Levenshtein。
+  每次評估**完全獨立**（提示詞明確禁止參考先前分數）、低溫取樣（0.1–0.2）、供應商固定順序不輪替——同樣的表現拿到一致的分數。
 
-## 核心流程
-
-### 語音重組
-
-1. 使用者輸入碎詞（手動、語音、AAC 圖卡皆可）。
-2. App 整合碎詞 ＋ 地點 ＋ 相機標籤。
-3. 安全模組先攔截高風險文字。
-4. 推理引擎依設定路由，輸出自然句。
-5. TTS 朗讀，可選多語言（中英日韓）；結果可複製、分享、加入最愛。
-
-### 語音復健（AI 全判讀）
-
-1. 選目標句：手動輸入、AI 推薦、或開啟「整段分句」逐句練習（自動切分並顯示進度）。
-2. 播放示範 → 使用者跟讀 → App STT 錄音轉文字。
-3. **AI 語義評分**：所有引擎（含離線 Gemma）均透過 `scoreRehab()` 介面，依語氣、斷句、語義全面判讀，而非純字元差異。
-4. 結果顯示分數、AI 評語、錯誤字高亮（紅框標示漏讀詞）。
-5. 紀錄推送 Firestore，連續天數（streak）自動計算；WorkManager 在指定時段發送提醒通知。
-
-### AAC 圖卡
-
-- 分類涵蓋：商品、飲食、金額、動作、需求、人物、地點、醫療、時間、問句、心情、緊急。
-- 支援自訂圖卡（設定頁填入 JSON：`[{"label":"…","emoji":"…","category":"…"}]`）。
-- 組合後可朗讀、重組成自然句、或保存到歷史。
-
-### 無障礙操作
-
-- **鼻控（Nose Tracker）**：WebView 內建 MediaPipe Face Mesh，偵測鼻尖移動控制游標，靈敏度可在設定頁即時滑桿調整（注入 `window.egSetSensitivity()`）。
-- **高對比模式**：純黑底、黃色強調（#FFE600）、白字，適合弱視使用者。
-- **停留點選（Dwell）**：凝視目標一段時間自動點擊，免手操作。
-
-### 成績單與匯出
-
-- 成績單讀取 Firestore `rehabLogs`，支援今日／本月／本年三段維度。
-- 統計：練習次數、平均分、連續天數、正向情緒字眼出現次數。
-- 折線趨勢圖（Canvas 繪製，依時間 bucket 聚合）。
-- CSV 匯出（FileProvider 分享）、PDF 匯出（`PdfDocument` 生成）。
-- WorkManager `ReportPushWorker`：可排程定期自動發送摘要到 Telegram。
-
-### 安全與緊急通報
-
-- 偵測危機關鍵字 → 嘗試取得 GPS → 透過 Telegram Chat ID 通知。
-- 文字進 LLM 前先攔截，輸出後 TTS 前再清理。
-- ⚠️ Telegram Chat ID 由使用者自行填寫，**不內建任何預設值**。
-
-## GPT-SoVITS 自訂語音（電腦端）
-
-GPT-SoVITS 是 Python + PyTorch 桌面框架，APK 無法直接執行，因此採「**電腦跑 API server、手機連線**」的架構。
-
-> **App 不內建任何語音模型或角色音色**——由使用者自行匯入有權使用的聲音。
-
-### 手機連線方式
-
-| 方式 | 設定 |
-| --- | --- |
-| **有線 USB**（推薦） | `adb reverse tcp:9880 tcp:9880`，App 切「有線」 |
-| **無線 Wi-Fi** | App 填 `http://<電腦IP>:9880` |
-| **Tailscale** | 填 `100.x` 位址 |
-
-詳見 [`docs/GPT_SOVITS_MODEL_GUIDE.md`](docs/GPT_SOVITS_MODEL_GUIDE.md)。
-
-## 設定項目
+## 設定項目（Android）
 
 | 設定 | 預設 | 說明 |
 | --- | --- | --- |
-| `theme` | 科技風 | 視覺風格 |
-| `language` | 繁體中文 | 介面語言（繁中／EN／日／韓） |
-| `highContrast` | false | 高對比模式（黑底黃文） |
+| `language` | 繁體中文 | 介面＋朗讀語言（繁中／EN／日／韓），連動聲音模型篩選 |
+| `theme` / `highContrast` | 科技風 / off | 視覺風格、高對比（黑底黃文） |
 | `fontScale` | 1.0 | 全域字體倍率（0.8–1.8） |
-| `noseSensitivity` | 1.0 | 鼻控靈敏度（0.5–2.0） |
-| `dailyReminderEnabled` | false | 每日復健提醒 |
-| `dailyReminderHour` | 9 | 提醒時段（0–23） |
-| `reportPushFrequency` | none | 成績單推送頻率（none／daily／weekly） |
-| `ttsRate` | 0.85 | 朗讀速度（0.5–1.5） |
-| `cloudProvider` | 自動 | 雲端或本地 AI 路由 |
-| `autoSaveRehab` | true | 自動保存復健紀錄 |
-| `noseSensitivity` | 1.0 | 鼻控靈敏度倍率 |
+| `noseSensitivity` | 1.0 | 鼻控靈敏度（0.5–2.0，即時生效） |
+| `dailyReminderEnabled` / `Hour` | off / 9 | 每日復健提醒 |
+| `reportPushFrequency` | none | 成績單 Telegram 推送（none／daily／weekly） |
+| `gptSovitApiBaseUrl` | — | 語音中心位址（可存多台電腦、掃 QR 自動填） |
+| `emergencyChatId` | 空白 | Telegram 緊急通報接收者（不內建預設值） |
 | `customAacItems` | 空 | 自訂 AAC 圖卡（JSON） |
-| `emergencyChatId` | 空白 | Telegram 緊急通報接收者 |
-| `gptSovitEnabled` | false | GPT-SoVITS 實驗語音 |
 
-## 權限
+## 權限（Android）
 
 | 權限 | 用途 |
 | --- | --- |
 | 麥克風 | 語音輸入、跟讀錄音 |
 | 定位 | GPS 情境、住家錨點、緊急通報 |
-| 相機 | 前／後鏡頭預覽與辨識 |
-| 網路 | 雲端 AI、Overpass、Google Places、Telegram |
-| 通知（POST_NOTIFICATIONS） | 每日復健提醒、成績單推送 |
-| 儲存／媒體 | 匯入參考音檔、CSV／PDF 匯出 |
+| 相機 | 前／後鏡頭辨識、鼻控追蹤 |
+| 網路 | 雲端 AI、語音中心連線、Telegram |
+| 通知 | 每日提醒、成績單推送 |
+| 儲存／媒體 | 參考音檔匯入、CSV／PDF 匯出 |
 
 ## 專案結構
 
 ```text
 app/src/main/java/com/example/
 ├── ui/
-│   ├── VoiceWeaverScreen.kt    語音重組（含最愛、多語朗讀、複製分享）
-│   ├── AacScreen.kt            AAC 圖卡（含自訂圖卡）
-│   ├── RehabScreen.kt          語音復健（AI 評分、錯誤高亮、整段練習、streak）
-│   ├── report/ReportScreen.kt  成績單（趨勢圖、CSV/PDF 匯出）
-│   ├── settings/               設定畫面（無障礙、提醒、自訂圖卡）
-│   └── theme/                  AppPalette（含 HighContrastPalette）、Theme
+│   ├── VoiceWeaverScreen.kt      語音重組（最愛、多語朗讀、複製分享）
+│   ├── AacScreen.kt              AAC 圖卡（大圖卡模式、自訂圖卡）
+│   ├── RehabScreen.kt            語音復健（AI 評分、錯誤高亮、整段練習）
+│   ├── report/ReportScreen.kt    成績單（趨勢圖、CSV/PDF 匯出）
+│   ├── CrisisConversationWindow  危機介入（視訊、語音訊息、家人指令）
+│   ├── I18n.kt                   執行期翻譯層（動態訊息四語）
+│   └── settings/ + theme/        設定、進階設定、AppPalette
 ├── ai/
-│   ├── VoiceWeaverCore.kt      核心 ViewModel + InferenceEngine 介面 + scoreRehab()
-│   ├── CloudInferenceEngine.kt 雲端推理（offload → 雲端 → fallback）
-│   ├── MediaPipeLLMEngine.kt   裝置端 Gemma / Qwen AI 評分
-│   ├── PronunciationEvaluator.kt Levenshtein 備援 + wrongChars()
-│   ├── TtsModule.kt            TTS（含多語 speakInLocale）
-│   └── CloudSync.kt            Firestore 金鑰同步 + pushRehabLog()
-├── data/
-│   └── SettingsRepository.kt  DataStore（含 noseSensitivity、highContrast、提醒設定）
-├── work/
-│   ├── RehabScheduler.kt       WorkManager 排程（每日提醒、成績單推送）
-│   └── ReportExporter.kt       CSV / PDF 生成 + FileProvider 分享
-└── MainActivity.kt             鼻控靈敏度注入、高對比主題切換
+│   ├── VoiceWeaverCore.kt        核心 ViewModel + InferenceEngine 介面
+│   ├── CloudInferenceEngine.kt   雲端推理（電腦接手 → 雲端 → fallback）
+│   ├── MediaPipeLLMEngine.kt     裝置端 Gemma/Qwen
+│   ├── OffloadManager.kt         電腦接手（連線分級、/reconstruct 代理）
+│   ├── LocalSovitsHelper.kt      GPT-SoVITS 連線與模型切換
+│   └── SpeechToTextManager.kt    Vosk 離線 STT
+├── work/                          WorkManager（提醒、推送、匯出）
+└── MainActivity.kt
 
 app/src/main/assets/
-├── nose_tracker.html   鼻控 WebView（MediaPipe Face Mesh + egSetSensitivity）
-├── poi/                離線 POI（台灣／美國）
-└── t2s_map.txt         繁→簡對照
+├── nose_tracker.html   鼻控 WebView（MediaPipe Face Mesh，四語狀態訊息）
+└── poi/                離線 POI（台灣／美國）
 
 tools/
-├── GPT-SoVITS/   電腦端語音中心 + 無線同步
-├── dmg/          macOS 打包（.dmg）
-└── win/          Windows 打包（.zip）
+├── GPT-SoVITS/
+│   ├── voice_center_app.py     語音中心 GUI（Mac/Win 共用，四語介面）
+│   ├── model_setup_server.py   模型管理後端（掃描、匯入、歷史）
+│   ├── text_infer_server.py    Qwen 文字推論（9882）
+│   ├── image_gen_server.py     SD-Turbo 生圖（9881）
+│   └── sync_voice_models.py    手機↔電腦雙向模型同步
+├── dmg/build_dmg.sh    macOS .dmg 打包（權重安全網）
+└── win/build_win.ps1   Windows 打包
 ```
 
 ## 隱私與授權
 
-- **不內建任何語音模型／角色音色**：聲音由使用者自行匯入有權使用的素材。
+- **不內建任何語音模型／角色音色**：聲音由使用者自行匯入有權使用的素材；安裝檔打包時安全網強制剔除權重。
 - **金鑰不入版控**：`.env` 與 `app/google-services.json` 已被 `.gitignore`；API 金鑰只存在使用者裝置與其個人 Firestore。
-- **聲紋屬生物特徵**：啟用 GPT-SoVITS／匯入錄音前需勾選知情同意。
-- **第三方授權**：[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) 為 **AGPL-3.0**；打包 `.dmg`／`.zip` 散布時會附上其 `LICENSE`。
+- **聲紋屬生物特徵**：啟用 GPT-SoVITS／匯入錄音前需勾選知情同意（聲音主體同意、僅個人非商業溝通用途、不得冒充他人、不上傳雲端）。
+- **危機通報**：畫面與聲音僅傳給使用者自行設定的家人 Telegram，不經任何第三方伺服器。
+- **第三方授權**：[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) 為 **AGPL-3.0**，`.dmg`／`.exe` 散布時隨附其 `LICENSE`。
 - 本專案程式碼本身尚未公開授權（保留所有權利）；如需重用請先聯絡作者。
