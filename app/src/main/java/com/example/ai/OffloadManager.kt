@@ -204,11 +204,12 @@ object OffloadManager {
      * 把句子重組交給電腦端文字伺服器(9882/reconstruct)。
      * 送 {system,user}，回傳重組後句子；任何失敗回 null（呼叫端退回雲端/本機）。
      */
-    suspend fun computerReconstruct(system: String, user: String): String? = withContext(Dispatchers.IO) {
+    suspend fun computerReconstruct(system: String, user: String, temperature: Double = 0.5): String? = withContext(Dispatchers.IO) {
         val host = computerHost ?: return@withContext null
         val payload = JSONObject()
             .put("system", system)
             .put("user", user)
+            .put("temperature", temperature)   // 評分類任務傳低溫求穩定；舊版伺服器會忽略此欄位
             .toString()
         val req = Request.Builder()
             .url("http://$host:9882/reconstruct")

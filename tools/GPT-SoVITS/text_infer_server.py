@@ -60,9 +60,11 @@ def load_model() -> None:
         print(f"[text] load failed: {exc}", flush=True)
 
 
-def reconstruct(system: str, user: str) -> str:
+def reconstruct(system: str, user: str, temperature: float = 0.5) -> str:
     import torch
 
+    # 評分類任務會傳低溫（0.1~0.2）求穩定；夾在安全範圍
+    temperature = max(0.05, min(1.5, float(temperature or 0.5)))
     messages = []
     if system.strip():
         messages.append({"role": "system", "content": system})
@@ -77,13 +79,26 @@ def reconstruct(system: str, user: str) -> str:
                 **inputs,
                 max_new_tokens=MAX_NEW_TOKENS,
                 do_sample=True,
-                temperature=0.5,
+                temperature=temperature,
                 top_p=0.9,
                 pad_token_id=_tok.eos_token_id,
             )
         gen = out[0][inputs["input_ids"].shape[1]:]
         text = _tok.decode(gen, skip_special_tokens=True).strip()
-    # 只取第一行、去引號，符合 AAC「一句話」需求
+    text = (text or "").strip()
+    # JSON 輸出（復健評分等結構化任務）必須完整保留——多行 JSON 砍到第一行會整包壞掉，
+    # 客戶端解析失敗就悄悄掉到別的評分來源，分數忽高忽低。
+    # 模型常包 ```json 圍欄或加前言，所以不能只看開頭：取第一個 { 到最後一個 }，能 json 解析才算。
+    if "{" in text:
+        si, ei = text.find("{"), text.rfind("}")
+        if ei > si:
+            cand = text[si:ei + 1]
+            try:
+                json.loads(cand)
+                return cand
+            except Exception:
+                pass
+    # 其餘（AAC 組句等「一句話」需求）維持只取第一行、去引號
     text = text.splitlines()[0].strip() if text else ""
     return text.strip().strip("「」\"'")
 
@@ -124,7 +139,8 @@ class Handler(BaseHTTPRequestHandler):
             if not user:
                 self._json(400, {"ok": False, "error": "缺少 user"})
                 return
-            text = reconstruct(system, user)
+            temperature = body.get("temperature", 0.5)
+            text = reconstruct(system, user, temperature)
             self._json(200, {"ok": True, "text": text})
         except Exception as exc:  # noqa: BLE001
             self._json(500, {"ok": False, "error": str(exc)})

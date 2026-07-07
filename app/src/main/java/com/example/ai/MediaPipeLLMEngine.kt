@@ -133,7 +133,7 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
     ): RehabEvaluation = withContext(Dispatchers.IO) {
         val raw = runLlmSession(
             prompt = buildRehabEvalPrompt(target, recognized, words),
-            temperature = 0.3f,
+            temperature = 0.2f,   // 評分求穩定
             topK = 20,
             seed = (System.currentTimeMillis() and 0xFFFF).toInt()
         ) ?: return@withContext super.scoreRehab(target, recognized, words)
@@ -146,6 +146,7 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
         appendLine("<|im_start|>system")
         appendLine(
             "你是失語症語言治療師，評估患者口語跟讀。不要用字元差異，要看語意完整(50%)、流暢(30%)、語氣(20%)。" +
+            "每次評估都是獨立事件：只依據本次的目標句與患者語音判分，不參考、不比較、不延續任何先前的評估或分數（下面的範例只是輸出格式示範）。" +
             "只輸出 JSON：{\"score\":0到100整數,\"feedback\":\"20字內鼓勵\",\"wrongChars\":[\"說不準的字\"]}<|im_end|>"
         )
         appendLine("<|im_start|>user")

@@ -323,7 +323,7 @@ class HybridInferenceEngine(
         val prompt = buildRehabEvalPrompt(target, recognized, words)
         // 1) 電腦接手＝最省手機、離線可用（區網/USB）
         if (OffloadManager.shouldUseComputerText()) {
-            val txt = OffloadManager.computerReconstruct(prompt.system, prompt.user)?.trim()
+            val txt = OffloadManager.computerReconstruct(prompt.system, prompt.user, temperature = prompt.temperature)?.trim()
             val parsed = txt?.let { runCatching { parseRehabScore(it) }.getOrNull() }
             if (parsed != null) return parsed
         }
@@ -352,6 +352,8 @@ class HybridInferenceEngine(
             system = """
                 你是失語症語言治療師，評估患者的口語跟讀表現。
                 不要用字元差異計算，要從語意傳達與流暢自然的角度判斷。
+                這是一次完全獨立的評估：只依據本次的目標句與患者語音判分，
+                沒有任何先前的練習、分數或對話——不得參考、比較或延續任何過去的評估結果。
             """.trimIndent(),
             user = """
                 目標句：$target
@@ -364,7 +366,7 @@ class HybridInferenceEngine(
 
                 只回傳 JSON：{"score":整數, "feedback":"一句繁體中文鼓勵或指引（20字以內）", "wrongChars":["說得不準或漏掉的字"]}
             """.trimIndent(),
-            temperature = 0.3,
+            temperature = 0.15,   // 評分求穩定：低溫讓同樣表現得到一致分數
             maxTokens = 150
         )
     }
