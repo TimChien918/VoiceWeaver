@@ -671,6 +671,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         // 輪詢家人回覆 + 指令（/call /camera /end）
         crisisPollOffset = 0L
         crisisPollJob = viewModelScope.launch {
+            // ⚠️ 先快轉略過 bot 的舊積壓訊息：offset=0 會把「上一次危機」家人傳的 /end /camera
+            //     全部重放——新危機一開就被舊 /end 關掉。offset=-1 只取最後一則，拿到基準後丟棄內容。
+            runCatching { com.example.net.TelegramClient.pollFamilyReplies(-1L, crisisChatId()) }
+                .getOrNull()?.getOrNull()?.let { (base, _) -> crisisPollOffset = base }
             while (_crisisConv.value.active) {
                 val chat = crisisChatId()
                 runCatching { com.example.net.TelegramClient.pollFamilyReplies(crisisPollOffset, chat) }

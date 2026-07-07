@@ -174,7 +174,7 @@ fun StoryTrainingScreen(
                         scope.launch {
                             loadingAi = true
                             val hits = prompt.expectedKeywords.count { userText.contains(it) }
-                            val baseScore = (hits * 100f / prompt.expectedKeywords.size).toInt().coerceIn(0, 100)
+                            val baseScore = (hits * 100f / prompt.expectedKeywords.size.coerceAtLeast(1)).toInt().coerceIn(0, 100)
                             val feedback = generateFeedback(engine, prompt, userText, baseScore)
                             aiFeedback = feedback
                             lastScore = baseScore
@@ -303,7 +303,9 @@ private suspend fun generateFeedback(
     val ai = result?.takeIf { it.isNotBlank() }
     return ai ?: when {
         baseScore >= 80 -> I18n.tr("太棒了！您把這個故事完整說出來了，繼續保持 💪")
-        baseScore >= 50 -> I18n.tr("說得不錯！下次可以再多提到「%s」等關鍵字 🌱").format(prompt.expectedKeywords.first())
+        baseScore >= 50 -> prompt.expectedKeywords.firstOrNull()
+            ?.let { I18n.tr("說得不錯！下次可以再多提到「%s」等關鍵字 🌱").format(it) }
+            ?: I18n.tr("太棒了！您把這個故事完整說出來了，繼續保持 💪")
         else            -> I18n.tr("您願意開口練習就很棒了，再試一次，慢慢來 🌿")
     }
 }

@@ -73,6 +73,16 @@ fun QrScanDialog(
             if (hasCam) {
                 val executor = remember { Executors.newSingleThreadExecutor() }
                 val scanner = remember { BarcodeScanning.getClient() }
+                // 相機綁在 Activity lifecycle 上，Dialog 關閉不會自動解绑 →
+                // 沒有這段的話，掃完 QR 相機會繼續開著（隱私 + 耗電），executor/scanner 也洩漏。
+                val camProvider = remember { arrayOfNulls<ProcessCameraProvider>(1) }
+                DisposableEffect(Unit) {
+                    onDispose {
+                        runCatching { camProvider[0]?.unbindAll() }
+                        runCatching { scanner.close() }
+                        executor.shutdown()
+                    }
+                }
 
                 AndroidView(
                     factory = { c ->
@@ -108,6 +118,7 @@ fun QrScanDialog(
                                     proxy.close()
                                 }
                             }
+                            camProvider[0] = provider
                             provider.unbindAll()
                             provider.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
                         }, ContextCompat.getMainExecutor(c))

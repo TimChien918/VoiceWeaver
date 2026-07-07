@@ -149,8 +149,9 @@ object TelegramClient {
             val tk = token(); val tg = target(chatId)
             if (tk.isBlank()) return@withContext Result.failure(IllegalStateException("Telegram 未設定"))
             runCatching {
+                // offset=-1：Telegram 只回「最後一則」積壓訊息 → 用來在危機開始時快轉略過舊 backlog
                 val url = "${BASE_URL}bot$tk/getUpdates?timeout=0&allowed_updates=%5B%22message%22%5D" +
-                    if (offset > 0) "&offset=$offset" else ""
+                    if (offset != 0L) "&offset=$offset" else ""
                 val req = Request.Builder().url(url).get().build()
                 okHttp.newCall(req).execute().use { resp ->
                     val txt = resp.body?.string().orEmpty()
