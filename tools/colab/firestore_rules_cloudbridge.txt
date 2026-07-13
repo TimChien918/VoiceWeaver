@@ -1,0 +1,32 @@
+// ─────────────────────────────────────────────────────────────
+// VoiceWeaver — Firestore 安全規則：ngrok 雲端配對（cloudbridge）
+// ─────────────────────────────────────────────────────────────
+// 把「cloudbridge」這一段加進你現有的規則裡（Firebase Console → Firestore → 規則）。
+// 不要動到既有的 users/{uid} 那段；只是多加 match /cloudbridge/{code}。
+//
+// 設計：App／網頁把 ngrok 授權碼寫到 cloudbridge/{配對碼}；配對碼是 24 字不可猜的隨機字串。
+//   - 讀取：公開（因為 Colab 無登入），但沒有配對碼就不知道 doc id → 讀不到。
+//   - 寫入：僅限已登入者（避免匿名亂寫）。
+//
+// ⚠️ 安全提醒：任何拿到「配對碼」的人都能讀到你的 ngrok 授權碼。配對碼請勿外流；
+//   若外流，到 App／網頁重按產生新配對碼（未來版），或直接到 ngrok 後台重置 authtoken。
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 你原本的規則保留（範例，請對照自己現有的，不要覆蓋掉）──
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /{sub=**} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // ── 新增：ngrok 雲端配對 ──
+    match /cloudbridge/{code} {
+      allow read: if true;                    // Colab 無登入；靠不可猜的配對碼保護
+      allow write: if request.auth != null;   // 只有登入者能寫
+    }
+  }
+}
