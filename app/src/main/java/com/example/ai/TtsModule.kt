@@ -83,6 +83,8 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     private var gptSovitChineseModelDirUri: String = ""
     private var gptSovitEnglishModelDirUri: String = ""
     private var gptSovitApiBaseUrl: String = ""
+    /** 手動情緒覆寫（""＝自動偵測）。UI 可切「開心/難過/…」強制語氣。 */
+    @Volatile var manualEmotionOverride: String = ""
 
     val availablePiperVoices = listOf(
         PiperVoiceProfile("zh_TW-coqui-medium", "台灣本地女聲 (Coqui)", "zh_TW_coqui_medium.onnx", 78.4, "自然溫柔，發音清晰，適合日常溝通"),
@@ -398,17 +400,24 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             } else {
                 addLog("[GPT-SoVITS] 沿用目前模型（無 ${targetLang.displayName} 模型或切換失敗）")
             }
-            // ② 參考音檔：使用者自填優先；否則用（切換後的）該語言預設聲音 ref。
-            val defaultRef = activeVoice?.refPath ?: LocalSovitsHelper.refPathFor(targetLang)
+            // ② 情緒感知參考音：手動覆寫優先，否則從文字自動偵測情緒 → 挑該情緒的參考音。
+            //    伺服器沒提供情緒對照（舊電腦端）時 refForEmotion 會自動退回單一 refPath。
+            val emotion = manualEmotionOverride.ifBlank { LocalSovitsHelper.detectEmotion(text) }
+            val emoRef = activeVoice?.refForEmotion(emotion)
+            if (activeVoice != null && activeVoice.emotions.isNotEmpty()) {
+                addLog("[GPT-SoVITS] 情緒：$emotion${if (manualEmotionOverride.isNotBlank()) "（手動）" else "（自動）"} → ${emoRef?.ref?.substringAfterLast('/')}")
+                _synthesisStatus.value = "🎭 情緒：$emotion"
+            }
+            val defaultRef = emoRef?.ref?.ifBlank { null } ?: activeVoice?.refPath ?: LocalSovitsHelper.refPathFor(targetLang)
             val effectiveRefAudioPath = refAudioPath.ifBlank {
-                addLog("[GPT-SoVITS] 參考音檔未填，改用 Mac 端預設槽位：$defaultRef")
+                addLog("[GPT-SoVITS] 參考音檔：$defaultRef")
                 defaultRef
             }
             val serverSidePath = LocalSovitsHelper.translateRefAudioPathForServer(effectiveRefAudioPath, !isZh)
             // ③ 只有中文模型（簡體訓練）才把繁體轉簡體；英/日/韓不轉。
             val speakText = if (isZh) ChineseConverter.toSimplified(context, text) else text
             if (isZh && speakText != text) addLog("[GPT-SoVITS] 繁→簡：「$text」→「$speakText」")
-            val promptRaw = activeVoice?.prompt ?: LocalSovitsHelper.promptFor(targetLang)
+            val promptRaw = (emoRef?.prompt?.ifBlank { null }) ?: activeVoice?.prompt ?: LocalSovitsHelper.promptFor(targetLang)
             val promptText = if (isZh) ChineseConverter.toSimplified(context, promptRaw) else promptRaw
             sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text)
         }

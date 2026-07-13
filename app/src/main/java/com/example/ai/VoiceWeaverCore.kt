@@ -1265,6 +1265,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 即時轉發 TtsModule 的合成狀態（⏳/✅/❌ 人話訊息），給設定頁測試按鈕下方顯示。 */
     val sovitsSynthesisStatus: StateFlow<String?> get() = ttsModule.synthesisStatus
 
+    // 語音情緒手動覆寫（""＝自動偵測）。UI 選情緒 → 之後合成都用該情緒的參考音。
+    private val _voiceEmotion = MutableStateFlow("")
+    val voiceEmotion: StateFlow<String> = _voiceEmotion.asStateFlow()
+    fun setVoiceEmotion(emotion: String) {
+        _voiceEmotion.value = emotion
+        ttsModule.manualEmotionOverride = emotion
+    }
+
     /** 每種語言的測試句（句子帶該語言獨有字元 → TtsModule.detectLang 自動切對應模型）。 */
     fun testSentenceFor(lang: LocalSovitsHelper.VoiceLang): String = when (lang) {
         LocalSovitsHelper.VoiceLang.EN -> "Hello, this is a voice synthesis test. The weather is nice today."

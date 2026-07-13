@@ -214,6 +214,39 @@ object LocalSovitsHelper {
      * 從文字字元偵測語言：諺文→韓、假名→日、CJK 漢字→中、其餘→英。
      * 日文常混漢字，故先看假名/諺文；都沒有再用漢字判中文。
      */
+    // ── 情緒（換參考音＝換語氣）──────────────────────────
+    const val NEUTRAL = "中立"
+    private val EMOTION_ALIASES = mapOf(
+        "中立" to listOf("中立","平静","平靜","neutral"),
+        "开心" to listOf("开心","開心","高兴","高興","快乐","快樂","喜悦","happy"),
+        "难过" to listOf("难过","難過","伤心","傷心","难受","難受","sad"),
+        "恐惧" to listOf("恐惧","恐懼","害怕","惊恐","驚恐","fear"),
+        "吃惊" to listOf("吃惊","吃驚","惊讶","驚訝","惊喜","驚喜","surprise"),
+    )
+    private val LABEL_TO_CANON = EMOTION_ALIASES.flatMap { (c, al) -> al.map { it to c } }.toMap()
+    fun canonEmotion(label: String?): String = LABEL_TO_CANON[(label ?: "").trim()] ?: (label ?: "").trim().ifBlank { NEUTRAL }
+
+    private val EMOTION_KEYWORDS = mapOf(
+        "开心" to listOf("開心","开心","高興","高兴","快樂","快乐","太好","好耶","謝謝","谢谢","感謝","感谢","喜歡","喜欢","愛你","爱你","棒","讚","赞","哈哈","耶","幸福","舒服"),
+        "难过" to listOf("難過","难过","傷心","伤心","想哭","好累","不想","唉","失望","孤單","孤单","難受","难受","委屈","痛"),
+        "恐惧" to listOf("害怕","好怕","救命","危險","危险","不敢","恐怖","嚇","吓","緊張","紧张","求救"),
+        "吃惊" to listOf("什麼","什么","怎麼會","怎么会","天啊","居然","竟然","哇","真的假的","不會吧","不会吧","太扯","驚","惊"),
+    )
+    /** 從要唸的文字自動判情緒；沒把握回中立（？→吃惊、！→开心）。 */
+    fun detectEmotion(text: String?): String {
+        val t = text ?: ""
+        var best = NEUTRAL; var score = 0
+        for ((emo, kws) in EMOTION_KEYWORDS) {
+            val c = kws.count { t.contains(it) }
+            if (c > score) { best = emo; score = c }
+        }
+        if (score == 0) {
+            if (t.contains("？") || t.contains("?")) return "吃惊"
+            if (t.contains("！") || t.contains("!")) return "开心"
+        }
+        return best
+    }
+
     fun detectLang(text: String): VoiceLang {
         var hangul = 0; var kana = 0; var han = 0; var latin = 0
         for (c in text) {
@@ -245,16 +278,30 @@ object LocalSovitsHelper {
      * prompt 必須與音檔內容逐字一致 — 不對齊會降 clone 品質。
      * 權重路徑是相對於 Mac 上 GPT-SoVITS 工作目錄（~/VoiceWeaver-電腦端/GPT-SoVITS/）的路徑，給 /set_*_weights 熱切換用。
      */
+    /** 一個情緒對應的參考音：(server 端音檔路徑, 該音的逐字稿)。 */
+    data class EmotionRef(val ref: String, val prompt: String)
+
     data class MacRefVoice(
         val character: String,
         val lang: VoiceLang,
         val refPath: String,
         val prompt: String,
         val gptWeights: String,
-        val sovitsWeights: String
+        val sovitsWeights: String,
+        /** 情緒 → 參考音（中立/开心/难过/恐惧/吃惊）。空＝伺服器未提供情緒，退回單一 refPath。 */
+        val emotions: Map<String, EmotionRef> = emptyMap()
     ) {
         /** UI 顯示：模型名 + 語言標籤，例「我的聲音_ZH」 */
         val displayLabel: String get() = "$character${lang.tag}"
+
+        /** 指定情緒的參考音；沒有就退中立、再退預設 refPath/prompt。 */
+        fun refForEmotion(emotion: String?): EmotionRef {
+            val emo = canonEmotion(emotion)
+            emotions[emo]?.let { return it }
+            emotions[NEUTRAL]?.let { return it }
+            emotions.values.firstOrNull()?.let { return it }
+            return EmotionRef(refPath, prompt)
+        }
     }
 
     /**
@@ -295,12 +342,24 @@ object LocalSovitsHelper {
                     val character = name
                         .replace(Regex("[ _](ZH|CN|EN|JA|JP|KO|KR)\\b", RegexOption.IGNORE_CASE), "")
                         .trim('_', ' ').ifBlank { name }
+                    // 情緒對照（雲端橋接／新版電腦端會回 emotions:{情緒:{ref_path,prompt}}）
+                    val emo = mutableMapOf<String, EmotionRef>()
+                    o.optJSONObject("emotions")?.let { eo ->
+                        val keys = eo.keys()
+                        while (keys.hasNext()) {
+                            val k = keys.next()
+                            eo.optJSONObject(k)?.let { ev ->
+                                emo[canonEmotion(k)] = EmotionRef(ev.optString("ref_path"), ev.optString("prompt"))
+                            }
+                        }
+                    }
                     list.add(
                         MacRefVoice(
                             character = character, lang = lang,
                             refPath = o.optString("ref_path"),
                             prompt = o.optString("prompt"),
-                            gptWeights = gpt, sovitsWeights = sovits
+                            gptWeights = gpt, sovitsWeights = sovits,
+                            emotions = emo
                         )
                     )
                 }
