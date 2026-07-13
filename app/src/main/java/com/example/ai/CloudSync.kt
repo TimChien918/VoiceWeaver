@@ -175,6 +175,18 @@ object CloudSync {
     }
 
     // ── 推送復健日誌（網頁版成績單讀取用）──
+    /** ngrok 授權碼／固定網域鏡射到 cloudbridge/{配對碼}，讓 Colab 用配對碼從雲端取用。 */
+    fun pushNgrokBridge(token: String, domain: String, pairCode: String) {
+        if (uid == null || pairCode.isBlank()) return
+        val doc = hashMapOf<String, Any>(
+            "ngrokToken" to token,
+            "ngrokDomain" to domain,
+            "updatedAt" to System.currentTimeMillis()
+        )
+        db.collection("cloudbridge").document(pairCode).set(doc)
+            .addOnFailureListener { Log.w(TAG, "pushNgrokBridge failed", it) }
+    }
+
     fun pushRehabLog(log: com.example.data.RehabLog) {
         val u = uid ?: return
         val data = hashMapOf<String, Any>(

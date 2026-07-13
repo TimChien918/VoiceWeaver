@@ -272,6 +272,13 @@ fun SettingsScreen(
                 }
             }
 
+            // ngrok 雲端通道：授權碼存雲端（像其他 API），Colab 用配對碼自動取用
+            if (showComplex) item {
+                Section(title = I18n.tr("ngrok 雲端通道（Colab GPU）"), icon = Icons.Default.Cloud, p = p) {
+                    NgrokCloudSection(viewModel = viewModel, settings = settings, p = p)
+                }
+            }
+
             // ※「AI 生圖」已移到「開發者模式」內（需要電腦/雲端的功能集中管理）。
 
             // 進階功能入口（資料治理）。
@@ -914,6 +921,63 @@ private fun GptSovitDeveloperPanel(
  *  - 「複製啟動指令」「複製 adb reverse 指令」按鈕
  *  - 依模式不同的教學
  */
+/**
+ * ngrok 雲端通道：授權碼／固定網域存進帳號雲端（像其他 API），並鏡射到 cloudbridge/{配對碼}，
+ * 讓 Colab 用一組非機密配對碼自動取回授權碼——授權碼完全不必貼進 Colab。
+ */
+@Composable
+private fun NgrokCloudSection(
+    viewModel: VoiceWeaverViewModel,
+    settings: com.example.data.AppSettings,
+    p: com.example.ui.theme.AppPalette
+) {
+    val context = LocalContext.current
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    var token by remember(settings.ngrokToken) { mutableStateOf(settings.ngrokToken) }
+    var domain by remember(settings.ngrokDomain) { mutableStateOf(settings.ngrokDomain) }
+    var pairCode by remember { mutableStateOf(settings.ngrokPairCode) }
+    // 首次進入就確保有配對碼可顯示／複製
+    LaunchedEffect(Unit) { if (pairCode.isBlank()) pairCode = viewModel.ensureNgrokPairCode() }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Text(
+            I18n.tr("用 Colab 免費 GPU 跑語音合成時填 ngrok 授權碼。存到雲端後，Colab 用下方配對碼自動取用，授權碼不必貼進 Colab。"),
+            fontSize = 11.sp, color = p.textMuted, lineHeight = 15.sp
+        )
+        OutlinedTextField(
+            value = token, onValueChange = { token = it },
+            modifier = Modifier.fillMaxWidth().onFocusChanged { st ->
+                if (!st.isFocused && token != settings.ngrokToken) viewModel.saveNgrok(token.trim(), domain.trim())
+            },
+            singleLine = true,
+            label = { Text(I18n.tr("ngrok 授權碼")) },
+            placeholder = { Text(I18n.tr("從 dashboard.ngrok.com 複製")) }
+        )
+        OutlinedTextField(
+            value = domain, onValueChange = { domain = it },
+            modifier = Modifier.fillMaxWidth().onFocusChanged { st ->
+                if (!st.isFocused && domain != settings.ngrokDomain) viewModel.saveNgrok(token.trim(), domain.trim())
+            },
+            singleLine = true,
+            label = { Text(I18n.tr("固定網域（選填，建議）")) },
+            placeholder = { Text(I18n.tr("例 voiceweaver.ngrok-free.app")) }
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(I18n.tr("Colab 配對碼"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+                Text(pairCode.ifBlank { "…" }, fontSize = 11.sp, color = p.textMuted, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            }
+            TextButton(onClick = {
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("VW_PAIR_CODE", pairCode))
+            }) { Text(I18n.tr("📋 複製"), fontSize = 11.sp, color = p.neonCyan) }
+        }
+        Text(
+            I18n.tr("授權碼只存在你的帳號與一份用配對碼保護的雲端文件。需登入雲端同步才會生效。"),
+            fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
+        )
+    }
+}
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun TermuxSovitsPanel(

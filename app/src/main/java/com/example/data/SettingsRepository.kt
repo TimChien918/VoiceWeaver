@@ -125,6 +125,9 @@ data class AppSettings(
     val gptSovitApiBaseUrl: String = "",
     /** 已儲存的 SoVITS 電腦清單：每行一筆「名稱|http://ip:9880」。 */
     val gptSovitServerList: String = "",
+    val ngrokToken: String = "",
+    val ngrokDomain: String = "",
+    val ngrokPairCode: String = "",
     /** 聲紋克隆隱私知情同意（未勾選前不可啟用 GPT-SoVITS / 錄音匯入）。 */
     val sovitsConsentAccepted: Boolean = false,
     /** AAC 意圖確認卡開關：AI 組句後跳大圖卡讓不識字使用者 ✓/✗ 確認。 */
@@ -252,6 +255,9 @@ class SettingsRepository(private val context: Context) {
         val GptSovitAutoRootUri = stringPreferencesKey("gpt_sovit_auto_root_uri")
         val GptSovitApiBaseUrl = stringPreferencesKey("gpt_sovit_api_base_url")
         val GptSovitServerList = stringPreferencesKey("gpt_sovit_server_list")
+        val NgrokToken = stringPreferencesKey("ngrok_token")
+        val NgrokDomain = stringPreferencesKey("ngrok_domain")
+        val NgrokPairCode = stringPreferencesKey("ngrok_pair_code")
         val SovitsConsent       = booleanPreferencesKey("sovits_consent_accepted")
         val AacIntentConfirm    = booleanPreferencesKey("aac_intent_confirm")
         val AacIntentImage      = booleanPreferencesKey("aac_intent_image")
@@ -330,6 +336,9 @@ class SettingsRepository(private val context: Context) {
         gptSovitAutoImportRootUri = this[Keys.GptSovitAutoRootUri] ?: "",
         gptSovitApiBaseUrl = this[Keys.GptSovitApiBaseUrl] ?: "",
         gptSovitServerList = this[Keys.GptSovitServerList] ?: "",
+        ngrokToken = this[Keys.NgrokToken] ?: "",
+        ngrokDomain = this[Keys.NgrokDomain] ?: "",
+        ngrokPairCode = this[Keys.NgrokPairCode] ?: "",
         sovitsConsentAccepted = this[Keys.SovitsConsent] ?: false,
         aacIntentConfirmEnabled = this[Keys.AacIntentConfirm] ?: true,
         aacIntentImageEnabled = this[Keys.AacIntentImage] ?: false,
@@ -397,6 +406,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setGptSovitAutoImportRootUri(uri: String) = update { it[Keys.GptSovitAutoRootUri] = uri }
     suspend fun setGptSovitApiBaseUrl(url: String) = update { it[Keys.GptSovitApiBaseUrl] = url.trim() }
     suspend fun setGptSovitServerList(list: String) = update { it[Keys.GptSovitServerList] = list }
+    suspend fun setNgrokToken(v: String) = update { it[Keys.NgrokToken] = v.trim() }
+    suspend fun setNgrokDomain(v: String) = update { it[Keys.NgrokDomain] = v.trim() }
+    suspend fun setNgrokPairCode(v: String) = update { it[Keys.NgrokPairCode] = v }
     suspend fun setSovitsConsentAccepted(on: Boolean) = update { it[Keys.SovitsConsent] = on }
     suspend fun setAacIntentConfirmEnabled(on: Boolean) = update { it[Keys.AacIntentConfirm] = on }
     suspend fun setAacIntentImageEnabled(on: Boolean) = update { it[Keys.AacIntentImage] = on }

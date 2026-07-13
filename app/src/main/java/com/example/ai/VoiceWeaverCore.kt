@@ -1503,6 +1503,24 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun setGptSovitAutoImportRootUri(uri: String) = viewModelScope.launch { settingsRepo.setGptSovitAutoImportRootUri(uri) }
     fun setGptSovitApiBaseUrl(url: String) = viewModelScope.launch { settingsRepo.setGptSovitApiBaseUrl(url) }
     fun setGptSovitServerList(list: String) = viewModelScope.launch { settingsRepo.setGptSovitServerList(list) }
+
+    /** 產生（若無）並回傳 ngrok 雲端配對碼——24 字不可猜，只產一次。 */
+    suspend fun ensureNgrokPairCode(): String {
+        val cur = settingsRepo.settings.firstOrNull()?.ngrokPairCode ?: ""
+        if (cur.isNotBlank()) return cur
+        val bytes = ByteArray(18).also { java.security.SecureRandom().nextBytes(it) }
+        val code = "vw" + bytes.joinToString("") { "%02x".format(it) }.take(22)
+        settingsRepo.setNgrokPairCode(code)
+        return code
+    }
+
+    /** 存 ngrok 授權碼／固定網域到帳號，並鏡射到 cloudbridge/{配對碼}（Colab 用配對碼取用）。 */
+    fun saveNgrok(token: String, domain: String) = viewModelScope.launch {
+        settingsRepo.setNgrokToken(token)
+        settingsRepo.setNgrokDomain(domain)
+        val code = ensureNgrokPairCode()
+        CloudSync.pushNgrokBridge(token.trim(), domain.trim(), code)
+    }
     // ─── 自訂 API（懸浮視窗）─────────────────────────────────────────────────
     fun setCustomApiEnabled(on: Boolean) = viewModelScope.launch { settingsRepo.setCustomApiEnabled(on) }
     fun setCustomApiName(v: String) = viewModelScope.launch { settingsRepo.setCustomApiName(v) }
