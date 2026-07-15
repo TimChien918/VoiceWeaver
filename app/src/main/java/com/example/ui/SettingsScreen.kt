@@ -975,6 +975,42 @@ private fun NgrokCloudSection(
             I18n.tr("授權碼只存在你的帳號與一份用配對碼保護的雲端文件。需登入雲端同步才會生效。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
         )
+
+        // ── 一鍵把「手機語音」指到 Colab 雲端（讀 Drive 上的角色）或改回本機 ──
+        val cloudBase = domain.trim().let { d ->
+            when {
+                d.isBlank() -> ""
+                d.startsWith("http", ignoreCase = true) -> d.trimEnd('/')
+                else -> "https://" + d.trimEnd('/')
+            }
+        }
+        val curBase = settings.gptSovitApiBaseUrl.trim().trimEnd('/')
+        val isCloud = cloudBase.isNotBlank() && curBase == cloudBase
+        Text(
+            I18n.tr("手機語音要用電腦還是 Colab 免費 GPU 合成？切到雲端後，角色清單直接來自 Drive 上的資料夾。"),
+            fontSize = 11.sp, color = p.textMuted, lineHeight = 15.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = {
+                    if (cloudBase.isBlank()) return@Button
+                    // 先確保網域已存雲端（供 Colab 用配對碼取用），再把手機語音指向雲端
+                    viewModel.saveNgrok(token.trim(), domain.trim())
+                    viewModel.setGptSovitApiBaseUrl(cloudBase)
+                },
+                enabled = cloudBase.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) { Text(if (isCloud) I18n.tr("☁️ 使用中（雲端）") else I18n.tr("☁️ 改用雲端 Colab"), fontSize = 12.sp) }
+            OutlinedButton(
+                onClick = { viewModel.setGptSovitApiBaseUrl(com.example.ai.LocalSovitsHelper.DEFAULT_LOCAL_URL) },
+                modifier = Modifier.weight(1f)
+            ) { Text(I18n.tr("💻 改回本機"), fontSize = 12.sp) }
+        }
+        Text(
+            I18n.tr("目前語音伺服器：") + curBase.ifBlank { com.example.ai.LocalSovitsHelper.DEFAULT_LOCAL_URL },
+            fontSize = 10.sp, color = if (isCloud) p.neonCyan else p.textMuted,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, lineHeight = 14.sp
+        )
     }
 }
 

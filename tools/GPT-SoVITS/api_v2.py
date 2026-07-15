@@ -168,23 +168,57 @@ async def health():
 
 @APP.get("/models")
 async def models():
-    """回傳已登錄的模型清單（讀模型控制中心的 model_history.json），給 App 動態顯示角色清單。"""
+    """回傳已登錄的模型清單，給 App 動態顯示角色清單。
+
+    情緒資料夾結構（VOICEWEAVER_EMOTION_ROOT）優先，否則退回 model_history.json。
+    每筆都含 emotions:{情緒:{ref_path,prompt}}，與 Colab 橋接同一份合約
+    （App 端自行依偵測到的情緒挑參考音，見 LocalSovitsHelper.refForEmotion）。
+    """
     import json as _json
     from pathlib import Path as _Path
-    hist = _Path(__file__).resolve().parent / "user_models/model_history.json"
+    here = _Path(__file__).resolve().parent
+    if str(here) not in sys.path:
+        sys.path.append(str(here))
+    try:
+        import emotion_models as _em
+    except Exception:
+        _em = None
+
+    out = []
+    scanned = _em.scan_emotion_models() if _em else []
+    if scanned:
+        for m in scanned:
+            ems = m.get("emotions", {})
+            neu = ems.get(_em.NEUTRAL) or next(iter(ems.values()), {})
+            out.append({
+                "name": m["name"],
+                "version": "",
+                "gpt_rel": m.get("gpt", ""),
+                "sovits_rel": m.get("sovits", ""),
+                "ref_path": neu.get("ref", ""),
+                "prompt": neu.get("prompt", ""),
+                "emotions": {k: {"ref_path": v["ref"], "prompt": v["prompt"]}
+                             for k, v in ems.items()},
+            })
+        return JSONResponse(status_code=200, content={"ok": True, "models": out})
+
+    # 退回舊 model_history.json（單一參考音＝中立情緒）
+    hist = here / "user_models/model_history.json"
     try:
         data = _json.loads(hist.read_text(encoding="utf-8")) if hist.exists() else []
     except Exception:
         data = []
-    out = []
+    neutral = _em.NEUTRAL if _em else "中立"
     for r in (data if isinstance(data, list) else []):
+        ref, prompt = r.get("ref_path", ""), r.get("prompt", "")
         out.append({
             "name": r.get("name", ""),
             "version": r.get("version", ""),
             "gpt_rel": r.get("gpt_rel", ""),
             "sovits_rel": r.get("sovits_rel", ""),
-            "ref_path": r.get("ref_path", ""),
-            "prompt": r.get("prompt", ""),
+            "ref_path": ref,
+            "prompt": prompt,
+            "emotions": {neutral: {"ref_path": ref, "prompt": prompt}},
         })
     return JSONResponse(status_code=200, content={"ok": True, "models": out})
 

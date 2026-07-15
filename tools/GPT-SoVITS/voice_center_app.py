@@ -124,6 +124,12 @@ except Exception as _e:
     CC_OK = False
     _CC_ERR = str(_e)
 
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import emotion_models as em   # 情緒感知：與 api_v2 /models、Colab 橋接共用同一套
+except Exception:
+    em = None
+
 VOICE_CFG = "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
 
 # Python 直譯器（非凍結版直接用 sys.executable；凍結版啟動時背景搜尋）
@@ -577,6 +583,15 @@ I18N = {
     "adv.delete":   {"zh-TW":"🗑 刪除", "en":"🗑 Delete", "ja":"🗑 削除", "ko":"🗑 삭제"},
     "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
     "adv.importBatch": {"zh-TW":"📂 批量匯入資料夾", "en":"📂 Batch import folders", "ja":"📂 フォルダを一括取込", "ko":"📂 폴더 일괄 가져오기"},
+    "adv.secEmoDrive": {"zh-TW":"情緒模型資料夾（Google Drive）", "en":"Emotion models folder (Google Drive)", "ja":"感情モデルフォルダ（Google ドライブ）", "ko":"감정 모델 폴더 (Google 드라이브)"},
+    "adv.emoHint": {"zh-TW":"指到 Google Drive for Desktop 的 VoiceWeaver 資料夾（含 ZH/EN/JA/KO），即可依情緒切參考音；App 本機模式與網頁都會生效。",
+                    "en":"Point to the VoiceWeaver folder in Google Drive for Desktop (with ZH/EN/JA/KO) to enable emotion-aware refs; applies to app local mode and web.",
+                    "ja":"Google ドライブ（デスクトップ）の VoiceWeaver フォルダ（ZH/EN/JA/KO）を指定すると感情で参照音を切替。アプリのローカルとWebに反映。",
+                    "ko":"Google 드라이브 데스크톱의 VoiceWeaver 폴더(ZH/EN/JA/KO)를 지정하면 감정별 참조음 전환. 앱 로컬/웹에 적용."},
+    "adv.emoNone": {"zh-TW":"（尚未設定；改用已匯入的模型清單）", "en":"(not set; using imported models)", "ja":"（未設定；取込済みモデルを使用）", "ko":"(미설정; 가져온 모델 사용)"},
+    "adv.emoPick": {"zh-TW":"📁 選擇 Drive 資料夾", "en":"📁 Pick Drive folder", "ja":"📁 Drive フォルダを選択", "ko":"📁 Drive 폴더 선택"},
+    "adv.emoCheck": {"zh-TW":"🔎 健檢", "en":"🔎 Check", "ja":"🔎 点検", "ko":"🔎 점검"},
+    "adv.emoClear": {"zh-TW":"✖ 取消設定", "en":"✖ Clear", "ja":"✖ 解除", "ko":"✖ 해제"},
     "adv.stopgen":  {"zh-TW":"⏹ 中止合成", "en":"⏹ Stop synthesis", "ja":"⏹ 合成を中止", "ko":"⏹ 합성 중지"},
     "adv.secTest":  {"zh-TW":"測試合成", "en":"Test synthesis", "ja":"合成テスト", "ko":"합성 테스트"},
     "adv.testDefault": {"zh-TW":"你好，這是測試。", "en":"Hello, this is a test.", "ja":"こんにちは、これはテストです。", "ko":"안녕하세요, 테스트입니다."},
@@ -956,6 +971,8 @@ class App:
             self._tab_btns[key] = (b, tkey)
         self._current_tab = None
 
+        self._load_emotion_root()   # 早於建 UI：讓進階分頁的資料夾標籤一開始就顯示正確路徑
+
         self._build_main(self.tab_main)
         self._build_adv(self.tab_adv)
         self._build_help(self.tab_help)
@@ -1134,6 +1151,7 @@ class App:
         self.sync_models(arm_serial=serial)
 
     def _start_all_services(self):
+        self._load_emotion_root()   # 設 VOICEWEAVER_EMOTION_ROOT，讓 api_v2 子程序啟動時繼承
         self._detect_device_bg()
         self._start_lang_server()
         # 逐一啟動，不要三個服務一起載入模型——每個載入都會吃 ~85% CPU + 數 GB 記憶體，
@@ -1160,11 +1178,13 @@ class App:
     def _start_lang_server(self):
         """port 9879：手機語言同步 + 網頁橋接（皆帶 CORS，供 github.io 網頁從 localhost/Tailscale 呼叫）
 
-          POST /lang    {"tag","name"}        手機語言推送（既有）
-          GET  /health                        橋接狀態（網頁偵測連線用）
-          GET  /voices                        模型清單 [{name,lang}]
-          POST /switch  {"name","lang"}       切換 GPT-SoVITS 模型（載權重，較慢）
-          POST /speak   {"text","lang"?}      用目前語音合成 → 回 audio/wav
+          POST /lang           {"tag","name"}            手機語言推送（既有）
+          GET  /health                                   橋接狀態（網頁偵測連線用）
+          GET  /voices                                   模型清單 [{name,lang}]
+          GET  /emotions                                 目前語音可用情緒 + 全部標準情緒（手動覆寫用）
+          POST /switch         {"name","lang"}           切換 GPT-SoVITS 模型（載權重，較慢）
+          POST /detect_emotion {"text"}                  從文字偵測情緒 → {"emotion"}
+          POST /speak {"text","lang"?,"emotion"?}        合成 → audio/wav（帶 X-Emotion；emotion 空＝自動偵測）
         """
         import json, http.server
         app_ref = self
@@ -1186,9 +1206,12 @@ class App:
                 try: self.wfile.write(body)
                 except Exception: pass
 
-            def _wav(self, data: bytes):
+            def _wav(self, data: bytes, emotion: str = ""):
+                import urllib.parse
                 self.send_response(200); self._cors()
                 self.send_header("Content-Type", "audio/wav")
+                if emotion:
+                    self.send_header("X-Emotion", urllib.parse.quote(emotion))
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 try: self.wfile.write(data)
@@ -1219,6 +1242,14 @@ class App:
                         return self._json(200, {"ok": True, "voices": voices})
                     except Exception as e:
                         return self._json(500, {"ok": False, "error": str(e)})
+                if self.path.startswith("/emotions"):
+                    # 目前載入語音可用的情緒清單（給網頁手動覆寫用）+ 全部標準情緒
+                    cur = app_ref._bridge_voice or {}
+                    return self._json(200, {
+                        "ok": True,
+                        "emotions": sorted((cur.get("emotions") or {}).keys()),
+                        "all": list(em.EMOTION_ALIASES.keys()) if em else [],
+                    })
                 self._json(404, {"ok": False, "error": "not found"})
 
             def do_POST(self):
@@ -1242,15 +1273,19 @@ class App:
                 if self.path == "/switch":
                     ok, msg = app_ref._bridge_switch(str(data.get("name", "")), str(data.get("lang", "")))
                     return self._json(200 if ok else 500, {"ok": ok, "msg": msg})
+                if self.path == "/detect_emotion":
+                    emo = em.detect_emotion(str(data.get("text", ""))) if em else ""
+                    return self._json(200, {"ok": True, "emotion": emo})
                 if self.path == "/speak":
                     text = str(data.get("text", "")).strip()
                     if not text:
                         return self._json(400, {"ok": False, "error": "empty text"})
-                    wav, err = app_ref._bridge_speak(text, str(data.get("lang", "")),
-                                                     str(data.get("name", "")))
+                    wav, err, emo = app_ref._bridge_speak(text, str(data.get("lang", "")),
+                                                          str(data.get("name", "")),
+                                                          str(data.get("emotion", "")))
                     if wav is None:
                         return self._json(500, {"ok": False, "error": err})
-                    return self._wav(wav)
+                    return self._wav(wav, emo)
                 if self.path == "/image":
                     prompt = str(data.get("prompt", "")).strip()
                     if not prompt:
@@ -1289,6 +1324,26 @@ class App:
             cands = [m for m in hist if m.get("name") == name]
         return cands[0] if cands else None
 
+    def _bridge_emotions_for(self, name: str, lang_tag: str, ref: str, prompt: str):
+        """回該角色的情緒→參考音對照 {canon:{ref,prompt}}。
+
+        有情緒資料夾結構（VOICEWEAVER_EMOTION_ROOT）且名稱/語言對得上就用它；
+        否則退回單一參考音當中立（與 Colab 橋接同一套邏輯）。
+        """
+        neutral = (em.NEUTRAL if em else "中立")
+        fallback = {neutral: {"ref": ref, "prompt": prompt}} if ref else {}
+        if not em:
+            return fallback
+        # 去掉名稱結尾語言標籤後比對角色名
+        base = re.sub(r"[ _](ZH|CN|EN|JA|JP|KO|KR)\b", "", name, flags=re.I).strip("_ ") or name
+        for m in em.scan_emotion_models():
+            if m.get("lang", "") != lang_tag:
+                continue
+            if m.get("character") == base or m.get("name") == name or m.get("character") == name:
+                return {k: {"ref": v["ref"], "prompt": v["prompt"]}
+                        for k, v in m.get("emotions", {}).items()}
+        return fallback
+
     def _bridge_switch(self, name: str, lang: str):
         from pathlib import Path
         try:
@@ -1300,13 +1355,17 @@ class App:
             ref_abs = resolve_existing(m["ref_path"])
             cc.apply_runtime_model(m["version"], gpt_rel, sov_rel, Path(ref_abs), m.get("prompt", ""))
             cc.mark_model_used(m)
-            self._bridge_voice = {"name": m.get("name", ""), "lang": self._model_lang_tag(m),
-                                  "ref": ref_abs, "prompt": m.get("prompt", "")}
+            lang_tag = self._model_lang_tag(m)
+            self._bridge_voice = {"name": m.get("name", ""), "lang": lang_tag,
+                                  "ref": ref_abs, "prompt": m.get("prompt", ""),
+                                  "emotions": self._bridge_emotions_for(
+                                      m.get("name", ""), lang_tag, ref_abs, m.get("prompt", ""))}
             return True, f"已切換到 {name}"
         except Exception as e:
             return False, str(e)
 
-    def _bridge_speak(self, text: str, lang_hint: str = "", want_name: str = ""):
+    def _bridge_speak(self, text: str, lang_hint: str = "", want_name: str = "", emotion: str = ""):
+        """合成 → (wav_bytes, err, used_emotion)。emotion 空 → 從 text 自動偵測（換情緒＝換參考音）。"""
         from pathlib import Path
         with self._bridge_lock:
             try:
@@ -1317,24 +1376,31 @@ class App:
                                   or (want_norm and self._norm_lang(cur.get("lang", "")) != want_norm)):
                     ok, msg = self._bridge_switch(want_name, lang_hint)
                     if not ok:
-                        return None, msg
+                        return None, msg, ""
                 # 沒有指定、也沒載入過 → 自動載入最近使用的那一個
                 elif not cur:
                     hist = cc.load_history()
                     if not hist:
-                        return None, "電腦上沒有任何語音模型"
+                        return None, "電腦上沒有任何語音模型", ""
                     ok, msg = self._bridge_switch(hist[0].get("name", ""), self._model_lang_tag(hist[0]))
                     if not ok:
-                        return None, msg
+                        return None, msg, ""
                 v = self._bridge_voice
+                # 情緒感知：手動指定優先，否則從文字偵測 → 挑該情緒的參考音（沒有退中立、再退預設）。
+                used = (em.canon_emotion(emotion) if emotion else em.detect_emotion(text)) if em else ""
+                ref, prompt = v.get("ref", ""), v.get("prompt", "")
+                if em:
+                    ekey, pick = em.pick_ref(v, used)
+                    if pick:
+                        used, ref, prompt = ekey, pick["ref"], pick["prompt"]
                 tag = self._norm_lang(lang_hint) or self._norm_lang(v.get("lang", "")) \
-                      or self._detect_lang_from_text(v.get("prompt", "")) or "ZH"
-                ok, msg = cc.run_tts_test(text, v.get("prompt", ""), Path(v["ref"]), 8, "_" + tag)
+                      or self._detect_lang_from_text(prompt) or "ZH"
+                ok, msg = cc.run_tts_test(text, prompt, Path(ref), 8, "_" + tag)
                 if not ok:
-                    return None, msg
-                return cc.TEST_WAV_PATH.read_bytes(), None
+                    return None, msg, used
+                return cc.TEST_WAV_PATH.read_bytes(), None, used
             except Exception as e:
-                return None, str(e)
+                return None, str(e), ""
 
     def _bridge_image(self, prompt: str, steps: int = 2):
         """代理到本機生圖伺服器(9881)，回 png bytes。"""
@@ -1803,6 +1869,18 @@ class App:
         self.tr(self._btn(row2, "", self.adv_import, C_BLUE), "adv.import").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._btn(row2, "", self.adv_import_batch, C_AMBER), "adv.importBatch").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._neutral_btn(row2, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x")
+
+        # ── 情緒模型資料夾（Google Drive）：指到 Drive 即可依情緒切參考音 ──
+        _section("adv.secEmoDrive")
+        emo_hint = tk.Label(parent, font=(FONT_UI, SZ_SMALL), wraplength=580, justify="left", anchor="w")
+        emo_hint.pack(fill="x", padx=20, pady=(0, 4)); self.tr(emo_hint, "adv.emoHint"); self._track(emo_hint, "muted")
+        self.emo_path_lbl = tk.Label(parent, text=self._emotion_root_display(),
+                                     font=(FONT_MONO, SZ_SMALL), wraplength=580, justify="left", anchor="w")
+        self.emo_path_lbl.pack(fill="x", padx=20, pady=(0, 4)); self._track(self.emo_path_lbl, "fg")
+        row_emo = tk.Frame(parent); row_emo.pack(fill="x", padx=20, pady=(0, 4)); self._track(row_emo, "bg")
+        self.tr(self._btn(row_emo, "", self.adv_pick_emotion_root, C_BLUE), "adv.emoPick").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row_emo, "", self.adv_emotion_report), "adv.emoCheck").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row_emo, "", self.adv_clear_emotion_root), "adv.emoClear").pack(side="left", expand=True, fill="x")
 
         _section("adv.secTest")
         tr = tk.Frame(parent); tr.pack(fill="x", padx=20, pady=(4, 4)); self._track(tr, "bg")
@@ -2635,6 +2713,7 @@ class App:
 
     # ── 無線端點記憶（USB 接上時學習手機 Wi-Fi IP，之後免插線即可無線同步） ──
     PHONE_IP_FILE = os.path.join(ROOT, ".phone_wifi")
+    EMOTION_ROOT_FILE = os.path.join(ROOT, ".emotion_root")
 
     def _save_phone_ip(self, ip: str) -> None:
         ip = (ip or "").strip()
@@ -2655,6 +2734,81 @@ class App:
                 return f.read().strip()
         except Exception:
             return ""
+
+    # ── 情緒模型資料夾（Google Drive）：設 VOICEWEAVER_EMOTION_ROOT ──
+    def _load_emotion_root(self) -> str:
+        """讀記憶檔並設進本行程環境變數（api_v2 子程序啟動時繼承、app 橋接即時讀）。回路徑。"""
+        path = ""
+        try:
+            with open(self.EMOTION_ROOT_FILE, encoding="utf-8") as f:
+                path = f.read().strip()
+        except Exception:
+            path = ""
+        if path and os.path.isdir(path):
+            os.environ["VOICEWEAVER_EMOTION_ROOT"] = path
+        else:
+            os.environ.pop("VOICEWEAVER_EMOTION_ROOT", None)
+            path = ""
+        return path
+
+    def _emotion_root_display(self) -> str:
+        p = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        return p if p else self.t("adv.emoNone")
+
+    def _apply_emotion_root(self, path: str):
+        """持久化 + 設環境變數 + 更新標籤 + 重啟語音服務(9880)讓子程序繼承新 env。"""
+        path = (path or "").strip().rstrip("/")
+        try:
+            with open(self.EMOTION_ROOT_FILE, "w", encoding="utf-8") as f:
+                f.write(path)
+        except Exception:
+            pass
+        if path and os.path.isdir(path):
+            os.environ["VOICEWEAVER_EMOTION_ROOT"] = path
+        else:
+            os.environ.pop("VOICEWEAVER_EMOTION_ROOT", None)
+        try:
+            self.emo_path_lbl.config(text=self._emotion_root_display())
+        except Exception:
+            pass
+        # api_v2(9880) 是子程序、啟動時才讀 env → 重啟才生效（app 自身橋接 9879 即時讀，不必重啟）
+        if port_up(9880) or ("9880" in getattr(self, "procs", {})):
+            self.stop("9880")
+            self.root.after(1500, lambda: self.start("9880"))
+            self.set_status(self.t("已套用情緒資料夾，語音服務重啟中…"))
+
+    def adv_pick_emotion_root(self):
+        from tkinter import filedialog, messagebox
+        path = filedialog.askdirectory(title=self.t("adv.emoPick"))
+        if not path:
+            return
+        # 若選到的資料夾沒有任何語言子夾，問要不要自動建範本
+        has_lang = any(os.path.isdir(os.path.join(path, l)) for l in ("ZH", "EN", "JA", "KO"))
+        if not has_lang and em is not None:
+            if messagebox.askyesno("VoiceWeaver",
+                                   f"此資料夾底下還沒有 ZH/EN/JA/KO。\n要在這裡建立範本資料夾嗎？\n{path}"):
+                try:
+                    em.ensure_template(path)
+                except Exception:
+                    pass
+        self._apply_emotion_root(path)
+        self.adv_emotion_report()
+
+    def adv_clear_emotion_root(self):
+        self._apply_emotion_root("")
+        self.set_status(self.t("已取消情緒資料夾設定"))
+
+    def adv_emotion_report(self):
+        from tkinter import messagebox
+        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        if em is None:
+            messagebox.showinfo("VoiceWeaver", "emotion_models 模組未載入")
+            return
+        try:
+            rep = em.format_report(em.scan_report(root))
+        except Exception as e:
+            rep = f"健檢失敗：{e}"
+        messagebox.showinfo("VoiceWeaver — 情緒模型健檢", rep)
 
     def _current_ip_field(self) -> str:
         """UI 欄位目前的手機 IP（使用者可手動改）；沒有就回記憶檔。"""
