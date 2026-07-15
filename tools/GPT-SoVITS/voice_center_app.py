@@ -2365,7 +2365,11 @@ class App:
             cc.save_history(hist)
             ok, _ = cc.apply_runtime_model(ver, gpt_rel, sov_rel,
                                            ref_path or Path(""), edited["prompt"])
-            return True, f"已匯入「{edited['name']}」（{ver}）" + ("，已載入" if ok else "；請重啟語音服務")
+            # 匯入即上傳：有設定 Drive 曲庫就同步進去（Drive 桌面版負責上傳）
+            dest = self._sync_to_drive_library(edited["name"], lang_val, gpt_src, sov_src,
+                                               ref_path, edited["prompt"])
+            up = "；已同步到雲端曲庫" if dest else ""
+            return True, f"已匯入「{edited['name']}」（{ver}）" + ("，已載入" if ok else "；請重啟語音服務") + up
         self._run_bg(task)
 
     # ── 編輯現有模型 ───────────────────────────────────────────
@@ -2519,7 +2523,11 @@ class App:
                                 if r.get("gpt_rel") == gpt_rel and r.get("sovits_rel") == sov_rel:
                                     r["lang"] = lang_val; break
                             cc.save_history(hist)
-                            _log(f"  ✓ 已匯入「{info['name']}」[{lang_val}]（{ver}）")
+                            # 匯入即上傳：有設定 Drive 曲庫就同步進去
+                            dest = self._sync_to_drive_library(info["name"], lang_val, gpt_src, sov_src,
+                                                               ref_src, info.get("prompt", ""))
+                            _log(f"  ✓ 已匯入「{info['name']}」[{lang_val}]（{ver}）"
+                                 + ("，已同步雲端曲庫" if dest else ""))
                             ok_count += 1
                 except Exception as exc:
                     _log(f"  ✗ 例外：{exc}")
@@ -2792,6 +2800,7 @@ class App:
                 except Exception:
                     pass
         self._apply_emotion_root(path)
+        self._write_catalog_line(path)   # 挑好資料夾即產出雲端曲庫目錄索引
         self.adv_emotion_report()
 
     def adv_clear_emotion_root(self):
@@ -2808,7 +2817,61 @@ class App:
             rep = em.format_report(em.scan_report(root))
         except Exception as e:
             rep = f"健檢失敗：{e}"
-        messagebox.showinfo("VoiceWeaver — 情緒模型健檢", rep)
+        cat_line = self._write_catalog_line(root)
+        messagebox.showinfo("VoiceWeaver — 情緒模型健檢", rep + ("\n\n" + cat_line if cat_line else ""))
+
+    def _write_catalog_line(self, root: str) -> str:
+        """更新雲端曲庫目錄索引 catalog.json，回一行摘要（給健檢彈窗附上）。"""
+        if em is None or not root:
+            return ""
+        try:
+            cat, path = em.write_catalog(root)
+        except Exception as e:
+            return f"⚠️ 目錄索引寫入失敗：{e}"
+        if not path:
+            return ""
+        s = cat.get("summary", {})
+        mb = s.get("bytes", 0) / (1024 * 1024)
+        return f"🗂 已更新曲庫目錄 catalog.json：{s.get('characters',0)} 角色 / 約 {mb:.0f} MB"
+
+    def _sync_to_drive_library(self, name, lang, gpt_src, sov_src, ref_src, prompt, emotion=None):
+        """匯入即上傳：把模型複製進 Drive 曲庫的 <語言>/<角色>/ 結構，並刷新 catalog。
+
+        只有設定了情緒資料夾（VOICEWEAVER_EMOTION_ROOT，即 Drive for Desktop 的曲庫）才動作；
+        實際上傳交給 Google Drive 桌面版。回傳目的地資料夾字串（沒動作回 ""）。
+        """
+        import shutil
+        import re as _re
+        from pathlib import Path
+        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        if em is None or not root or not os.path.isdir(root):
+            return ""
+        emotion = emotion or em.NEUTRAL
+        LANG = (lang or "ZH").upper()
+        char = _re.sub(r"[ _](ZH|CN|EN|JA|JP|KO|KR)\b", "", name or "", flags=_re.I).strip("_ ") or (name or "角色")
+        char = _re.sub(r'[\\/:*?"<>|]', "_", char).strip() or "角色"
+        cdir = Path(root) / LANG / char
+
+        def _cp(src, dst):
+            src = Path(src) if src else None
+            if src and src.exists() and not dst.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+
+        try:
+            cdir.mkdir(parents=True, exist_ok=True)
+            if gpt_src:
+                _cp(gpt_src, cdir / Path(gpt_src).name)
+            if sov_src:
+                _cp(sov_src, cdir / Path(sov_src).name)
+            if ref_src and Path(ref_src).exists():
+                stem = _re.sub(r'[\\/:*?"<>|【】\[\]]', "", (prompt or Path(ref_src).stem))[:40].strip() or "參考"
+                ext = Path(ref_src).suffix or ".wav"
+                _cp(ref_src, cdir / "reference_audios" / "emotions" / f"【{emotion}】{stem}{ext}")
+            self._write_catalog_line(root)
+            return str(cdir)
+        except Exception:
+            return ""
 
     def _current_ip_field(self) -> str:
         """UI 欄位目前的手機 IP（使用者可手動改）；沒有就回記憶檔。"""

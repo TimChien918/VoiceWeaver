@@ -371,6 +371,74 @@ object LocalSovitsHelper {
         }.getOrElse { Log.w(TAG, "refreshModels 失敗（離線？），沿用現有清單：${it.message}"); false }
     }
 
+    /** 雲端曲庫一筆（Apple Music 式瀏覽用）：整個 Drive 曲庫的角色，不限目前載入的。 */
+    data class CatalogEntry(
+        val name: String,
+        val character: String,
+        val lang: VoiceLang,
+        val ready: Boolean,          // 權重+參考音齊全
+        val emotions: List<String>,
+        val bytes: Long
+    ) {
+        /** 顯示用大小，例「231 MB」；不足 1 MB 顯示 KB。 */
+        val sizeLabel: String get() = when {
+            bytes >= 1024L * 1024 -> "${bytes / (1024 * 1024)} MB"
+            bytes > 0 -> "${bytes / 1024} KB"
+            else -> "—"
+        }
+    }
+
+    /** 從 `/catalog` 抓整個雲端曲庫（Mac api_v2 與 Colab 橋接皆有此端點）。離線回空。 */
+    suspend fun fetchCatalog(baseUrl: String): List<CatalogEntry> = withContext(Dispatchers.IO) {
+        val base = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_LOCAL_URL }
+        runCatching {
+            val req = Request.Builder().url("$base/catalog").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code != 200) return@use emptyList<CatalogEntry>()
+                val cat = org.json.JSONObject(resp.body?.string().orEmpty())
+                    .optJSONObject("catalog") ?: return@use emptyList()
+                val arr = cat.optJSONArray("characters") ?: return@use emptyList()
+                (0 until arr.length()).mapNotNull { i ->
+                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val name = o.optString("name").trim()
+                    if (name.isBlank()) return@mapNotNull null
+                    val emos = o.optJSONArray("emotions")?.let { ea ->
+                        (0 until ea.length()).map { ea.optString(it) }
+                    } ?: emptyList()
+                    CatalogEntry(
+                        name = name,
+                        character = o.optString("character").ifBlank { name },
+                        lang = langFromModelName(o.optString("lang").ifBlank { name }) ?: VoiceLang.ZH,
+                        ready = o.optBoolean("ok"),
+                        emotions = emos,
+                        bytes = o.optLong("bytes")
+                    )
+                }
+            }
+        }.getOrElse { Log.w(TAG, "fetchCatalog 失敗（離線？）：${it.message}"); emptyList() }
+    }
+
+    /** 隨選下載：請運算端（Mac/Colab）把某角色從 Drive 拉到本地。回 (成功, 訊息)。 */
+    suspend fun prepareCharacter(baseUrl: String, character: String, lang: VoiceLang):
+        Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        val base = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_LOCAL_URL }
+        val dlClient = OkHttpClient.Builder()
+            .connectTimeout(4, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS)   // 大檔從 Drive 拉可能要一段時間
+            .build()
+        runCatching {
+            val url = "$base/prepare?character=" + java.net.URLEncoder.encode(character, "UTF-8") +
+                "&lang=" + lang.tag.trim('_')
+            dlClient.newCall(Request.Builder().url(url).get().build()).execute().use { resp ->
+                val o = org.json.JSONObject(resp.body?.string().orEmpty())
+                val ok = o.optBoolean("ok")
+                val mb = o.optLong("bytes") / (1024 * 1024)
+                ok to if (ok) "已下載到運算端（約 $mb MB / ${o.optInt("files")} 檔）"
+                      else o.optString("error", "下載失敗")
+            }
+        }.getOrElse { false to (it.message ?: "連線失敗") }
+    }
+
     /** 向後相容：只取中文清單（設定頁角色切換 chip 用）。 */
     val ZH_VOICES: List<MacRefVoice> get() = VOICES.filter { it.lang == VoiceLang.ZH }
 

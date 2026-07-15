@@ -223,6 +223,41 @@ async def models():
     return JSONResponse(status_code=200, content={"ok": True, "models": out})
 
 
+def _load_emotion_models_module():
+    from pathlib import Path as _Path
+    here = _Path(__file__).resolve().parent
+    if str(here) not in sys.path:
+        sys.path.append(str(here))
+    try:
+        import emotion_models as _em
+        return _em
+    except Exception:
+        return None
+
+
+@APP.get("/catalog")
+async def catalog():
+    """雲端曲庫目錄索引（給手機 Apple Music 式瀏覽整個曲庫）。
+
+    優先讀曲庫根的 catalog.json（Mac/Colab 掃描時寫），沒有就即時掃 VOICEWEAVER_EMOTION_ROOT。
+    """
+    _em = _load_emotion_models_module()
+    if not _em:
+        return JSONResponse(status_code=200, content={"ok": True, "catalog": None})
+    cat = _em.load_catalog() or _em.build_catalog()
+    return JSONResponse(status_code=200, content={"ok": True, "catalog": cat})
+
+
+@APP.get("/prepare")
+async def prepare(character: str = None, lang: str = None):
+    """隨選下載：把指定角色的檔案從 Drive 拉到運算端本地（讀一遍觸發串流下載）。"""
+    _em = _load_emotion_models_module()
+    if not _em:
+        return JSONResponse(status_code=200, content={"ok": False, "error": "emotion_models unavailable"})
+    res = _em.prefetch(character=character, lang=lang)
+    return JSONResponse(status_code=200, content={"ok": res.get("ok", False), **res})
+
+
 class TTS_Request(BaseModel):
     text: str = None
     text_lang: str = None

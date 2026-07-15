@@ -790,6 +790,8 @@ private fun GptSovitDeveloperPanel(
             appLangTag = appLangTag,
             p = p
         )
+        // ── 雲端曲庫（Apple Music 式）── 瀏覽 Drive 上整個曲庫、按需請運算端下載
+        CloudLibraryPanel(apiBaseUrl = apiBaseUrl, p = p)
         // 舊的「自動/中文/English」模式 chip 已移除：語言現在由文字自動偵測（中/英/日/韓），
         // 與下方多語言測試按鈕功能重複，故拿掉避免混淆。
         Text(
@@ -1011,6 +1013,92 @@ private fun NgrokCloudSection(
             fontSize = 10.sp, color = if (isCloud) p.neonCyan else p.textMuted,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, lineHeight = 14.sp
         )
+    }
+}
+
+@Composable
+private fun CloudLibraryPanel(
+    apiBaseUrl: String,
+    p: com.example.ui.theme.AppPalette
+) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var entries by remember { mutableStateOf<List<com.example.ai.LocalSovitsHelper.CatalogEntry>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var preparing by remember { mutableStateOf<String?>(null) }
+
+    fun refresh() {
+        loading = true; msg = ""
+        scope.launch {
+            entries = com.example.ai.LocalSovitsHelper.fetchCatalog(apiBaseUrl)
+            loading = false
+            if (entries.isEmpty()) msg = I18n.tr("曲庫是空的，或伺服器未連線。")
+        }
+    }
+    LaunchedEffect(apiBaseUrl) { refresh() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.neonCyan.copy(alpha = 0.06f))
+            .border(1.dp, p.neonCyan.copy(alpha = 0.20f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Cloud, null, tint = p.neonCyan, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(I18n.tr("雲端曲庫"), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight,
+                modifier = Modifier.weight(1f))
+            TextButton(onClick = { refresh() }, enabled = !loading) {
+                Text(if (loading) I18n.tr("讀取中…") else I18n.tr("🔄 重新整理"), fontSize = 12.sp, color = p.neonCyan)
+            }
+        }
+        Text(
+            I18n.tr("整個雲端曲庫的角色（來自 Drive）。按「預備」請電腦/Colab 先把該角色下載到運算端，之後合成不用等。"),
+            fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
+        )
+        if (msg.isNotBlank()) Text(msg, fontSize = 11.sp, color = p.auraAmber)
+        entries.forEach { e ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(p.darkBg.copy(alpha = 0.20f))
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (e.ready) p.neonGreen else p.auraAmber)
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("${e.character}${e.lang.tag}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+                    Text(
+                        "${e.sizeLabel} · ${if (e.emotions.isEmpty()) I18n.tr("無情緒") else e.emotions.joinToString("／")}",
+                        fontSize = 10.sp, color = p.textMuted
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        preparing = e.name; msg = ""
+                        scope.launch {
+                            val (ok, m) = com.example.ai.LocalSovitsHelper.prepareCharacter(apiBaseUrl, e.character, e.lang)
+                            preparing = null
+                            msg = (if (ok) "✅ " else "⚠️ ") + "${e.character}${e.lang.tag}：$m"
+                        }
+                    },
+                    enabled = preparing == null
+                ) {
+                    Text(if (preparing == e.name) I18n.tr("下載中…") else I18n.tr("⬇ 預備"),
+                        fontSize = 11.sp, color = if (preparing == e.name) p.textMuted else p.neonCyan)
+                }
+            }
+        }
     }
 }
 

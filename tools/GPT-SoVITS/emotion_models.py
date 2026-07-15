@@ -12,10 +12,13 @@ api_v2.py（/models）與 voice_center_app.py（web 橋接合成）共用這支�
 
 情緒根目錄：環境變數 VOICEWEAVER_EMOTION_ROOT（沒設就沒有情緒模型，呼叫端退回舊 model_history）。
 """
+import json
 import os
 import re
+import time
 
 NEUTRAL = "中立"
+CATALOG_NAME = "catalog.json"   # 雲端曲庫目錄索引（放在曲庫根目錄）
 LANG_DIRS = {"ZH", "EN", "JA", "KO"}
 
 EMOTION_ALIASES = {
@@ -216,6 +219,138 @@ def ensure_template(root=None):
             os.makedirs(d, exist_ok=True)
             created.append(lang)
     return created
+
+
+# ── 雲端曲庫目錄索引（catalog.json）──────────────────────────
+# 「像 Apple Music 的曲庫清單」：Mac 與 Colab 兩個掃描端都產出同一份。
+# 路徑一律「相對曲庫根」，所以哪一端寫的都一樣、可互換（隨選下載/上傳都靠它）。
+
+def _size(path):
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def build_catalog(root=None):
+    """掃曲庫根 → 目錄索引 dict（含每角色的權重/參考音相對路徑與大小）。
+
+    回 {version, updatedAt(ms), characters:[{name,character,lang,ok,emotions[],
+        gpt{path,size}, sovits{path,size}, refs:[{path,emotion,prompt,size}], bytes}],
+        summary{characters,ready,bytes}}。
+    """
+    root = root or emotion_root()
+    cat = {"version": 1, "updatedAt": int(time.time() * 1000),
+           "characters": [], "summary": {"characters": 0, "ready": 0, "bytes": 0}}
+    if not root or not os.path.isdir(root):
+        return cat
+    for lang in sorted(os.listdir(root)):
+        ldir = os.path.join(root, lang)
+        if lang.upper() not in LANG_DIRS or not os.path.isdir(ldir):
+            continue
+        LANG = lang.upper()
+        for char in sorted(os.listdir(ldir)):
+            cdir = os.path.join(ldir, char)
+            if not os.path.isdir(cdir):
+                continue
+            gpt = sovits = None
+            for f in os.listdir(cdir):
+                ap = os.path.join(cdir, f)
+                if f.lower().endswith(".ckpt"):
+                    gpt = {"path": os.path.relpath(ap, root), "size": _size(ap)}
+                elif f.lower().endswith(".pth"):
+                    sovits = {"path": os.path.relpath(ap, root), "size": _size(ap)}
+            refs, emotions = [], []
+            for r, _d, files in os.walk(os.path.join(cdir, "reference_audios")):
+                for f in sorted(files):
+                    if not f.lower().endswith((".wav", ".mp3", ".flac")):
+                        continue
+                    ap = os.path.join(r, f)
+                    emo, prompt = parse_ref_filename(f)
+                    if emo not in emotions:
+                        emotions.append(emo)
+                    refs.append({"path": os.path.relpath(ap, root), "emotion": emo,
+                                 "prompt": prompt, "size": _size(ap)})
+            ok = bool(gpt and sovits and refs)
+            b = (gpt or {}).get("size", 0) + (sovits or {}).get("size", 0) + sum(r["size"] for r in refs)
+            cat["characters"].append({
+                "name": f"{char} {LANG}", "character": char, "lang": LANG, "ok": ok,
+                "emotions": sorted(emotions), "gpt": gpt, "sovits": sovits,
+                "refs": refs, "bytes": b})
+            cat["summary"]["characters"] += 1
+            cat["summary"]["ready"] += 1 if ok else 0
+            cat["summary"]["bytes"] += b
+    return cat
+
+
+def write_catalog(root=None):
+    """把目錄索引寫進 <root>/catalog.json。回 (catalog, 路徑) 或 (None, "")。"""
+    root = root or emotion_root()
+    if not root or not os.path.isdir(root):
+        return None, ""
+    cat = build_catalog(root)
+    path = os.path.join(root, CATALOG_NAME)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(cat, f, ensure_ascii=False, indent=1)
+    except OSError:
+        return cat, ""
+    return cat, path
+
+
+def load_catalog(root=None):
+    """讀 <root>/catalog.json；沒有就回 None（呼叫端可改 build_catalog 即時掃）。"""
+    root = root or emotion_root()
+    if not root:
+        return None
+    try:
+        with open(os.path.join(root, CATALOG_NAME), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def prefetch(root=None, character=None, lang=None):
+    """讀取某角色的權重與參考音，強制把 Drive 串流檔案materialize到運算端本地。
+
+    隨選下載的核心：Colab 掛載 / Mac Drive for Desktop 都是「用到才下載」，
+    這支主動整支讀一遍就等於把該角色先抓下來。回 {ok, character, lang, bytes, files}。
+    """
+    root = root or emotion_root()
+    res = {"ok": False, "character": character, "lang": (lang or "").upper(), "bytes": 0, "files": 0}
+    if not root or not os.path.isdir(root) or not character:
+        return res
+    want = (lang or "").upper()
+    target = None
+    for c in build_catalog(root)["characters"]:
+        if c["character"] == character or c["name"] == character:
+            if not want or c["lang"] == want:
+                target = c
+                break
+    if not target:
+        return res
+    res["lang"] = target["lang"]
+    rels = []
+    if target.get("gpt"):
+        rels.append(target["gpt"]["path"])
+    if target.get("sovits"):
+        rels.append(target["sovits"]["path"])
+    rels += [r["path"] for r in target.get("refs", [])]
+    total = 0
+    for rel in rels:
+        try:
+            with open(os.path.join(root, rel), "rb") as f:
+                while True:
+                    chunk = f.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+            res["files"] += 1
+        except OSError:
+            pass
+    res["bytes"] = total
+    res["ok"] = res["files"] > 0
+    return res
 
 
 if __name__ == "__main__":   # 快速自測：印健檢報告

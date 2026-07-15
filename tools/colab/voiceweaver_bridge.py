@@ -22,6 +22,7 @@ import re
 import socket
 import socketserver
 import threading
+import time
 import urllib.parse
 import urllib.request
 
@@ -179,6 +180,39 @@ def _find(name):
         if m["name"] == name or m.get("character") == name:
             return m
     return None
+
+
+def _load_or_build_catalog():
+    """雲端曲庫目錄索引：優先讀 MODELS_ROOT/catalog.json（notebook cell 8 寫的），
+    沒有就從 load_models() 現掃組一份（與 Mac emotion_models.build_catalog 同格式）。"""
+    try:
+        with open(os.path.join(MODELS_ROOT, "catalog.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        pass
+
+    def _s(p):
+        try:
+            return os.path.getsize(p)
+        except OSError:
+            return 0
+    cat = {"version": 1, "updatedAt": int(time.time() * 1000),
+           "characters": [], "summary": {"characters": 0, "ready": 0, "bytes": 0}}
+    for m in load_models():
+        gpt = {"path": m.get("gpt", ""), "size": _s(m.get("gpt", ""))} if m.get("gpt") else None
+        sov = {"path": m.get("sovits", ""), "size": _s(m.get("sovits", ""))} if m.get("sovits") else None
+        refs = [{"path": v["ref"], "emotion": k, "prompt": v.get("prompt", ""), "size": _s(v["ref"])}
+                for k, v in m.get("emotions", {}).items()]
+        ok = bool(gpt and sov and refs)
+        b = (gpt or {}).get("size", 0) + (sov or {}).get("size", 0) + sum(r["size"] for r in refs)
+        cat["characters"].append({"name": m.get("name", ""), "character": m.get("character", m.get("name", "")),
+                                  "lang": m.get("lang", ""), "ok": ok,
+                                  "emotions": sorted(m.get("emotions", {}).keys()),
+                                  "gpt": gpt, "sovits": sov, "refs": refs, "bytes": b})
+        cat["summary"]["characters"] += 1
+        cat["summary"]["ready"] += 1 if ok else 0
+        cat["summary"]["bytes"] += b
+    return cat
 
 
 def _pick_ref(model, emotion):
@@ -352,6 +386,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"ok": True,
                                     "emotions": sorted((m or {}).get("emotions", {}).keys()),
                                     "all": list(EMOTION_ALIASES.keys())})
+        if path == "/catalog":   # 雲端曲庫目錄索引（給手機 Apple Music 式瀏覽整個曲庫）
+            return self._json(200, {"ok": True, "catalog": _load_or_build_catalog()})
+        if path == "/prepare":   # 隨選下載：讀該角色檔案，觸發 Drive 掛載串流下載到 Colab 本地
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            who = (q.get("character") or q.get("name") or [""])[0]
+            m = _find(who)
+            if not m:
+                return self._json(404, {"ok": False, "error": "找不到角色"})
+            total = files = 0
+            for p in [m.get("gpt", ""), m.get("sovits", "")] + [v["ref"] for v in m.get("emotions", {}).values()]:
+                try:
+                    with open(p, "rb") as f:
+                        while True:
+                            chunk = f.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            total += len(chunk)
+                    files += 1
+                except OSError:
+                    pass
+            return self._json(200, {"ok": files > 0, "name": m.get("name", ""),
+                                    "lang": m.get("lang", ""), "bytes": total, "files": files})
         if path.startswith(PROXY_PREFIXES):
             return self._proxy()
         self._json(404, {"ok": False, "error": "not found"})
