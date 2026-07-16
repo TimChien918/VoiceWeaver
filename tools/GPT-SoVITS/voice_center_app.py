@@ -130,6 +130,15 @@ try:
 except Exception:
     em = None
 
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import drive_uploader as gdrive   # 上傳曲庫到「使用者自己的」Google Drive（OAuth）
+except Exception:
+    gdrive = None
+
+# 預設曲庫根：使用者家目錄下的 VoiceWeaver（自動當情緒曲庫，免手動挑資料夾）
+DEFAULT_LIBRARY_ROOT = os.path.expanduser("~/VoiceWeaver")
+
 VOICE_CFG = "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
 
 # Python 直譯器（非凍結版直接用 sys.executable；凍結版啟動時背景搜尋）
@@ -592,6 +601,13 @@ I18N = {
     "adv.emoPick": {"zh-TW":"📁 選擇 Drive 資料夾", "en":"📁 Pick Drive folder", "ja":"📁 Drive フォルダを選択", "ko":"📁 Drive 폴더 선택"},
     "adv.emoCheck": {"zh-TW":"🔎 健檢", "en":"🔎 Check", "ja":"🔎 点検", "ko":"🔎 점검"},
     "adv.emoClear": {"zh-TW":"✖ 取消設定", "en":"✖ Clear", "ja":"✖ 解除", "ko":"✖ 해제"},
+    "adv.gdHint": {"zh-TW":"用你自己的 Google 帳號登入，把整個曲庫上傳到「你自己的」Google Drive（VoiceWeaver/），Colab／手機／網頁就都讀得到同一份。只碰 App 自己建立的檔案。",
+                   "en":"Sign in with your own Google account to upload the whole library to YOUR Google Drive (VoiceWeaver/). Colab/phone/web then share the same copy. Only touches files this app created.",
+                   "ja":"自分の Google アカウントでログインし、曲庫を自分の Google Drive（VoiceWeaver/）にアップロード。Colab/スマホ/Web が同じものを参照。",
+                   "ko":"본인 Google 계정으로 로그인해 라이브러리를 본인 Google Drive(VoiceWeaver/)에 업로드. Colab/휴대폰/웹이 동일본을 공유."},
+    "adv.gdLogin": {"zh-TW":"🔑 Google 登入", "en":"🔑 Sign in Google", "ja":"🔑 Google ログイン", "ko":"🔑 Google 로그인"},
+    "adv.gdUpload": {"zh-TW":"⬆️ 上傳曲庫到 Drive", "en":"⬆️ Upload library to Drive", "ja":"⬆️ 曲庫を Drive へ", "ko":"⬆️ 라이브러리 Drive 업로드"},
+    "adv.gdLogout": {"zh-TW":"登出", "en":"Sign out", "ja":"ログアウト", "ko":"로그아웃"},
     "adv.stopgen":  {"zh-TW":"⏹ 中止合成", "en":"⏹ Stop synthesis", "ja":"⏹ 合成を中止", "ko":"⏹ 합성 중지"},
     "adv.secTest":  {"zh-TW":"測試合成", "en":"Test synthesis", "ja":"合成テスト", "ko":"합성 테스트"},
     "adv.testDefault": {"zh-TW":"你好，這是測試。", "en":"Hello, this is a test.", "ja":"こんにちは、これはテストです。", "ko":"안녕하세요, 테스트입니다."},
@@ -1882,6 +1898,17 @@ class App:
         self.tr(self._neutral_btn(row_emo, "", self.adv_emotion_report), "adv.emoCheck").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._neutral_btn(row_emo, "", self.adv_clear_emotion_root), "adv.emoClear").pack(side="left", expand=True, fill="x")
 
+        # ── 上傳到「你自己的」Google Drive（OAuth）：登入 + 整庫上傳 ──
+        gd_hint = tk.Label(parent, font=(FONT_UI, SZ_SMALL), wraplength=580, justify="left", anchor="w")
+        gd_hint.pack(fill="x", padx=20, pady=(6, 2)); self.tr(gd_hint, "adv.gdHint"); self._track(gd_hint, "muted")
+        self.gd_status = tk.Label(parent, text=self._gdrive_status_text(),
+                                  font=(FONT_UI, SZ_SMALL), anchor="w")
+        self.gd_status.pack(fill="x", padx=20, pady=(0, 4)); self._track(self.gd_status, "muted")
+        row_gd = tk.Frame(parent); row_gd.pack(fill="x", padx=20, pady=(0, 4)); self._track(row_gd, "bg")
+        self.tr(self._btn(row_gd, "", self.adv_gdrive_login, C_GREEN), "adv.gdLogin").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._btn(row_gd, "", self.adv_gdrive_upload, C_BLUE), "adv.gdUpload").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row_gd, "", self.adv_gdrive_logout), "adv.gdLogout").pack(side="left", expand=True, fill="x")
+
         _section("adv.secTest")
         tr = tk.Frame(parent); tr.pack(fill="x", padx=20, pady=(4, 4)); self._track(tr, "bg")
         self.test_entry = tk.Entry(tr, font=(FONT_UI, SZ_BODY))
@@ -2745,13 +2772,25 @@ class App:
 
     # ── 情緒模型資料夾（Google Drive）：設 VOICEWEAVER_EMOTION_ROOT ──
     def _load_emotion_root(self) -> str:
-        """讀記憶檔並設進本行程環境變數（api_v2 子程序啟動時繼承、app 橋接即時讀）。回路徑。"""
+        """讀記憶檔並設進本行程環境變數（api_v2 子程序啟動時繼承、app 橋接即時讀）。回路徑。
+
+        沒設定過就自動用預設曲庫 ~/VoiceWeaver（建好 + ZH/EN/JA/KO 範本），
+        讓「情緒曲庫」免手動挑資料夾、匯入直接進這裡（合而為一）。
+        """
         path = ""
         try:
             with open(self.EMOTION_ROOT_FILE, encoding="utf-8") as f:
                 path = f.read().strip()
         except Exception:
             path = ""
+        if not path:                       # 沒設定過 → 自動用預設曲庫
+            path = DEFAULT_LIBRARY_ROOT
+            try:
+                os.makedirs(path, exist_ok=True)
+                if em:
+                    em.ensure_template(path)
+            except Exception:
+                pass
         if path and os.path.isdir(path):
             os.environ["VOICEWEAVER_EMOTION_ROOT"] = path
         else:
@@ -2820,6 +2859,84 @@ class App:
         cat_line = self._write_catalog_line(root)
         messagebox.showinfo("VoiceWeaver — 情緒模型健檢", rep + ("\n\n" + cat_line if cat_line else ""))
 
+    # ── Google Drive 上傳（使用者自己的 Drive，OAuth）──────────
+    def _gdrive_status_text(self) -> str:
+        if gdrive is None:
+            return "（Google Drive 模組未載入）"
+        if not gdrive.deps_ok():
+            return "（缺 google-api-python-client；請更新環境）"
+        if not gdrive.client_secret_path():
+            return f"（尚未放 google_client_secret.json 到 {os.path.expanduser('~/Library/Application Support/VoiceWeaver')}）"
+        try:
+            if gdrive.is_signed_in():
+                email = gdrive.account_email() or ""
+                return f"✅ 已登入 Google{'：' + email if email else ''}"
+        except Exception:
+            pass
+        return "尚未登入 Google"
+
+    def _refresh_gd_status(self):
+        try:
+            self.gd_status.config(text=self._gdrive_status_text())
+        except Exception:
+            pass
+
+    def adv_gdrive_login(self):
+        from tkinter import messagebox
+        if gdrive is None or not gdrive.deps_ok():
+            messagebox.showinfo("VoiceWeaver", "環境缺 google 套件；請更新語音中心。")
+            return
+        if not gdrive.client_secret_path():
+            messagebox.showinfo("VoiceWeaver",
+                                "尚未放置 google_client_secret.json。\n請放到：\n"
+                                + os.path.join(os.path.expanduser('~/Library/Application Support/VoiceWeaver'),
+                                               'google_client_secret.json'))
+            return
+        self.set_adv_status(self.t("開啟瀏覽器登入 Google…"))
+        def task():
+            try:
+                creds = gdrive.get_credentials(interactive=True)
+                ok = bool(creds)
+                self.root.after(0, self._refresh_gd_status)
+                return ok, ("已登入 Google Drive" if ok else "登入未完成")
+            except Exception as e:
+                return False, f"登入失敗：{e}"
+        self._run_bg(task)
+
+    def adv_gdrive_logout(self):
+        if gdrive is not None:
+            gdrive.sign_out()
+        self._refresh_gd_status()
+        self.set_adv_status(self.t("已登出 Google"))
+
+    def adv_gdrive_upload(self):
+        from tkinter import messagebox
+        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        if gdrive is None or not gdrive.deps_ok():
+            messagebox.showinfo("VoiceWeaver", "環境缺 google 套件；請更新語音中心。"); return
+        if not root or not os.path.isdir(root):
+            messagebox.showinfo("VoiceWeaver", "找不到曲庫資料夾。"); return
+        if not gdrive.client_secret_path():
+            messagebox.showinfo("VoiceWeaver", "請先放 google_client_secret.json 並登入。"); return
+        # 先確保 catalog 是最新，再整庫上傳
+        self._write_catalog_line(root)
+        self.set_adv_status(self.t("上傳曲庫到你的 Google Drive 中…（大檔需時間）"))
+        def task():
+            try:
+                res = gdrive.upload_library(
+                    root, log=lambda m: self.root.after(0, lambda: self.set_adv_status(m)))
+                self.root.after(0, self._refresh_gd_status)
+                mb = res.get("bytes", 0) / (1024 * 1024)
+                msg = (f"完成：{res.get('characters',0)} 角色，"
+                       f"上傳 {res.get('uploaded',0)}／跳過 {res.get('skipped',0)}，約 {mb:.0f} MB")
+                errs = res.get("errors", [])
+                if errs:
+                    msg += f"；{len(errs)} 項失敗（第一項：{errs[0]}）"
+                return (not errs), msg
+            except Exception as e:
+                return False, f"上傳失敗：{e}"
+        self._run_bg(task)
+
     def _write_catalog_line(self, root: str) -> str:
         """更新雲端曲庫目錄索引 catalog.json，回一行摘要（給健檢彈窗附上）。"""
         if em is None or not root:
@@ -2869,6 +2986,13 @@ class App:
                 ext = Path(ref_src).suffix or ".wav"
                 _cp(ref_src, cdir / "reference_audios" / "emotions" / f"【{emotion}】{stem}{ext}")
             self._write_catalog_line(root)
+            # 已登入 Google 就順手把這個角色上傳到使用者自己的 Drive（未登入則略過，不彈瀏覽器）
+            try:
+                if gdrive is not None and gdrive.deps_ok() and gdrive.is_signed_in():
+                    gdrive.upload_character(root, LANG, char)
+                    self.root.after(0, lambda: self._refresh_gd_status())
+            except Exception:
+                pass
             return str(cdir)
         except Exception:
             return ""

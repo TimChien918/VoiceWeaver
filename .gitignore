@@ -56,3 +56,9 @@ tools/GPT-SoVITS/user_models/
 app/src/main/assets/models/
 app/src/main/assets/poi/
 .claude/
+
+# Google Drive OAuth（絕不進 repo）
+google_client_secret*.json
+google_token.json
+**/google_client_secret*.json
+**/google_token.json

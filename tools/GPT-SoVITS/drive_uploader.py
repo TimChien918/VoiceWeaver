@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""把曲庫上傳到「使用者自己的」Google Drive（OAuth，drive.file 範圍）。
+
+- 每個使用者用自己的 Google 帳號登入授權 → 檔案進他自己的 Drive，不經開發者。
+- drive.file 範圍：App 只能看到／管理「它自己建立的檔案」，碰不到使用者 Drive 其他東西
+  （最保護隱私、也免 Google 敏感權限審核）。App 建立的資料夾樹在重跑時找得回來（冪等）。
+- 與 Colab 一致：Colab drive.mount 掛的是同一位登入者的 Drive → 上傳到這、Colab 讀得到。
+
+憑證檔位置（App 執行時讀，密鑰不進原始碼）：
+  client_secret：環境變數 VOICEWEAVER_GOOGLE_CLIENT_SECRET，或
+                 ~/Library/Application Support/VoiceWeaver/google_client_secret.json，或本檔同目錄。
+  token（登入後自動存）：~/Library/Application Support/VoiceWeaver/google_token.json
+"""
+import os
+import time
+
+SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+FOLDER_MIME = "application/vnd.google-apps.folder"
+ROOT_FOLDER = "VoiceWeaver"                          # Drive 上曲庫根資料夾名
+LANG_DIRS = {"ZH", "EN", "JA", "KO"}
+_APP_DIR = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+
+
+def _here():
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def client_secret_path():
+    """找 client_secret.json：環境變數 → AppSupport → 本檔同目錄。回路徑或 ""。"""
+    cand = [os.environ.get("VOICEWEAVER_GOOGLE_CLIENT_SECRET", ""),
+            os.path.join(_APP_DIR, "google_client_secret.json"),
+            os.path.join(_here(), "google_client_secret.json")]
+    for p in cand:
+        if p and os.path.isfile(p):
+            return p
+    return ""
+
+
+def token_path():
+    os.makedirs(_APP_DIR, exist_ok=True)
+    return os.path.join(_APP_DIR, "google_token.json")
+
+
+def deps_ok():
+    try:
+        import googleapiclient  # noqa: F401
+        import google_auth_oauthlib  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+# ── 認證 ─────────────────────────────────────────────
+def _load_saved():
+    from google.oauth2.credentials import Credentials
+    tp = token_path()
+    if os.path.isfile(tp):
+        try:
+            return Credentials.from_authorized_user_file(tp, SCOPES)
+        except Exception:
+            return None
+    return None
+
+
+def is_signed_in():
+    """已有可用（可自動更新）的憑證＝已登入，不需再開瀏覽器。"""
+    creds = _load_saved()
+    return bool(creds and (creds.valid or creds.refresh_token))
+
+
+def get_credentials(interactive=True):
+    """回可用憑證；沒有且 interactive 時開瀏覽器讓使用者登入自己的 Google。失敗回 None。"""
+    from google.auth.transport.requests import Request
+    creds = _load_saved()
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except Exception:
+            creds = None
+    if creds and creds.valid:
+        return creds
+    if not interactive:
+        return None
+    secret = client_secret_path()
+    if not secret:
+        raise FileNotFoundError(
+            "找不到 google_client_secret.json（放到 "
+            f"{os.path.join(_APP_DIR, 'google_client_secret.json')} 或設 VOICEWEAVER_GOOGLE_CLIENT_SECRET）")
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    flow = InstalledAppFlow.from_client_secrets_file(secret, SCOPES)
+    creds = flow.run_local_server(port=0, prompt="consent",
+                                  authorization_prompt_message="請在開啟的瀏覽器登入你自己的 Google 帳號並授權…")
+    with open(token_path(), "w", encoding="utf-8") as f:
+        f.write(creds.to_json())
+    return creds
+
+
+def sign_out():
+    """刪除本機 token（下次要重新登入）。"""
+    try:
+        os.remove(token_path())
+    except OSError:
+        pass
+
+
+def account_email(creds=None):
+    """回登入帳號 email（拿不到回 ""）。"""
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            return ""
+        from googleapiclient.discovery import build
+        svc = build("drive", "v3", credentials=creds, cache_discovery=False)
+        about = svc.about().get(fields="user(emailAddress)").execute()
+        return about.get("user", {}).get("emailAddress", "")
+    except Exception:
+        return ""
+
+
+# ── Drive 操作 ────────────────────────────────────────
+def _service(creds):
+    from googleapiclient.discovery import build
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _retry(fn, tries=5):
+    """對 403/429/5xx 做指數退避重試（官方建議，最多 ~32s）。"""
+    from googleapiclient.errors import HttpError
+    delay = 1.0
+    for i in range(tries):
+        try:
+            return fn()
+        except HttpError as e:
+            code = getattr(e, "status_code", None) or getattr(getattr(e, "resp", None), "status", None)
+            if int(code or 0) in (403, 429, 500, 502, 503) and i < tries - 1:
+                time.sleep(min(delay, 32)); delay *= 2; continue
+            raise
+
+
+def _find_folder(svc, name, parent):
+    q = (f"name = {_q(name)} and {_q(parent)} in parents and "
+         f"mimeType = '{FOLDER_MIME}' and trashed = false")
+    r = _retry(lambda: svc.files().list(q=q, spaces="drive", fields="files(id,name)",
+                                        pageSize=10).execute())
+    files = r.get("files", [])
+    return files[0]["id"] if files else None
+
+
+def _q(s):
+    return "'" + str(s).replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _ensure_folder(svc, name, parent):
+    fid = _find_folder(svc, name, parent)
+    if fid:
+        return fid
+    meta = {"name": name, "mimeType": FOLDER_MIME, "parents": [parent]}
+    r = _retry(lambda: svc.files().create(body=meta, fields="id").execute())
+    return r["id"]
+
+
+def _ensure_path(svc, parts):
+    """在 My Drive 底下逐層 ensure；回最後一層資料夾 id。"""
+    parent = "root"
+    for name in parts:
+        parent = _ensure_folder(svc, name, parent)
+    return parent
+
+
+def _find_file(svc, name, parent):
+    q = (f"name = {_q(name)} and {_q(parent)} in parents and "
+         f"mimeType != '{FOLDER_MIME}' and trashed = false")
+    r = _retry(lambda: svc.files().list(q=q, spaces="drive", fields="files(id,name,size)",
+                                        pageSize=10).execute())
+    files = r.get("files", [])
+    return files[0] if files else None
+
+
+def _upload_file(svc, local, parent, remote_name=None, progress=None):
+    """resumable 上傳單檔；同名同大小已存在就跳過。回 ('uploaded'|'skipped', bytes)。"""
+    from googleapiclient.http import MediaFileUpload
+    name = remote_name or os.path.basename(local)
+    size = os.path.getsize(local)
+    exist = _find_file(svc, name, parent)
+    if exist and str(exist.get("size", "")) == str(size):
+        return "skipped", size
+    media = MediaFileUpload(local, resumable=True, chunksize=8 * 1024 * 1024)
+    body = {"name": name, "parents": [parent]}
+    if exist:  # 覆蓋更新（大小不同）
+        req = svc.files().update(fileId=exist["id"], media_body=media)
+    else:
+        req = svc.files().create(body=body, media_body=media, fields="id")
+    resp = None
+    while resp is None:
+        status, resp = _retry(lambda: req.next_chunk())
+        if status and progress:
+            progress(name, int(status.progress() * 100))
+    return "uploaded", size
+
+
+def upload_character(root, lang, char, progress=None):
+    """把本機 <root>/<LANG>/<角色>/ 整包上傳到 Drive VoiceWeaver/<LANG>/<角色>/。
+
+    回 {ok, character, lang, uploaded, skipped, bytes, error}。
+    """
+    res = {"ok": False, "character": char, "lang": (lang or "").upper(),
+           "uploaded": 0, "skipped": 0, "bytes": 0, "error": ""}
+    cdir = os.path.join(root, res["lang"], char)
+    if not os.path.isdir(cdir):
+        res["error"] = "找不到角色資料夾"; return res
+    try:
+        creds = get_credentials(interactive=True)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        leaf = _ensure_path(svc, [ROOT_FOLDER, res["lang"], char])
+        for r, _d, files in os.walk(cdir):
+            rel = os.path.relpath(r, cdir)
+            parent = leaf if rel == "." else _ensure_path(
+                svc, [ROOT_FOLDER, res["lang"], char] + rel.split(os.sep))
+            for f in sorted(files):
+                if f == ".DS_Store":
+                    continue
+                act, b = _upload_file(svc, os.path.join(r, f), parent, progress=progress)
+                res["uploaded" if act == "uploaded" else "skipped"] += 1
+                res["bytes"] += b
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+def upload_catalog(root, creds=None):
+    """把 <root>/catalog.json 上傳到 Drive VoiceWeaver/。"""
+    p = os.path.join(root, "catalog.json")
+    if not os.path.isfile(p):
+        return False
+    try:
+        creds = creds or get_credentials(interactive=True)
+        if not creds:
+            return False
+        svc = _service(creds)
+        leaf = _ensure_path(svc, [ROOT_FOLDER])
+        _upload_file(svc, p, leaf)
+        return True
+    except Exception:
+        return False
+
+
+def upload_library(root, progress=None, log=None):
+    """把整個本機曲庫（所有語言/角色）＋ catalog 上傳到使用者 Drive。回總結 dict。"""
+    total = {"characters": 0, "uploaded": 0, "skipped": 0, "bytes": 0, "errors": []}
+    if not root or not os.path.isdir(root):
+        total["errors"].append("找不到曲庫根"); return total
+    creds = get_credentials(interactive=True)
+    if not creds:
+        total["errors"].append("尚未登入 Google"); return total
+    for lang in sorted(os.listdir(root)):
+        ldir = os.path.join(root, lang)
+        if lang.upper() not in LANG_DIRS or not os.path.isdir(ldir):
+            continue
+        for char in sorted(os.listdir(ldir)):
+            if not os.path.isdir(os.path.join(ldir, char)):
+                continue
+            if log:
+                log(f"⬆ {lang.upper()}/{char}")
+            r = upload_character(root, lang, char, progress=progress)
+            total["characters"] += 1
+            total["uploaded"] += r["uploaded"]; total["skipped"] += r["skipped"]
+            total["bytes"] += r["bytes"]
+            if not r["ok"]:
+                total["errors"].append(f"{lang}/{char}: {r['error']}")
+    upload_catalog(root, creds=creds)
+    return total
+
+
+if __name__ == "__main__":   # 快速自測（不觸網）：印憑證狀態
+    print("deps_ok:", deps_ok())
+    print("client_secret:", client_secret_path() or "(未放置)")
+    print("signed_in:", is_signed_in())
