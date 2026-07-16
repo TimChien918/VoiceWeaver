@@ -149,6 +149,7 @@ fun SettingsScreen(
         LaunchedEffect(Unit) { viewModel.refreshOffloadPlan() }
         FloatingPanel(title = I18n.tr("開發者模式"), icon = Icons.Default.DeveloperMode, onDismiss = { showDeveloper = false }) {
             DeveloperModeSection(
+                viewModel = viewModel,
                 enabled = settings.developerMode,
                 offloadPlan = offloadPlan,
                 onRefreshOffload = { viewModel.refreshOffloadPlan() },
@@ -272,12 +273,7 @@ fun SettingsScreen(
                 }
             }
 
-            // ngrok 雲端通道：授權碼存雲端（像其他 API），Colab 用配對碼自動取用
-            if (showComplex) item {
-                Section(title = I18n.tr("ngrok 雲端通道（Colab GPU）"), icon = Icons.Default.Cloud, p = p) {
-                    NgrokCloudSection(viewModel = viewModel, settings = settings, p = p)
-                }
-            }
+            // ngrok 雲端通道（Colab）已併入「開發者模式 → GPT-SoVITS」的連接電腦頁（與本機/有線同一處）。
 
             // ※「AI 生圖」已移到「開發者模式」內（需要電腦/雲端的功能集中管理）。
 
@@ -709,6 +705,8 @@ private fun GptSovitDeveloperPanel(
     onClearEnglishModelDir: () -> Unit,
     onClearAutoImport: () -> Unit,
     onBack: () -> Unit,
+    viewModel: VoiceWeaverViewModel,
+    settings: AppSettings,
     appLangTag: String = "zh-TW",
     p: com.example.ui.theme.AppPalette
 ) {
@@ -790,6 +788,10 @@ private fun GptSovitDeveloperPanel(
             appLangTag = appLangTag,
             p = p
         )
+        // ── 用 Colab 免費 GPU（ngrok 通道）── 與「連接電腦」同一頁：填授權碼/網域、一鍵切雲端
+        Text(I18n.tr("☁️ 用 Colab 免費 GPU（ngrok 通道）"), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+            color = p.textLight, modifier = Modifier.padding(top = 4.dp))
+        NgrokCloudSection(viewModel = viewModel, settings = settings, p = p)
         // ── 雲端曲庫（Apple Music 式）── 瀏覽 Drive 上整個曲庫、按需請運算端下載
         CloudLibraryPanel(apiBaseUrl = apiBaseUrl, p = p)
         // 舊的「自動/中文/English」模式 chip 已移除：語言現在由文字自動偵測（中/英/日/韓），
@@ -1806,6 +1808,7 @@ private fun OffloadTaskRow(
 
 @Composable
 private fun DeveloperModeSection(
+    viewModel: VoiceWeaverViewModel,
     enabled: Boolean,
     offloadPlan: com.example.ai.OffloadManager.OffloadPlan,
     onRefreshOffload: () -> Unit,
@@ -1936,6 +1939,8 @@ private fun DeveloperModeSection(
 
             if (showGptSovitPanel) {
                 GptSovitDeveloperPanel(
+                    viewModel = viewModel,
+                    settings = settings,
                     enabled = settings.gptSovitEnabled,
                     mode = settings.gptSovitVoiceMode,
                     chineseVoiceUri = settings.gptSovitChineseVoiceUri,
