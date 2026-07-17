@@ -592,15 +592,7 @@ I18N = {
     "adv.delete":   {"zh-TW":"🗑 刪除", "en":"🗑 Delete", "ja":"🗑 削除", "ko":"🗑 삭제"},
     "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
     "adv.importBatch": {"zh-TW":"📂 批量匯入資料夾", "en":"📂 Batch import folders", "ja":"📂 フォルダを一括取込", "ko":"📂 폴더 일괄 가져오기"},
-    "adv.secEmoDrive": {"zh-TW":"情緒模型資料夾（Google Drive）", "en":"Emotion models folder (Google Drive)", "ja":"感情モデルフォルダ（Google ドライブ）", "ko":"감정 모델 폴더 (Google 드라이브)"},
-    "adv.emoHint": {"zh-TW":"指到 Google Drive for Desktop 的 VoiceWeaver 資料夾（含 ZH/EN/JA/KO），即可依情緒切參考音；App 本機模式與網頁都會生效。",
-                    "en":"Point to the VoiceWeaver folder in Google Drive for Desktop (with ZH/EN/JA/KO) to enable emotion-aware refs; applies to app local mode and web.",
-                    "ja":"Google ドライブ（デスクトップ）の VoiceWeaver フォルダ（ZH/EN/JA/KO）を指定すると感情で参照音を切替。アプリのローカルとWebに反映。",
-                    "ko":"Google 드라이브 데스크톱의 VoiceWeaver 폴더(ZH/EN/JA/KO)를 지정하면 감정별 참조음 전환. 앱 로컬/웹에 적용."},
-    "adv.emoNone": {"zh-TW":"（尚未設定；改用已匯入的模型清單）", "en":"(not set; using imported models)", "ja":"（未設定；取込済みモデルを使用）", "ko":"(미설정; 가져온 모델 사용)"},
-    "adv.emoPick": {"zh-TW":"📁 選擇 Drive 資料夾", "en":"📁 Pick Drive folder", "ja":"📁 Drive フォルダを選択", "ko":"📁 Drive 폴더 선택"},
-    "adv.emoCheck": {"zh-TW":"🔎 健檢", "en":"🔎 Check", "ja":"🔎 点検", "ko":"🔎 점검"},
-    "adv.emoClear": {"zh-TW":"✖ 取消設定", "en":"✖ Clear", "ja":"✖ 解除", "ko":"✖ 해제"},
+    "adv.secCloudLib": {"zh-TW":"雲端曲庫（Google Drive）", "en":"Cloud library (Google Drive)", "ja":"クラウド曲庫（Google ドライブ）", "ko":"클라우드 라이브러리 (Google 드라이브)"},
     "adv.gdHint": {"zh-TW":"用你自己的 Google 帳號登入，把整個曲庫上傳到「你自己的」Google Drive（VoiceWeaver/），Colab／手機／網頁就都讀得到同一份。只碰 App 自己建立的檔案。",
                    "en":"Sign in with your own Google account to upload the whole library to YOUR Google Drive (VoiceWeaver/). Colab/phone/web then share the same copy. Only touches files this app created.",
                    "ja":"自分の Google アカウントでログインし、曲庫を自分の Google Drive（VoiceWeaver/）にアップロード。Colab/スマホ/Web が同じものを参照。",
@@ -1910,18 +1902,8 @@ class App:
         self.tr(self._neutral_btn(row2, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x")
 
         # ── 情緒模型資料夾（Google Drive）：指到 Drive 即可依情緒切參考音 ──
-        _section("adv.secEmoDrive")
-        emo_hint = tk.Label(parent, font=(FONT_UI, SZ_SMALL), wraplength=580, justify="left", anchor="w")
-        emo_hint.pack(fill="x", padx=20, pady=(0, 4)); self.tr(emo_hint, "adv.emoHint"); self._track(emo_hint, "muted")
-        self.emo_path_lbl = tk.Label(parent, text=self._emotion_root_display(),
-                                     font=(FONT_MONO, SZ_SMALL), wraplength=580, justify="left", anchor="w")
-        self.emo_path_lbl.pack(fill="x", padx=20, pady=(0, 4)); self._track(self.emo_path_lbl, "fg")
-        row_emo = tk.Frame(parent); row_emo.pack(fill="x", padx=20, pady=(0, 4)); self._track(row_emo, "bg")
-        self.tr(self._btn(row_emo, "", self.adv_pick_emotion_root, C_BLUE), "adv.emoPick").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row_emo, "", self.adv_emotion_report), "adv.emoCheck").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row_emo, "", self.adv_clear_emotion_root), "adv.emoClear").pack(side="left", expand=True, fill="x")
-
-        # ── 上傳到「你自己的」Google Drive（OAuth）：登入 + 整庫上傳 ──
+        # ── 雲端曲庫（Google Drive）＝唯一曲庫；本機只是快取，路徑由程式決定不給挑 ──
+        _section("adv.secCloudLib")
         gd_hint = tk.Label(parent, font=(FONT_UI, SZ_SMALL), wraplength=580, justify="left", anchor="w")
         gd_hint.pack(fill="x", padx=20, pady=(6, 2)); self.tr(gd_hint, "adv.gdHint"); self._track(gd_hint, "muted")
         self.gd_status = tk.Label(parent, text=self._gdrive_status_text(),
@@ -2820,67 +2802,6 @@ class App:
             os.environ.pop("VOICEWEAVER_EMOTION_ROOT", None)
             path = ""
         return path
-
-    def _emotion_root_display(self) -> str:
-        p = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
-        return p if p else self.t("adv.emoNone")
-
-    def _apply_emotion_root(self, path: str):
-        """持久化 + 設環境變數 + 更新標籤 + 重啟語音服務(9880)讓子程序繼承新 env。"""
-        path = (path or "").strip().rstrip("/")
-        try:
-            with open(self.EMOTION_ROOT_FILE, "w", encoding="utf-8") as f:
-                f.write(path)
-        except Exception:
-            pass
-        if path and os.path.isdir(path):
-            os.environ["VOICEWEAVER_EMOTION_ROOT"] = path
-        else:
-            os.environ.pop("VOICEWEAVER_EMOTION_ROOT", None)
-        try:
-            self.emo_path_lbl.config(text=self._emotion_root_display())
-        except Exception:
-            pass
-        # api_v2(9880) 是子程序、啟動時才讀 env → 重啟才生效（app 自身橋接 9879 即時讀，不必重啟）
-        if port_up(9880) or ("9880" in getattr(self, "procs", {})):
-            self.stop("9880")
-            self.root.after(1500, lambda: self.start("9880"))
-            self.set_status(self.t("已套用情緒資料夾，語音服務重啟中…"))
-
-    def adv_pick_emotion_root(self):
-        from tkinter import filedialog, messagebox
-        path = filedialog.askdirectory(title=self.t("adv.emoPick"))
-        if not path:
-            return
-        # 若選到的資料夾沒有任何語言子夾，問要不要自動建範本
-        has_lang = any(os.path.isdir(os.path.join(path, l)) for l in ("ZH", "EN", "JA", "KO"))
-        if not has_lang and em is not None:
-            if messagebox.askyesno("VoiceWeaver",
-                                   f"此資料夾底下還沒有 ZH/EN/JA/KO。\n要在這裡建立範本資料夾嗎？\n{path}"):
-                try:
-                    em.ensure_template(path)
-                except Exception:
-                    pass
-        self._apply_emotion_root(path)
-        self._write_catalog_line(path)   # 挑好資料夾即產出雲端曲庫目錄索引
-        self.adv_emotion_report()
-
-    def adv_clear_emotion_root(self):
-        self._apply_emotion_root("")
-        self.set_status(self.t("已取消情緒資料夾設定"))
-
-    def adv_emotion_report(self):
-        from tkinter import messagebox
-        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
-        if em is None:
-            messagebox.showinfo("VoiceWeaver", "emotion_models 模組未載入")
-            return
-        try:
-            rep = em.format_report(em.scan_report(root))
-        except Exception as e:
-            rep = f"健檢失敗：{e}"
-        cat_line = self._write_catalog_line(root)
-        messagebox.showinfo("VoiceWeaver — 情緒模型健檢", rep + ("\n\n" + cat_line if cat_line else ""))
 
     # ── Google Drive 上傳（使用者自己的 Drive，OAuth）──────────
     def _gdrive_status_text(self) -> str:
