@@ -575,32 +575,73 @@ def save_cached_catalog(chars):
         pass
 
 
-def load_cached_catalog():
-    """回上次成功讀到的雲端曲庫（離線時用）；沒有回 []。"""
+def load_cached_catalog(with_age=False):
+    """回上次成功讀到的雲端曲庫；沒有回 []。with_age=True 時回 (chars, 秒數)。"""
     try:
         with open(_CACHED_LIST, encoding="utf-8") as f:
-            return json.load(f).get("characters", [])
+            d = json.load(f)
+        chars = d.get("characters", [])
+        age = max(0.0, time.time() - d.get("updatedAt", 0) / 1000.0)
     except (OSError, ValueError):
-        return []
+        chars, age = [], 1e9
+    return (chars, age) if with_age else chars
 
 
-def cloud_catalog(local_root=None, allow_offline=True):
-    """畫面用的單一入口：連得上就讀 Drive（並存快取）；連不上就回上次的清單。
+_refreshing = False
 
-    離線時 downloaded 旗標會即時用本機重算 → 只有已下載的能用（決策 3a）。
-    回 {ok, offline, characters[], error}
+
+def _mark_downloaded(chars, local_root):
+    for c in chars:
+        c["downloaded"] = (is_downloaded(local_root, c.get("lang", ""), c.get("character", ""))
+                           if local_root else False)
+    return chars
+
+
+def refresh_cloud_catalog_async(local_root=None):
+    """背景更新 Drive 曲庫快取（走一次目錄樹實測要 ~30 秒，不能擋在請求路徑上）。"""
+    global _refreshing
+    if _refreshing:
+        return
+    local_root = local_root or emotion_root()
+
+    def _work():
+        global _refreshing
+        try:
+            r = list_drive_catalog(local_root)
+            if r.get("ok"):
+                save_cached_catalog(r["characters"])
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            _refreshing = False
+    _refreshing = True
+    import threading
+    threading.Thread(target=_work, daemon=True).start()
+
+
+def cloud_catalog(local_root=None, max_age_s=300, force=False):
+    """畫面用的單一入口——**快取優先，絕不讓請求等網路**。
+
+    走一次 Drive 目錄樹實測要 ~31 秒（慢速網路），若每次請求都同步去讀，
+    網頁 /voices(4s) /catalog(8s) 必定逾時 → 曲庫永遠顯示空的。
+    所以：快取新鮮就直接回；過期就先回舊的、同時背景更新；沒快取才同步讀一次。
+    downloaded 一律用本機即時重算（很便宜）。
     """
     local_root = local_root or emotion_root()
+    chars, age = load_cached_catalog(with_age=True)
+    if chars and not force:
+        if age > max_age_s:
+            refresh_cloud_catalog_async(local_root)      # 背景更新，這次先回舊的
+        return {"ok": True, "offline": False, "stale": age > max_age_s,
+                "characters": _mark_downloaded(chars, local_root), "error": ""}
+    # 沒快取（或強制）→ 只好同步讀一次
     r = list_drive_catalog(local_root)
     if r.get("ok"):
         save_cached_catalog(r["characters"])
-        return {"ok": True, "offline": False, "characters": r["characters"], "error": ""}
-    if not allow_offline:
-        return {"ok": False, "offline": True, "characters": [], "error": r.get("error", "")}
-    chars = load_cached_catalog()
-    for c in chars:      # 離線也要正確標示哪些是現成可用的
-        c["downloaded"] = is_downloaded(local_root, c.get("lang", ""), c.get("character", "")) if local_root else False
-    return {"ok": bool(chars), "offline": True, "characters": chars, "error": r.get("error", "")}
+        return {"ok": True, "offline": False, "stale": False,
+                "characters": _mark_downloaded(r["characters"], local_root), "error": ""}
+    return {"ok": bool(chars), "offline": True, "stale": True,
+            "characters": _mark_downloaded(chars, local_root), "error": r.get("error", "")}
 
 
 def upload_catalog(root, creds=None):
