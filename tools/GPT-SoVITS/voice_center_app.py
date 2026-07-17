@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 import zipfile
 import tkinter as tk
@@ -1247,9 +1248,11 @@ class App:
                         "voice": port_up(9880), "image": port_up(9881), "text": port_up(9882),
                     })
                 if self.path.startswith("/voices"):
+                    # 角色清單＝雲端曲庫（本機只是快取），帶 downloaded 讓 UI 標示
                     try:
-                        voices = [{"name": m.get("name", ""), "lang": app_ref._model_lang_tag(m)}
-                                  for m in cc.load_history()]
+                        voices = [{"name": c.get("name", ""), "lang": c.get("lang", ""),
+                                   "downloaded": bool(c.get("downloaded"))}
+                                  for c in app_ref._cloud_characters()]
                         return self._json(200, {"ok": True, "voices": voices})
                     except Exception as e:
                         return self._json(500, {"ok": False, "error": str(e)})
@@ -1262,23 +1265,28 @@ class App:
                         "all": list(em.EMOTION_ALIASES.keys()) if em else [],
                     })
                 if self.path.startswith("/catalog"):
-                    # 雲端曲庫目錄索引（給網頁 Apple Music 式瀏覽整個曲庫）
-                    if em is None:
-                        return self._json(200, {"ok": True, "catalog": None})
+                    # 雲端曲庫（Drive）＝唯一曲庫；每個角色帶 downloaded 標示本機有沒有快取
                     try:
-                        cat = em.load_catalog() or em.build_catalog()
+                        chars = app_ref._cloud_characters()
                     except Exception as e:
                         return self._json(500, {"ok": False, "error": str(e)})
-                    return self._json(200, {"ok": True, "catalog": cat})
+                    return self._json(200, {"ok": True, "catalog": {
+                        "version": 2, "characters": chars,
+                        "summary": {"characters": len(chars),
+                                    "downloaded": sum(1 for c in chars if c.get("downloaded")),
+                                    "bytes": sum(c.get("bytes", 0) or 0 for c in chars)},
+                    }})
                 if self.path.startswith("/prepare"):
-                    # 隨選下載：把該角色從 Drive 拉到運算端本地（讀檔觸發串流下載）
-                    if em is None:
-                        return self._json(200, {"ok": False, "error": "emotion_models unavailable"})
+                    # 真正的隨選下載：從 Drive 抓到本機快取（不是只讀本機檔）
                     q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                     who = (q.get("character") or q.get("name") or [""])[0]
                     lang = (q.get("lang") or [""])[0]
+                    if gdrive is None or not gdrive.deps_ok():
+                        return self._json(200, {"ok": False, "error": "Google Drive 模組未載入"})
+                    if not gdrive.is_signed_in():
+                        return self._json(200, {"ok": False, "error": "尚未登入 Google"})
                     try:
-                        res = em.prefetch(character=who, lang=lang)
+                        res = gdrive.download_character(app_ref._cache_root(), lang, who)
                     except Exception as e:
                         return self._json(500, {"ok": False, "error": str(e)})
                     return self._json(200, {"ok": res.get("ok", False), **res})
@@ -1349,49 +1357,59 @@ class App:
 
     # ── 網頁橋接：切換 / 合成 ───────────────────────────────────
     def _bridge_find_voice(self, name: str, lang: str):
+        """在本機快取（＝雲端曲庫下載下來的那份）找角色。回 emotion_models 的 model dict。
+
+        名稱可傳「角色」或「角色 LANG」；不再讀 model_history（雲端才是唯一曲庫）。
+        """
+        if em is None:
+            return None
         norm = self._norm_lang(lang)
-        hist = cc.load_history()
-        cands = [m for m in hist if m.get("name") == name and (not norm or self._model_lang_tag(m) == norm)]
+        base = re.sub(r"[ _](ZH|CN|EN|JA|JP|KO|KR)\b", "", name or "", flags=re.I).strip("_ ") or (name or "")
+        models = em.scan_emotion_models(self._cache_root())
+        cands = [m for m in models
+                 if (m.get("character") == base or m.get("name") == name)
+                 and (not norm or m.get("lang") == norm)]
         if not cands:
-            cands = [m for m in hist if m.get("name") == name]
+            cands = [m for m in models if m.get("character") == base or m.get("name") == name]
         return cands[0] if cands else None
 
-    def _bridge_emotions_for(self, name: str, lang_tag: str, ref: str, prompt: str):
-        """回該角色的情緒→參考音對照 {canon:{ref,prompt}}。
-
-        有情緒資料夾結構（VOICEWEAVER_EMOTION_ROOT）且名稱/語言對得上就用它；
-        否則退回單一參考音當中立（與 Colab 橋接同一套邏輯）。
-        """
-        neutral = (em.NEUTRAL if em else "中立")
-        fallback = {neutral: {"ref": ref, "prompt": prompt}} if ref else {}
-        if not em:
-            return fallback
-        # 去掉名稱結尾語言標籤後比對角色名
-        base = re.sub(r"[ _](ZH|CN|EN|JA|JP|KO|KR)\b", "", name, flags=re.I).strip("_ ") or name
-        for m in em.scan_emotion_models():
-            if m.get("lang", "") != lang_tag:
-                continue
-            if m.get("character") == base or m.get("name") == name or m.get("character") == name:
-                return {k: {"ref": v["ref"], "prompt": v["prompt"]}
-                        for k, v in m.get("emotions", {}).items()}
-        return fallback
 
     def _bridge_switch(self, name: str, lang: str):
-        from pathlib import Path
+        """切換到某角色：本機快取沒有就先從 Drive 抓，再用絕對路徑載權重。
+
+        雲端＝唯一曲庫，所以這裡完全不碰 model_history；載權重走
+        api_v2 /set_*_weights（同 Colab），不需要 version 欄位。
+        """
         try:
             m = self._bridge_find_voice(name, lang)
             if not m:
-                return False, f"找不到模型「{name}」"
-            gpt_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["gpt_rel"])), ROOT)
-            sov_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["sovits_rel"])), ROOT)
-            ref_abs = resolve_existing(m["ref_path"])
-            cc.apply_runtime_model(m["version"], gpt_rel, sov_rel, Path(ref_abs), m.get("prompt", ""))
-            cc.mark_model_used(m)
-            lang_tag = self._model_lang_tag(m)
-            self._bridge_voice = {"name": m.get("name", ""), "lang": lang_tag,
-                                  "ref": ref_abs, "prompt": m.get("prompt", ""),
-                                  "emotions": self._bridge_emotions_for(
-                                      m.get("name", ""), lang_tag, ref_abs, m.get("prompt", ""))}
+                # 快取沒有 → 也許雲端有，抓下來再找一次（決策：自動下載）
+                base = re.sub(r"[ _](ZH|CN|EN|JA|JP|KO|KR)\b", "", name or "",
+                              flags=re.I).strip("_ ") or (name or "")
+                norm = self._norm_lang(lang)
+                if gdrive is not None and gdrive.is_signed_in() and norm:
+                    r = gdrive.download_character(self._cache_root(), norm, base)
+                    if not r.get("ok"):
+                        return False, f"找不到模型「{name}」（雲端下載失敗：{r.get('error')}）"
+                    m = self._bridge_find_voice(name, lang)
+                if not m:
+                    return False, f"找不到模型「{name}」"
+            if not port_up(9880):
+                return False, "語音服務(9880)未啟動"
+            import urllib.parse, urllib.request
+            for ep, wp in (("/set_sovits_weights", m["sovits"]), ("/set_gpt_weights", m["gpt"])):
+                q = urllib.parse.urlencode({"weights_path": wp})
+                with urllib.request.urlopen(f"http://127.0.0.1:9880{ep}?{q}", timeout=180) as r:
+                    body = r.read().decode("utf-8", "replace")
+                if "success" not in body.lower():
+                    return False, f"{ep}: {body[:120]}"
+            _ekey, ref = em.pick_ref(m, None)
+            self._bridge_voice = {
+                "name": m["name"], "lang": m.get("lang", ""),
+                "ref": (ref or {}).get("ref", ""), "prompt": (ref or {}).get("prompt", ""),
+                "emotions": {k: {"ref": v["ref"], "prompt": v["prompt"]}
+                             for k, v in m.get("emotions", {}).items()},
+            }
             return True, f"已切換到 {name}"
         except Exception as e:
             return False, str(e)
@@ -1409,12 +1427,12 @@ class App:
                     ok, msg = self._bridge_switch(want_name, lang_hint)
                     if not ok:
                         return None, msg, ""
-                # 沒有指定、也沒載入過 → 自動載入最近使用的那一個
+                # 沒有指定、也沒載入過 → 自動載入快取裡的第一個角色
                 elif not cur:
-                    hist = cc.load_history()
-                    if not hist:
-                        return None, "電腦上沒有任何語音模型", ""
-                    ok, msg = self._bridge_switch(hist[0].get("name", ""), self._model_lang_tag(hist[0]))
+                    models = em.scan_emotion_models(self._cache_root()) if em else []
+                    if not models:
+                        return None, "本機還沒有下載任何角色（請先到曲庫下載）", ""
+                    ok, msg = self._bridge_switch(models[0]["name"], models[0].get("lang", ""))
                     if not ok:
                         return None, msg, ""
                 v = self._bridge_voice
@@ -2235,6 +2253,35 @@ class App:
     def _cache_root(self) -> str:
         return os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
 
+    def _cloud_characters(self):
+        """雲端曲庫角色清單（含 downloaded）。沒登入/沒 Drive 就退回本機快取掃描，
+        讓「還沒登入」時網頁至少還看得到已下載的角色。"""
+        root = self._cache_root()
+        if gdrive is not None and gdrive.deps_ok() and gdrive.is_signed_in():
+            try:
+                return gdrive.cloud_catalog(root).get("characters", [])
+            except Exception:
+                pass
+        if em is None:
+            return []
+        return [{"name": m["name"], "character": m.get("character", ""), "lang": m.get("lang", ""),
+                 "emotions": sorted(m.get("emotions", {}).keys()),
+                 "bytes": 0, "files": 0, "downloaded": True}
+                for m in em.scan_emotion_models(root)]
+
+    def _dl_progress(self, char):
+        """回一個 progress callback：把下載進度即時寫到狀態列（節流，避免洗版）。"""
+        last = {"t": 0.0, "pct": -1}
+        def cb(fname, pct):
+            now = time.time()
+            if pct == last["pct"] or (now - last["t"] < 0.5 and pct < 100):
+                return
+            last["t"], last["pct"] = now, pct
+            short = fname if len(fname) <= 28 else fname[:26] + "…"
+            msg = self.t("⬇ 下載「%s」 %s %d%%").format(char, short, pct)
+            self.root.after(0, lambda: self.set_adv_status(msg))
+        return cb
+
     def _ensure_downloaded(self, m, log=None):
         """確保角色在本機快取；沒有就從 Drive 抓（合成/切換前自動做）。回 (ok, msg)。"""
         root = self._cache_root()
@@ -2245,7 +2292,7 @@ class App:
             return False, "尚未登入 Google，無法下載"
         if log:
             log(self.t("從 Drive 下載「%s」中…").format(char))
-        r = gdrive.download_character(root, lang, char)
+        r = gdrive.download_character(root, lang, char, progress=self._dl_progress(char))
         if not r.get("ok"):
             return False, r.get("error", "下載失敗")
         return True, f"已下載（{r['downloaded']} 檔／約 {r['bytes']/1024/1024:.0f}MB）"
@@ -2930,7 +2977,8 @@ class App:
         def task():
             try:
                 res = gdrive.upload_library(
-                    root, log=lambda m: self.root.after(0, lambda: self.set_adv_status(m)))
+                    root, progress=self._dl_progress("上傳"),
+                    log=lambda m: self.root.after(0, lambda: self.set_adv_status(m)))
                 self.root.after(0, self._refresh_gd_status)
                 mb = res.get("bytes", 0) / (1024 * 1024)
                 msg = (f"完成：{res.get('characters',0)} 角色，"

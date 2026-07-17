@@ -433,13 +433,33 @@ def list_drive_catalog(local_root=None, creds=None):
     return res
 
 
+def _fetch_range(creds, file_id, tmp_path, start, total, name="", progress=None):
+    """用 Range 請求把檔案從 start 續傳到 tmp_path（append）。走官方 AuthorizedSession。"""
+    from google.auth.transport.requests import AuthorizedSession
+    sess = AuthorizedSession(creds)
+    url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
+    headers = {"Range": f"bytes={start}-"} if start else {}
+    with sess.get(url, headers=headers, stream=True, timeout=300) as r:
+        if r.status_code not in (200, 206):
+            raise RuntimeError(f"下載 {name} 失敗 HTTP {r.status_code}")
+        # 200＝伺服器不接受 Range（整包重來）→ 覆寫；206＝真的續傳 → 接在後面
+        mode = "ab" if (start and r.status_code == 206) else "wb"
+        got = start if mode == "ab" else 0
+        with open(tmp_path, mode) as fh:
+            for chunk in r.iter_content(chunk_size=4 * 1024 * 1024):
+                if not chunk:
+                    continue
+                fh.write(chunk)
+                got += len(chunk)
+                if progress and total:
+                    progress(name, min(100, int(got * 100 / total)))
+
+
 def download_character(local_root, lang, char, progress=None, creds=None):
     """把角色從 Drive 抓到本機快取 <local_root>/<LANG>/<角色>/（同名同大小跳過）。
 
     回 {ok, downloaded, skipped, bytes, error}。
     """
-    from googleapiclient.http import MediaIoBaseDownload
-    import io
     res = {"ok": False, "character": char, "lang": (lang or "").upper(),
            "downloaded": 0, "skipped": 0, "bytes": 0, "error": ""}
     try:
@@ -463,15 +483,16 @@ def download_character(local_root, lang, char, progress=None, creds=None):
                 if os.path.isfile(dst) and os.path.getsize(dst) == size:
                     res["skipped"] += 1; res["bytes"] += size; continue
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
-                req = svc.files().get_media(fileId=f["id"])
                 tmp = dst + ".part"
-                with io.FileIO(tmp, "wb") as fh:
-                    dl = MediaIoBaseDownload(fh, req, chunksize=8 * 1024 * 1024)
-                    done = False
-                    while not done:
-                        status, done = _retry(lambda: dl.next_chunk())
-                        if status and progress:
-                            progress(f["name"], int(status.progress() * 100))
+                # 續傳：慢速網路下大檔常被中斷，沒續傳＝每次從頭來（實測 316MB 約 12 分鐘）
+                have = os.path.getsize(tmp) if os.path.isfile(tmp) else 0
+                if have > size:                    # .part 比來源還大＝來源換過 → 重下
+                    os.remove(tmp); have = 0
+                if have < size:
+                    _fetch_range(creds, f["id"], tmp, have, size, f["name"], progress)
+                if os.path.getsize(tmp) != size:   # 大小不符就不當完成，留著 .part 下次續
+                    res["error"] = f"{f['name']} 下載不完整"
+                    continue
                 os.replace(tmp, dst)
                 res["downloaded"] += 1; res["bytes"] += size
 
