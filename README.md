@@ -5,11 +5,13 @@
 **為失語症、語言復健與臨場表達困難者打造的 AI 溝通輔助生態系**
 
 把零碎的詞 ＋ 所在地點 ＋ 相機看到的東西，交給 AI 重組成自然句；
-AI 全判讀語音復健評分；鼻控無障礙操作；自己的聲音自己合成。
+AI 全判讀語音復健評分；鼻控無障礙操作；自己的聲音、自己的雲端曲庫，隨處合成。
 
 ![Platform](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)
 ![Web](https://img.shields.io/badge/網頁版-Live-0a84ff)
 ![Desktop](https://img.shields.io/badge/語音中心-macOS%20%7C%20Windows-8a2be2)
+![Colab](https://img.shields.io/badge/雲端算力-Colab%20GPU-f9ab00?logo=googlecolab&logoColor=white)
+![Drive](https://img.shields.io/badge/曲庫-Google%20Drive-4285F4?logo=googledrive&logoColor=white)
 ![i18n](https://img.shields.io/badge/介面語言-繁中%20%7C%20EN%20%7C%20日%20%7C%20한-ff9500)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 
@@ -22,16 +24,17 @@ AI 全判讀語音復健評分；鼻控無障礙操作；自己的聲音自己�
 
 ---
 
-## 三個入口，一套生態
+## 四個入口，一套生態
 
 | 入口 | 說明 | 取得方式 |
 | --- | --- | --- |
-| **📱 Android App** | 完整功能：離線推理、相機、定位、鼻控、語音復健、GPT-SoVITS 角色語音 | [Releases → `v1.3.0-android`](https://github.com/TimChien918/VoiceWeaver/releases/tag/v1.3.0-android) 或自行建置 |
-| **🌐 網頁輕量版** | 純瀏覽器免安裝；可把語音／生圖／文字運算丟給自己的電腦跑 | [直接開啟](https://timchien918.github.io/VoiceWeaver-Web/) |
-| **🖥 語音中心（macOS / Windows）** | 桌面 App：GPT-SoVITS 語音合成、SD-Turbo 生圖、Qwen 文字推論、聲音模型管理與手機同步 | [Releases → `v1.2.1-mac`](https://github.com/TimChien918/VoiceWeaver/releases/tag/v1.2.1-mac) / [`v1.1.0-win`](https://github.com/TimChien918/VoiceWeaver/releases/tag/v1.1.0-win) |
+| **📱 Android App** | 完整功能：離線推理、相機、定位、鼻控、語音復健、GPT-SoVITS 角色語音、雲端曲庫瀏覽與下載 | [Releases](https://github.com/TimChien918/VoiceWeaver/releases) 或自行建置 |
+| **🌐 網頁輕量版** | 純瀏覽器免安裝；可把語音／生圖／文字運算丟給電腦或 Colab 跑 | [直接開啟](https://timchien918.github.io/VoiceWeaver-Web/) |
+| **🖥 語音中心（macOS / Windows）** | 桌面 App：GPT-SoVITS 語音合成、SD-Turbo 生圖、Qwen 文字推論、**雲端曲庫管理（Google Drive）** | [Releases](https://github.com/TimChien918/VoiceWeaver/releases) |
+| **☁️ Colab GPU（免費算力）** | 免安裝的雲端運算：同一份 Google Drive 曲庫、免費 GPU 跑語音合成，手機／網頁走 ngrok 連線 | [notebook](tools/colab/VoiceWeaver_GPT_SoVITS_Colab.ipynb) |
 
-- 手機與網頁用**同一個 Google 帳號**登入即雙向同步 API 金鑰、供應商清單與設定。
-- 三個入口的介面都支援**繁體中文／English／日本語／한국어**一鍵切換；切換語言會連動語音模型篩選與朗讀語言。
+- 手機、網頁、電腦用**同一個 Google 帳號**登入即互通：API 金鑰／設定雙向同步（Firestore），語音曲庫共用同一個 Drive。
+- 四個入口的介面都支援**繁體中文／English／日本語／한국어**一鍵切換；切換語言會連動語音模型篩選與朗讀語言。
 
 ## 功能總覽
 
@@ -45,7 +48,31 @@ AI 全判讀語音復健評分；鼻控無障礙操作；自己的聲音自己�
 | **相機辨識** | 前／後攝影機、AI 認物品、加入情境 |
 | **無障礙** | 鼻控游標（MediaPipe 鼻尖追蹤、靈敏度即時調整）、dwell 停留點選、超大字、高對比 |
 | **安全通報** | 危機關鍵字偵測 → GPS ＋ Telegram 即時通知家人、視訊通話、語音安全鎖定 |
-| **角色語音** | GPT-SoVITS 自訂聲音（電腦跑、手機／網頁連線），依介面語言自動篩選對應語言的模型 |
+| **角色語音（情緒感知）** | GPT-SoVITS 自訂聲音，依句子自動偵測情緒（開心／難過／恐懼／驚訝／中立）切換對應語氣的參考音；電腦／Colab 跑，手機／網頁連線 |
+| **雲端曲庫** | Google Drive 是**唯一曲庫**，本機只是快取——手機／網頁／電腦都看同一份角色清單，未下載的角色一鍵抓到運算端，合成前自動確保就緒 |
+
+## ☁️ 雲端曲庫（Google Drive 是唯一事實來源）
+
+聲音模型不再各裝置各存一份。架構是：
+
+```
+Google Drive（VoiceWeaver/<語言>/<角色>/）  ←── 唯一曲庫，登入哪個 Google 帳號就是哪份
+        │
+        │  電腦／Colab 用 Drive API／掛載讀取
+        ▼
+運算端本機快取（沒有的角色會自動下載，下載完就是「已下載」）
+        │
+        │  /catalog（瀏覽整庫＋下載狀態）／/prepare（隨選下載）／/speak（合成）
+        ▼
+手機／網頁（不存模型、不合成，只送文字、收 WAV）
+```
+
+- **一次 Google 登入 ＝ Firebase 身分 ＋ Drive 存取權**：電腦端登入時會自動把兩者綁在一起（`drive.file` 範圍，只碰 App 自己建立的檔案，不觸及你 Drive 裡其他東西）。
+- **匯入即上傳**：語音中心匯入單個／批量資料夾時，直接寫進曲庫的情緒結構並上傳到你自己的 Drive；不用手動搬檔案。
+- **資料夾格式**：`<語言 ZH/EN/JA/KO>/<角色>/{*.ckpt, *.pth, reference_audios/**/emotions/【情緒】逐字稿.wav}`——檔名的【情緒】標籤決定該顆參考音對應哪種語氣。
+- **`catalog.json`**：曲庫根目錄的目錄索引（角色／語言／情緒／大小），Mac 與 Colab 兩端寫出的格式完全一致，互為可信來源。
+- **隨選下載＋續傳**：合成前運算端會自動確保角色已在本機；沒有就從 Drive 抓（支援中斷續傳，慢速網路也不必整包重來）。已下載的角色在手機／網頁／語音中心都會標示 ✅，未下載標示 ☁️。
+- **管理**：語音中心可「移除下載」（清本機快取、雲端保留）或「從雲端刪除角色」（丟 Drive 垃圾桶，可自行還原，會影響所有裝置看到的曲庫）。
 
 ## 快速開始（自行建置 Android App）
 
@@ -73,16 +100,16 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ## 🖥 語音中心（macOS / Windows 桌面 App）
 
 自帶 Python 環境的桌面應用（Tkinter），下載 `.dmg`／`.exe` 安裝即用，首次開啟自動解壓環境（約 2GB）。
-一個視窗管理三個 AI 服務＋手機連線＋聲音模型：
+一個視窗管理三個 AI 服務＋手機連線＋雲端曲庫：
 
 | 埠 | 服務 | 說明 |
 | --- | --- | --- |
-| `9880` | 語音合成（GPT-SoVITS） | 需自備聲音模型；手機／網頁的角色語音由此輸出 |
+| `9880` | 語音合成（GPT-SoVITS） | 首次啟動可一鍵下載基礎模型（約 1.6GB）；角色模型來自雲端曲庫 |
 | `9881` | 本機生圖（SD-Turbo） | 首次生圖自動下載模型（免金鑰） |
 | `9882` | 文字推論（Qwen2.5-1.5B） | 句子重組／復健評分的「電腦接手」來源 |
-| `9879` | 橋接（含 CORS） | 手機語言同步 ＋ 網頁版的語音／生圖／文字代理 |
+| `9879` | 橋接（含 CORS） | 手機語言同步 ＋ 網頁版的語音／生圖／文字／曲庫代理（`/catalog`、`/prepare`、`/speak`…） |
 
-**聲音模型管理**：2 欄宮格清單、語言篩選（中／英／日／韓，跟手機介面語言自動連動）、單個與批量資料夾匯入、完整欄位編輯（.ckpt／.pth／參考音檔／參考文字，換音檔自動帶入逐字稿）、語言自動偵測（依參考文字的文字種類：諺文→韓、假名→日、漢字→中、拉丁→英）。
+**雲端曲庫管理**：Google 登入（一次綁定 Firebase＋Drive）、2 欄宮格清單（顯示每個角色的下載狀態／大小／情緒）、下載⇄移除下載一鍵切換、單個與批量資料夾匯入（自動上傳到 Drive）、從雲端刪除角色、語言篩選（中／英／日／韓，跟手機介面語言自動連動）。
 
 **手機連線三選一**：
 | 方式 | 設定 |
@@ -91,28 +118,39 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 | 無線 Wi-Fi | App 填 `http://<電腦IP>:9880`，或掃語音中心的 QR Code 自動填入 |
 | Tailscale（外網） | 填 `100.x` 位址；4G／5G 也能連 |
 
-**聲音模型隨身同步**：模型放手機 `/sdcard/VoiceWeaver/voice_models/`，USB 連接時電腦自動雙向同步（聯集、防誤刪安全閥）。換一台電腦，插上手機就能把聲音帶過去。
+> 打包腳本：`tools/dmg/build_dmg.sh`（macOS）、`tools/win/build_win.ps1`（Windows）。安全網會強制剔除任何模型權重，**安裝檔絕不內含聲音模型**——模型只透過使用者自己的 Google Drive 流動。
 
-> 打包腳本：`tools/dmg/build_dmg.sh`（macOS）、`tools/win/build_win.ps1`（Windows）。安全網會強制剔除任何模型權重，**安裝檔絕不內含聲音模型**。
+## ☁️ Colab GPU（免費雲端算力）
+
+不想讓自己的電腦跑推論、或電腦效能不夠時，用 [Google Colab](https://colab.research.google.com) 的免費 GPU：
+
+1. 上傳 `tools/colab/VoiceWeaver_GPT_SoVITS_Colab.ipynb` 到 Colab，選 GPU（T4）執行階段。
+2. 依序執行每個 cell：安裝相依 → 掛載 Drive（同一個帳號的曲庫）→ 啟動服務 → 開 ngrok 通道。
+3. 手機或網頁的「連接電腦」設定頁填入 ngrok 給的公開網址，或直接按「☁️ 改用雲端 Colab」。
+4. Colab 端的橋接（`voiceweaver_bridge.py`）與語音中心走同一套情緒偵測、同一份 `catalog.json` 格式，行為完全一致。
+
+> ngrok 授權碼透過配對碼從你的帳號雲端取用，不需要把授權碼貼進 notebook。
 
 ## 🌐 網頁版（免安裝）
 
 - 純瀏覽器＋自備 API 金鑰即可用：重組、AAC、復健評分、成績單、生圖。
-- **讓電腦幫忙跑運算**：設定頁啟用後，語音（GPT-SoVITS 角色聲音）、生圖（SD-Turbo）、文字（Qwen）都交給你的電腦，連不上自動退回雲端／瀏覽器。
+- **讓電腦／Colab 幫忙跑運算**：設定頁啟用後，語音（GPT-SoVITS 角色聲音，情緒感知）、生圖（SD-Turbo）、文字（Qwen）都交給你的電腦或 Colab，連不上自動退回雲端／瀏覽器。
   - 同一台電腦：免設定，直接「偵測連線」（走 `127.0.0.1:9879`）。
-  - 遠端：電腦跑 `tailscale serve --bg 9879`，網頁填 `https://主機.xxx.ts.net`。
-  - ⚠️ 受瀏覽器混合內容限制，HTTPS 網頁無法連區網 `http://192.168.x.x`——僅同機與 Tailscale 兩種連法。
+  - Colab：填 ngrok 給的公開網址，或按「☁️ 改用雲端 Colab」一鍵套用。
+  - 遠端電腦：跑 `tailscale serve --bg 9879`，網頁填 `https://主機.xxx.ts.net`。
+  - ⚠️ 受瀏覽器混合內容限制，HTTPS 網頁無法連區網 `http://192.168.x.x`——僅同機、Colab（ngrok）、Tailscale 三種連法。
+- **雲端曲庫瀏覽**：整個 Drive 曲庫的角色清單，標示已下載／未下載，可一鍵請運算端先下載。
 
 ## 技術架構
 
 - **Android**：Kotlin + Jetpack Compose；Room（歷史／復健）＋ DataStore（設定）；WorkManager（提醒／推送）；CameraX + ML Kit；Vosk（離線 STT，逐字信心度）
-- **雲端**：Firebase Auth（Google／匿名）＋ Firestore（金鑰、設定、復健日誌，與網頁版共用結構）
+- **雲端同步**：Firebase Auth（Google／匿名）＋ Firestore（金鑰、設定、復健日誌，與網頁版共用結構）；電腦端額外用 Google OAuth（`drive.file`）存取使用者自己的 Drive 曲庫，同一次登入會把 Firebase 身分與 Drive 授權綁在一起
 - **多語系**：strings.xml 四語資源 ＋ `I18n.tr()` 執行期翻譯層（覆蓋 lambda／ViewModel 內的動態訊息）；網頁 `data-i18n` 屬性驅動；語音中心 `I18N` 字典＋標題列語言切換（記住選擇）
 - **推理分層**（依裝置能力與網路自動路由）：
 
   | 層級 | 引擎 | 說明 |
   | --- | --- | --- |
-  | 電腦接手 | `OffloadManager` → 語音中心 9880/9881/9882 | USB／區網／Tailscale，實測 RTT 分級 |
+  | 電腦／Colab 接手 | `OffloadManager` → 9880/9881/9882（橋接 9879） | USB／區網／Tailscale／ngrok，實測 RTT 分級 |
   | 雲端 | `CloudInferenceEngine` | Gemini / Groq / OpenRouter / Cohere…，多金鑰固定順序備援 |
   | 裝置端 | `MediaPipeLLMEngine` | Gemma 3n E2B / Qwen（MediaPipe .task） |
   | 備援 | `RegexTemplateEngine` | 規則模板，零依賴 |
@@ -130,7 +168,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 | `noseSensitivity` | 1.0 | 鼻控靈敏度（0.5–2.0，即時生效） |
 | `dailyReminderEnabled` / `Hour` | off / 9 | 每日復健提醒 |
 | `reportPushFrequency` | none | 成績單 Telegram 推送（none／daily／weekly） |
-| `gptSovitApiBaseUrl` | — | 語音中心位址（可存多台電腦、掃 QR 自動填） |
+| `gptSovitApiBaseUrl` | — | 電腦／Colab 位址（可存多台，連不上自動換下一個） |
 | `emergencyChatId` | 空白 | Telegram 緊急通報接收者（不內建預設值） |
 | `customAacItems` | 空 | 自訂 AAC 圖卡（JSON） |
 
@@ -141,7 +179,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 | 麥克風 | 語音輸入、跟讀錄音 |
 | 定位 | GPS 情境、住家錨點、緊急通報 |
 | 相機 | 前／後鏡頭辨識、鼻控追蹤 |
-| 網路 | 雲端 AI、語音中心連線、Telegram |
+| 網路 | 雲端 AI、電腦／Colab 連線、Telegram |
 | 通知 | 每日提醒、成績單推送 |
 | 儲存／媒體 | 參考音檔匯入、CSV／PDF 匯出 |
 
@@ -155,14 +193,15 @@ app/src/main/java/com/example/
 │   ├── RehabScreen.kt            語音復健（AI 評分、錯誤高亮、整段練習）
 │   ├── report/ReportScreen.kt    成績單（趨勢圖、CSV/PDF 匯出）
 │   ├── CrisisConversationWindow  危機介入（視訊、語音訊息、家人指令）
+│   ├── SettingsScreen.kt         設定＋雲端曲庫瀏覽（CloudLibraryPanel）＋ngrok/Colab
 │   ├── I18n.kt                   執行期翻譯層（動態訊息四語）
-│   └── settings/ + theme/        設定、進階設定、AppPalette
+│   └── settings/ + theme/        進階設定、AppPalette
 ├── ai/
 │   ├── VoiceWeaverCore.kt        核心 ViewModel + InferenceEngine 介面
 │   ├── CloudInferenceEngine.kt   雲端推理（電腦接手 → 雲端 → fallback）
 │   ├── MediaPipeLLMEngine.kt     裝置端 Gemma/Qwen
 │   ├── OffloadManager.kt         電腦接手（連線分級、/reconstruct 代理）
-│   ├── LocalSovitsHelper.kt      GPT-SoVITS 連線與模型切換
+│   ├── LocalSovitsHelper.kt      GPT-SoVITS 連線、情緒偵測、雲端曲庫瀏覽/下載
 │   └── SpeechToTextManager.kt    Vosk 離線 STT
 ├── work/                          WorkManager（提醒、推送、匯出）
 └── MainActivity.kt
@@ -173,11 +212,17 @@ app/src/main/assets/
 
 tools/
 ├── GPT-SoVITS/
-│   ├── voice_center_app.py     語音中心 GUI（Mac/Win 共用，四語介面）
-│   ├── model_setup_server.py   模型管理後端（掃描、匯入、歷史）
+│   ├── voice_center_app.py     語音中心 GUI（Mac/Win 共用，四語介面；雲端曲庫管理）
+│   ├── drive_uploader.py       Google Drive 曲庫（OAuth 登入合一、上傳/下載/刪除、續傳）
+│   ├── emotion_models.py       情緒資料夾掃描＋偵測（api_v2／語音中心／Colab 共用邏輯）
+│   ├── api_v2.py               GPT-SoVITS 推論 API（9880）＋ /catalog /prepare
+│   ├── model_setup_server.py   模型管理後端（掃描、匯入）
 │   ├── text_infer_server.py    Qwen 文字推論（9882）
 │   ├── image_gen_server.py     SD-Turbo 生圖（9881）
-│   └── sync_voice_models.py    手機↔電腦雙向模型同步
+│   └── sync_voice_models.py    USB 手機↔電腦模型同步（次要路徑，雲端曲庫為主）
+├── colab/
+│   ├── VoiceWeaver_GPT_SoVITS_Colab.ipynb   雲端算力 notebook（掛 Drive、起服務、開 ngrok）
+│   └── voiceweaver_bridge.py                Colab 端橋接（與語音中心同一套情緒/曲庫邏輯）
 ├── dmg/build_dmg.sh    macOS .dmg 打包（權重安全網）
 └── win/build_win.ps1   Windows 打包
 ```
@@ -185,8 +230,9 @@ tools/
 ## 隱私與授權
 
 - **不內建任何語音模型／角色音色**：聲音由使用者自行匯入有權使用的素材；安裝檔打包時安全網強制剔除權重。
-- **金鑰不入版控**：`.env` 與 `app/google-services.json` 已被 `.gitignore`；API 金鑰只存在使用者裝置與其個人 Firestore。
-- **聲紋屬生物特徵**：啟用 GPT-SoVITS／匯入錄音前需勾選知情同意（聲音主體同意、僅個人非商業溝通用途、不得冒充他人、不上傳雲端）。
+- **曲庫存在使用者自己的 Google Drive**：電腦端用 OAuth `drive.file` 範圍存取——App 只能看到／管理它自己建立的檔案，碰不到你 Drive 裡其他東西；不會有任何檔案經過開發者。
+- **金鑰不入版控**：`.env`、`app/google-services.json`、`google_client_secret.json` 皆已 `.gitignore`；API 金鑰只存在使用者裝置與其個人 Firestore。
+- **聲紋屬生物特徵**：啟用 GPT-SoVITS／匯入錄音前需勾選知情同意（聲音主體同意、僅個人非商業溝通用途、不得冒充他人）。
 - **危機通報**：畫面與聲音僅傳給使用者自行設定的家人 Telegram，不經任何第三方伺服器。
 - **第三方授權**：[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) 為 **AGPL-3.0**，`.dmg`／`.exe` 散布時隨附其 `LICENSE`。
 - 本專案程式碼本身尚未公開授權（保留所有權利）；如需重用請先聯絡作者。

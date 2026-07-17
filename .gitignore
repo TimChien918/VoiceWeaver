@@ -62,3 +62,6 @@ google_client_secret*.json
 google_token.json
 **/google_client_secret*.json
 **/google_token.json
+
+# 機器本地的曲庫快取根覆寫（外接硬碟等個人化路徑，不該進版控）
+tools/GPT-SoVITS/.emotion_root
