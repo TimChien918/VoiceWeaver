@@ -590,6 +590,10 @@ I18N = {
     "adv.switch":   {"zh-TW":"✅ 切換為此模型", "en":"✅ Switch to this", "ja":"✅ このモデルに切替", "ko":"✅ 이 모델로 전환"},
     "adv.reload":   {"zh-TW":"重新整理", "en":"Refresh", "ja":"更新", "ko":"새로고침"},
     "adv.dl":       {"zh-TW":"⬇ 下載", "en":"⬇ Download", "ja":"⬇ ダウンロード", "ko":"⬇ 다운로드"},
+    "adv.fetchPre": {"zh-TW":"⬇ 下載基礎語音模型（語音服務起不來時按，約 1.6GB）",
+                     "en":"⬇ Download base voice models (needed for the voice service, ~1.6GB)",
+                     "ja":"⬇ 基礎音声モデルを取得（音声サービスに必須、約 1.6GB）",
+                     "ko":"⬇ 기본 음성 모델 내려받기 (음성 서비스에 필요, 약 1.6GB)"},
     "adv.rmDl":     {"zh-TW":"移除下載", "en":"Remove download", "ja":"ダウンロード削除", "ko":"다운로드 제거"},
     "adv.delCloud": {"zh-TW":"🗑 從雲端刪除角色", "en":"🗑 Delete from cloud", "ja":"🗑 クラウドから削除", "ko":"🗑 클라우드에서 삭제"},
     "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
@@ -779,9 +783,35 @@ def pids_on_port(port) -> list[str]:
     except Exception:
         return []
 
+# GPT-SoVITS 基礎預訓練模型（非角色模型）。DMG 為了版權不內建，且原本沒有任何
+# 下載機制 → pretrained_models 永遠是空的、api_v2(9880) 永遠起不來。
+# 比照生圖(SD-Turbo)/文字(Qwen) 的「首次執行自動下載」補上。v4 只需這幾個檔（約 1.6GB）。
+PRETRAINED_REPO = "lj1995/GPT-SoVITS"
+PRETRAINED_NEEDED = [
+    "s1v3.ckpt",
+    "gsv-v4-pretrained/s2Gv4.pth",
+    "chinese-hubert-base/config.json",
+    "chinese-hubert-base/preprocessor_config.json",
+    "chinese-hubert-base/pytorch_model.bin",
+    "chinese-roberta-wwm-ext-large/config.json",
+    "chinese-roberta-wwm-ext-large/tokenizer.json",
+    "chinese-roberta-wwm-ext-large/pytorch_model.bin",
+]
+
+
+def pretrained_dir() -> str:
+    return os.path.join(ROOT, "GPT_SoVITS", "pretrained_models")
+
+
+def missing_pretrained() -> list:
+    """回還缺哪些基礎模型檔（空 list＝齊全）。"""
+    d = pretrained_dir()
+    return [f for f in PRETRAINED_NEEDED if not os.path.isfile(os.path.join(d, f))]
+
+
 def have_voice_models() -> bool:
-    d = os.path.join(ROOT, "GPT_SoVITS", "pretrained_models")
-    return os.path.isdir(d) and bool(os.listdir(d))
+    """語音服務能不能起：基礎預訓練模型要齊全（不是只看資料夾存在）。"""
+    return not missing_pretrained()
 
 def find_adb_bg(callback=None):
     """背景執行緒搜尋 adb，找到後呼叫 callback(path)。"""
@@ -1943,6 +1973,10 @@ class App:
         self._track(self.test_entry, "entry")
         self.tr(self._btn(tr, "", self.adv_test, C_BLUE), "adv.audition").pack(side="left")
 
+        # 基礎語音模型（DMG 不內建）缺了語音服務就起不來 → 給一顆可以直接補下載
+        row_pre = tk.Frame(parent); row_pre.pack(fill="x", padx=20, pady=(4, 4)); self._track(row_pre, "bg")
+        self.tr(self._btn(row_pre, "", self.adv_fetch_pretrained, C_AMBER), "adv.fetchPre").pack(fill="x")
+
         ta = tk.Frame(parent); ta.pack(fill="x", padx=20, pady=(4, 4)); self._track(ta, "bg")
         self.tr(self._neutral_btn(ta, "", self.adv_play), "adv.play").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._neutral_btn(ta, "", self.adv_stopplay), "adv.stopPlay").pack(side="left", expand=True, fill="x", padx=(0,4))
@@ -2954,6 +2988,44 @@ class App:
         except Exception:
             pass
         return "尚未登入 Google"
+
+    def adv_fetch_pretrained(self):
+        """下載 GPT-SoVITS 基礎預訓練模型（語音服務的前置條件，約 1.6GB）。"""
+        from tkinter import messagebox
+        miss = missing_pretrained()
+        if not miss:
+            self.set_adv_status(self.t("基礎語音模型已齊全"))
+            return
+        if not messagebox.askyesno(
+                "VoiceWeaver",
+                f"語音合成需要 GPT-SoVITS 基礎模型，目前缺 {len(miss)} 個檔（約 1.6GB）。\n\n"
+                "要現在下載嗎？下載完語音服務就能啟動。\n"
+                "（用行動網路分享的話會很久，建議接 Wi-Fi）"):
+            return
+        self.set_adv_status(self.t("下載基礎語音模型中…（約 1.6GB）"))
+
+        def task():
+            try:
+                from huggingface_hub import hf_hub_download
+            except Exception as e:
+                return False, f"缺 huggingface_hub：{e}"
+            d = pretrained_dir()
+            os.makedirs(d, exist_ok=True)
+            for i, rel in enumerate(miss, 1):
+                self.root.after(0, lambda r=rel, n=i: self.set_adv_status(
+                    self.t("下載基礎模型 %d/%d：%s").format(n, len(miss), r)))
+                try:
+                    hf_hub_download(repo_id=PRETRAINED_REPO, filename=rel,
+                                    local_dir=d, local_dir_use_symlinks=False)
+                except Exception as e:  # noqa: BLE001
+                    return False, f"下載 {rel} 失敗：{e}"
+            left = missing_pretrained()
+            if left:
+                return False, f"仍缺 {len(left)} 個檔"
+            # 齊全了 → 語音服務現在可以起來
+            self.root.after(0, lambda: self.start("9880"))
+            return True, "基礎語音模型下載完成，語音服務啟動中…"
+        self._run_bg(task)
 
     def _sync_gd_buttons(self):
         """已登入只顯示「登出」，未登入只顯示「登入」。"""
