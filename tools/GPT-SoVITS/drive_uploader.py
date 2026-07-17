@@ -490,10 +490,22 @@ def download_character(local_root, lang, char, progress=None, creds=None):
                     os.remove(tmp); have = 0
                 if have < size:
                     _fetch_range(creds, f["id"], tmp, have, size, f["name"], progress)
+                # 併發保護：另一個下載可能已經完成並把 .part rename 掉了
+                if not os.path.isfile(tmp):
+                    if os.path.isfile(dst) and os.path.getsize(dst) == size:
+                        res["skipped"] += 1; res["bytes"] += size
+                        continue
+                    res["error"] = f"{f['name']} 下載中斷"
+                    continue
                 if os.path.getsize(tmp) != size:   # 大小不符就不當完成，留著 .part 下次續
                     res["error"] = f"{f['name']} 下載不完整"
                     continue
-                os.replace(tmp, dst)
+                try:
+                    os.replace(tmp, dst)
+                except OSError:                     # 別人先 rename 了 → 檔在就算成功
+                    if not (os.path.isfile(dst) and os.path.getsize(dst) == size):
+                        res["error"] = f"{f['name']} 寫入失敗"
+                        continue
                 res["downloaded"] += 1; res["bytes"] += size
 
         _walk(char_id, "")
