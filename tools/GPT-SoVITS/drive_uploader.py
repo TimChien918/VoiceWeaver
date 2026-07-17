@@ -107,6 +107,10 @@ def get_credentials(interactive=True):
         except Exception:
             creds = None
     if creds and creds.valid:
+        # 自我修復：已有 Drive 憑證但 Firebase 還沒連結（例如上次連結遇到 SSL 失敗）
+        # → 不必重開瀏覽器，直接補連結。
+        if not (firebase_identity() or {}).get("uid"):
+            firebase_sign_in_with_google(creds)
         return creds
     if not interactive:
         return None
@@ -126,7 +130,10 @@ def get_credentials(interactive=True):
     except OSError:
         pass
     # 同一次登入順便換 Firebase 身分 → Firebase 與 Drive 共用同一個 Google 帳號（登入合一）
-    firebase_sign_in_with_google(creds)
+    ok, msg = firebase_sign_in_with_google(creds)
+    if not ok:
+        # 不要靜默失敗：Drive 仍可用，但要讓呼叫端/使用者知道 Firebase 沒合上
+        print(f"[drive_uploader] Firebase 連結失敗（Drive 仍可用）：{msg}", flush=True)
     return creds
 
 
@@ -140,6 +147,20 @@ def sign_out():
 
 
 # ── Firebase 身分：與 Drive 同一次 Google 登入 ──────────────
+def _ssl_ctx():
+    """用 certifi 的 CA bundle 建 SSL context。
+
+    conda/框架版 Python 的 urllib 常沒配好系統 CA → 打 googleapis 會
+    CERTIFICATE_VERIFY_FAILED（這正是 Firebase 連結一直靜默失敗的原因）。
+    """
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
 def firebase_sign_in_with_google(creds):
     """拿 Google id_token 去換 Firebase 身分（signInWithIdp），寫進 beacon token 檔。
 
@@ -148,6 +169,14 @@ def firebase_sign_in_with_google(creds):
     回 (ok, uid_or_error)。
     """
     id_token = getattr(creds, "id_token", None)
+    if not id_token:
+        # to_json() 不會保存 id_token；refresh 一次即可重新取得（需 openid 範圍）
+        try:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+            id_token = getattr(creds, "id_token", None)
+        except Exception as e:  # noqa: BLE001
+            return False, f"取 id_token 失敗：{e}"
     if not id_token:
         return False, "Google 未回傳 id_token（缺 openid 範圍？）"
     try:
@@ -160,7 +189,7 @@ def firebase_sign_in_with_google(creds):
         req = urllib.request.Request(
             f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key={FIREBASE_API_KEY}",
             data=body, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with urllib.request.urlopen(req, timeout=15, context=_ssl_ctx()) as r:
             res = json.load(r)
         os.makedirs(os.path.dirname(_BEACON_TOKEN), exist_ok=True)
         with open(_BEACON_TOKEN, "w", encoding="utf-8") as f:
