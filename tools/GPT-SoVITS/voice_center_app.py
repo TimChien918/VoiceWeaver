@@ -1198,11 +1198,13 @@ class App:
           GET  /health                                   橋接狀態（網頁偵測連線用）
           GET  /voices                                   模型清單 [{name,lang}]
           GET  /emotions                                 目前語音可用情緒 + 全部標準情緒（手動覆寫用）
+          GET  /catalog                                  雲端曲庫目錄索引（整個 Drive 曲庫的角色）
+          GET  /prepare?character=&lang=                 隨選下載：把該角色從 Drive 拉到運算端
           POST /switch         {"name","lang"}           切換 GPT-SoVITS 模型（載權重，較慢）
           POST /detect_emotion {"text"}                  從文字偵測情緒 → {"emotion"}
           POST /speak {"text","lang"?,"emotion"?}        合成 → audio/wav（帶 X-Emotion；emotion 空＝自動偵測）
         """
-        import json, http.server
+        import json, http.server, urllib.parse
         app_ref = self
 
         class _Handler(http.server.BaseHTTPRequestHandler):
@@ -1266,6 +1268,27 @@ class App:
                         "emotions": sorted((cur.get("emotions") or {}).keys()),
                         "all": list(em.EMOTION_ALIASES.keys()) if em else [],
                     })
+                if self.path.startswith("/catalog"):
+                    # 雲端曲庫目錄索引（給網頁 Apple Music 式瀏覽整個曲庫）
+                    if em is None:
+                        return self._json(200, {"ok": True, "catalog": None})
+                    try:
+                        cat = em.load_catalog() or em.build_catalog()
+                    except Exception as e:
+                        return self._json(500, {"ok": False, "error": str(e)})
+                    return self._json(200, {"ok": True, "catalog": cat})
+                if self.path.startswith("/prepare"):
+                    # 隨選下載：把該角色從 Drive 拉到運算端本地（讀檔觸發串流下載）
+                    if em is None:
+                        return self._json(200, {"ok": False, "error": "emotion_models unavailable"})
+                    q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                    who = (q.get("character") or q.get("name") or [""])[0]
+                    lang = (q.get("lang") or [""])[0]
+                    try:
+                        res = em.prefetch(character=who, lang=lang)
+                    except Exception as e:
+                        return self._json(500, {"ok": False, "error": str(e)})
+                    return self._json(200, {"ok": res.get("ok", False), **res})
                 self._json(404, {"ok": False, "error": "not found"})
 
             def do_POST(self):
