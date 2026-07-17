@@ -587,9 +587,10 @@ I18N = {
     "adv.filter":   {"zh-TW":"篩選：", "en":"Filter:", "ja":"絞り込み：", "ko":"필터:"},
     "filter.all":   {"zh-TW":"全部", "en":"All", "ja":"すべて", "ko":"전체"},
     "adv.switch":   {"zh-TW":"✅ 切換為此模型", "en":"✅ Switch to this", "ja":"✅ このモデルに切替", "ko":"✅ 이 모델로 전환"},
-    "adv.edit":     {"zh-TW":"✏️ 編輯", "en":"✏️ Edit", "ja":"✏️ 編集", "ko":"✏️ 편집"},
     "adv.reload":   {"zh-TW":"重新整理", "en":"Refresh", "ja":"更新", "ko":"새로고침"},
-    "adv.delete":   {"zh-TW":"🗑 刪除", "en":"🗑 Delete", "ja":"🗑 削除", "ko":"🗑 삭제"},
+    "adv.dl":       {"zh-TW":"⬇ 下載", "en":"⬇ Download", "ja":"⬇ ダウンロード", "ko":"⬇ 다운로드"},
+    "adv.rmDl":     {"zh-TW":"移除下載", "en":"Remove download", "ja":"ダウンロード削除", "ko":"다운로드 제거"},
+    "adv.delCloud": {"zh-TW":"🗑 從雲端刪除角色", "en":"🗑 Delete from cloud", "ja":"🗑 クラウドから削除", "ko":"🗑 클라우드에서 삭제"},
     "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
     "adv.importBatch": {"zh-TW":"📂 批量匯入資料夾", "en":"📂 Batch import folders", "ja":"📂 フォルダを一括取込", "ko":"📂 폴더 일괄 가져오기"},
     "adv.secCloudLib": {"zh-TW":"雲端曲庫（Google Drive）", "en":"Cloud library (Google Drive)", "ja":"クラウド曲庫（Google ドライブ）", "ko":"클라우드 라이브러리 (Google 드라이브)"},
@@ -1890,18 +1891,19 @@ class App:
         self._model_grid_frame.pack(fill="x", padx=20, pady=(0, 4))
         self._track(self._model_grid_frame, "bg")
 
+        # 動作：切換（沒下載會自動先抓）／下載／移除下載（雲端保留）／刪除角色（雲端也砍）
         row1 = tk.Frame(parent); row1.pack(fill="x", padx=20, pady=(8, 4)); self._track(row1, "bg")
         self.tr(self._btn(row1, "", self.adv_switch, C_GREEN), "adv.switch").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row1, "", self.adv_edit), "adv.edit").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row1, "", self.adv_reload), "adv.reload").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._btn(row1, "", self.adv_delete, C_RED), "adv.delete").pack(side="left", expand=True, fill="x")
+        self.tr(self._btn(row1, "", self.adv_download, C_BLUE), "adv.dl").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row1, "", self.adv_remove_download), "adv.rmDl").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(row1, "", self.adv_reload), "adv.reload").pack(side="left", expand=True, fill="x")
 
         row2 = tk.Frame(parent); row2.pack(fill="x", padx=20, pady=(4, 4)); self._track(row2, "bg")
         self.tr(self._btn(row2, "", self.adv_import, C_BLUE), "adv.import").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._btn(row2, "", self.adv_import_batch, C_AMBER), "adv.importBatch").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row2, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x")
+        self.tr(self._neutral_btn(row2, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._btn(row2, "", self.adv_delete, C_RED), "adv.delCloud").pack(side="left", expand=True, fill="x")
 
-        # ── 情緒模型資料夾（Google Drive）：指到 Drive 即可依情緒切參考音 ──
         # ── 雲端曲庫（Google Drive）＝唯一曲庫；本機只是快取，路徑由程式決定不給挑 ──
         _section("adv.secCloudLib")
         gd_hint = tk.Label(parent, font=(FONT_UI, SZ_SMALL), wraplength=580, justify="left", anchor="w")
@@ -2064,19 +2066,36 @@ class App:
         self.adv_reload()
 
     def adv_reload(self):
-        if not CC_OK: return
-        try: self.adv_history = cc.load_history()
-        except Exception as exc:
-            self.set_adv_status(self.t("讀取模型清單失敗：%s").format(exc)); self.adv_history = []
+        """清單來源＝雲端曲庫（Drive）。本機只是快取，用 downloaded 旗標標示。
 
-        # 套用語言篩選
+        離線時回上次記住的清單（只有已下載的能用）。不再讀 model_history。
+        """
+        if not CC_OK: return
+        self.adv_offline = False
+        if gdrive is None or not gdrive.deps_ok():
+            self.adv_history = []
+            self.set_adv_status(self.t("Google Drive 模組未載入"))
+        elif not gdrive.is_signed_in():
+            self.adv_history = []
+            self.set_adv_status(self.t("請先登入 Google 才能看到雲端曲庫"))
+        else:
+            root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+            try:
+                r = gdrive.cloud_catalog(root)
+                self.adv_history = r.get("characters", [])
+                self.adv_offline = r.get("offline", False)
+                if self.adv_offline:
+                    self.set_adv_status(self.t("離線：顯示上次的曲庫，只有已下載的可用"))
+            except Exception as exc:
+                self.adv_history = []
+                self.set_adv_status(self.t("讀取雲端曲庫失敗：%s").format(exc))
+
+        # 套用語言篩選（雲端項目本身就有 lang）
         if self.lang_filter == "ALL":
             self.adv_filtered = list(self.adv_history)
         else:
-            self.adv_filtered = [
-                m for m in self.adv_history
-                if self._model_lang_tag(m) in (self.lang_filter, "")
-            ]
+            self.adv_filtered = [m for m in self.adv_history
+                                 if (m.get("lang") or "").upper() == self.lang_filter]
 
         # 若選中的模型在新清單裡不存在，重置選擇
         if self._selected_card_idx is not None and self._selected_card_idx >= len(self.adv_filtered):
@@ -2129,8 +2148,14 @@ class App:
             row, col = divmod(i, 2)
             lang_tag  = self._model_lang_tag(m)
             lang_text = self._LANG_DISPLAY.get(lang_tag, lang_tag or "")
-            name      = m.get("name", "?")
+            name      = m.get("character") or m.get("name", "?")
             is_sel    = (i == self._selected_card_idx)
+            # 雲端曲庫：已下載＝本機快取有，可直接合成；未下載＝要時才從 Drive 抓
+            dl        = bool(m.get("downloaded"))
+            mb        = (m.get("bytes", 0) or 0) / (1024 * 1024)
+            emos      = m.get("emotions") or []
+            sub_text  = (f"{'✅ 已下載' if dl else '☁️ 未下載'} · {mb:.0f}MB"
+                         + (f" · {len(emos)} 種情緒" if emos else ""))
 
             border_bg = C_BLUE  if is_sel else t["border"]
             card_bg   = t["listsel"] if is_sel else t["card"]
@@ -2151,12 +2176,18 @@ class App:
                                 bg=card_bg, fg=muted_fg, anchor="w", cursor="hand2")
             lang_lbl.pack(fill="x")
 
-            for w in (outer, inner, name_lbl, lang_lbl):
+            # 下載狀態列：一眼看出哪些現成可用、哪些要等下載
+            state_lbl = tk.Label(inner, text=sub_text, font=(FONT_UI, SZ_SMALL),
+                                 bg=card_bg, fg=(C_WHITE if is_sel else (C_GREEN if dl else t["muted"])),
+                                 anchor="w", cursor="hand2")
+            state_lbl.pack(fill="x")
+
+            for w in (outer, inner, name_lbl, lang_lbl, state_lbl):
                 w.bind("<Button-1>", lambda e, idx=i: self._select_card(idx))
 
             self._model_card_items.append({
                 "outer": outer, "inner": inner,
-                "name_lbl": name_lbl, "lang_lbl": lang_lbl,
+                "name_lbl": name_lbl, "lang_lbl": lang_lbl, "state_lbl": state_lbl,
             })
 
         # 還原捲動位置（等版面重排與 scrollregion 更新後再設定）
@@ -2201,28 +2232,111 @@ class App:
             except Exception:
                 pass
 
+    def _cache_root(self) -> str:
+        return os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+
+    def _ensure_downloaded(self, m, log=None):
+        """確保角色在本機快取；沒有就從 Drive 抓（合成/切換前自動做）。回 (ok, msg)。"""
+        root = self._cache_root()
+        lang, char = (m.get("lang") or "").upper(), m.get("character") or m.get("name", "")
+        if gdrive and gdrive.is_downloaded(root, lang, char):
+            return True, "已在本機"
+        if gdrive is None or not gdrive.is_signed_in():
+            return False, "尚未登入 Google，無法下載"
+        if log:
+            log(self.t("從 Drive 下載「%s」中…").format(char))
+        r = gdrive.download_character(root, lang, char)
+        if not r.get("ok"):
+            return False, r.get("error", "下載失敗")
+        return True, f"已下載（{r['downloaded']} 檔／約 {r['bytes']/1024/1024:.0f}MB）"
+
     def adv_switch(self):
+        """切換為此角色。沒下載會自動先從 Drive 抓（決策：自動下載再合成）。
+
+        載權重走 api_v2 的 /set_*_weights + 絕對路徑（同 Colab 作法），
+        不需要 version——雲端曲庫沒有這個欄位，api_v2 會自己認。
+        """
         m = self._selected_model()
         if not m: return
-        self.set_adv_status(self.t("切換為「%s」中…").format(m.get('name')))
+        char = m.get("character") or m.get("name", "")
+        self.set_adv_status(self.t("切換為「%s」中…").format(char))
         def task():
-            from pathlib import Path
-            gpt_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["gpt_rel"])), ROOT)
-            sov_rel = os.path.relpath(resolve_existing(os.path.join(ROOT, m["sovits_rel"])), ROOT)
-            ref_abs = resolve_existing(m["ref_path"])
-            cc.validate_model(m["version"], gpt_rel, sov_rel, Path(ref_abs), m["prompt"])
-            ok, _ = cc.apply_runtime_model(m["version"], gpt_rel, sov_rel, Path(ref_abs), m["prompt"])
-            cc.mark_model_used(m)
-            return ok, ("已切換並載入：" + m.get("name","") if ok else "已更新設定；可重啟語音服務")
+            ok, msg = self._ensure_downloaded(
+                m, log=lambda s: self.root.after(0, lambda: self.set_adv_status(s)))
+            if not ok:
+                return False, msg
+            if em is None:
+                return False, "emotion_models 未載入"
+            lang = (m.get("lang") or "").upper()
+            model = next((x for x in em.scan_emotion_models(self._cache_root())
+                          if x.get("character") == char and x.get("lang") == lang), None)
+            if not model:
+                return False, "本機快取找不到這個角色的權重"
+            if not port_up(9880):
+                return False, "語音服務(9880)未啟動，無法載入權重"
+            import urllib.parse, urllib.request
+            for ep, wp in (("/set_sovits_weights", model["sovits"]), ("/set_gpt_weights", model["gpt"])):
+                q = urllib.parse.urlencode({"weights_path": wp})
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:9880{ep}?{q}", timeout=180) as r:
+                        body = r.read().decode("utf-8", "replace")
+                    if "success" not in body.lower():
+                        return False, f"{ep}: {body[:120]}"
+                except Exception as e:
+                    return False, f"{ep} 失敗：{e}"
+            ekey, ref = em.pick_ref(model, None)
+            self._bridge_voice = {"name": model["name"], "lang": lang,
+                                  "ref": (ref or {}).get("ref", ""), "prompt": (ref or {}).get("prompt", ""),
+                                  "emotions": {k: {"ref": v["ref"], "prompt": v["prompt"]}
+                                               for k, v in model.get("emotions", {}).items()}}
+            self.root.after(0, self.adv_reload)
+            return True, f"已切換並載入：{char}（{msg}）"
+        self._run_bg(task)
+
+    def adv_download(self):
+        """把角色從 Drive 抓到本機快取。"""
+        m = self._selected_model()
+        if not m: return
+        char = m.get("character") or m.get("name", "")
+        self.set_adv_status(self.t("從 Drive 下載「%s」中…").format(char))
+        def task():
+            ok, msg = self._ensure_downloaded(m)
+            self.root.after(0, self.adv_reload)
+            return ok, (f"「{char}」{msg}" if ok else f"下載失敗：{msg}")
+        self._run_bg(task)
+
+    def adv_remove_download(self):
+        """清掉本機快取，雲端保留（之後要用再下載）。"""
+        m = self._selected_model()
+        if not m: return
+        char = m.get("character") or m.get("name", "")
+        if gdrive is None:
+            self.set_adv_status(self.t("Google Drive 模組未載入")); return
+        def task():
+            ok, freed = gdrive.remove_download(self._cache_root(), (m.get("lang") or "").upper(), char)
+            self.root.after(0, self.adv_reload)
+            return ok, (f"已移除「{char}」的下載，釋出約 {freed/1024/1024:.0f}MB（雲端仍保留）"
+                        if ok else f"「{char}」本機沒有快取")
         self._run_bg(task)
 
     def adv_delete(self):
+        """從雲端刪除角色（丟 Drive 垃圾桶，可還原）並清本機快取——會影響所有裝置。"""
+        from tkinter import messagebox
         m = self._selected_model()
         if not m: return
+        char = m.get("character") or m.get("name", "")
+        if gdrive is None or not gdrive.is_signed_in():
+            self.set_adv_status(self.t("請先登入 Google")); return
+        if not messagebox.askyesno("VoiceWeaver",
+                                   f"要從雲端刪除「{char}」嗎？\n\n"
+                                   "所有裝置（手機／網頁／Colab）都會看不到這個角色。\n"
+                                   "檔案會進 Google Drive 垃圾桶，可自行還原。"):
+            return
         def task():
-            records = [r for r in cc.load_history() if r.get("id") != m.get("id")]
-            cc.save_history(records)
-            return True, f"已移除「{m.get('name')}」"
+            r = gdrive.delete_character(self._cache_root(), (m.get("lang") or "").upper(), char)
+            self.root.after(0, self.adv_reload)
+            return r.get("ok", False), (f"已從雲端刪除「{char}」（在 Drive 垃圾桶可還原）"
+                                        if r.get("ok") else f"刪除失敗：{r.get('error')}")
         self._run_bg(task)
 
     # ── 通用模型欄位編輯對話框 ─────────────────────────────────
@@ -2404,60 +2518,6 @@ class App:
             return True, f"已匯入「{edited['name']}」（{ver}）" + ("，已載入" if ok else "；請重啟語音服務") + up
         self._run_bg(task)
 
-    # ── 編輯現有模型 ───────────────────────────────────────────
-    def adv_edit(self):
-        import shutil
-        from pathlib import Path
-
-        m = self._selected_model()
-        if not m: return
-
-        edited = self._model_edit_dialog("編輯聲音模型", m)
-        if not edited: return
-
-        self.set_adv_status(self.t("更新「%s」中…").format(edited['name']))
-        def task():
-            ver = edited["version"]
-            gpt_src = Path(edited["gpt_path"])
-            sov_src = Path(edited["sovits_path"])
-            if not gpt_src.exists(): return False, f"找不到 .ckpt：{gpt_src}"
-            if not sov_src.exists(): return False, f"找不到 .pth：{sov_src}"
-
-            # 若使用者換了檔案才複製，否則直接用相對路徑
-            gpt_dir, sovits_dir = cc.ensure_dirs(ver)
-            gpt_dst = gpt_dir / gpt_src.name
-            sov_dst = sovits_dir / sov_src.name
-            if not gpt_dst.exists(): shutil.copy2(gpt_src, gpt_dst)
-            if not sov_dst.exists(): shutil.copy2(sov_src, sov_dst)
-
-            ref_path = Path(edited["ref_path"]) if edited["ref_path"] else None
-            if ref_path and ref_path.exists():
-                cc.REF_DIR.mkdir(parents=True, exist_ok=True)
-                ref_dst = cc.REF_DIR / ref_path.name
-                if not ref_dst.exists(): shutil.copy2(ref_path, ref_dst)
-                ref_path = ref_dst
-
-            gpt_rel = os.path.relpath(gpt_dst, ROOT)
-            sov_rel = os.path.relpath(sov_dst, ROOT)
-
-            # 更新歷史紀錄
-            records = cc.load_history()
-            for r in records:
-                if r.get("id") == m.get("id"):
-                    r["name"]       = edited["name"] or r["name"]
-                    r["version"]    = ver
-                    r["lang"]       = edited.get("lang", "")
-                    r["gpt_rel"]    = gpt_rel
-                    r["sovits_rel"] = sov_rel
-                    r["ref_path"]   = str(ref_path) if ref_path else r.get("ref_path","")
-                    r["prompt"]     = edited["prompt"]
-                    break
-            cc.save_history(records)
-            cc.update_config(ver, gpt_rel, sov_rel)
-            ok, _ = cc.apply_runtime_model(ver, gpt_rel, sov_rel,
-                                           ref_path or Path(""), edited["prompt"])
-            return True, f"已更新「{edited['name']}」" + ("，已重新載入" if ok else "；請重啟語音服務")
-        self._run_bg(task)
 
     def adv_import_batch(self):
         """批量掃描一個父資料夾，把所有含 .ckpt + .pth 的子資料夾全部匯入。"""
@@ -2577,33 +2637,33 @@ class App:
         threading.Thread(target=_work, daemon=True).start()
 
     def adv_test(self):
+        """試聽：雲端曲庫項目沒有 ref_path/version → 先確保下載，再從本機快取取情緒參考音。"""
         m = self._selected_model()
         if not m: return
         text = self.test_entry.get().strip() or "你好。"
+        char = m.get("character") or m.get("name", "")
         self.set_adv_status(self.t("合成測試中…"))
         def task():
             from pathlib import Path
-            lang = "_ZH"
-            for tag in ("_ZH","_EN","_JA","_KO"):
-                if tag in (m.get("version","") + m.get("name","")).upper(): lang = tag; break
-            ref_abs = resolve_existing(m["ref_path"])
-            ok, msg = cc.run_tts_test(text, m.get("prompt",""), Path(ref_abs), 8, lang)
+            ok, msg = self._ensure_downloaded(
+                m, log=lambda s: self.root.after(0, lambda: self.set_adv_status(s)))
+            if not ok:
+                return False, msg
+            if em is None:
+                return False, "emotion_models 未載入"
+            lang = (m.get("lang") or "ZH").upper()
+            model = next((x for x in em.scan_emotion_models(self._cache_root())
+                          if x.get("character") == char and x.get("lang") == lang), None)
+            if not model:
+                return False, "本機快取找不到這個角色"
+            _ekey, ref = em.pick_ref(model, None)     # 試聽用中立（沒有就退任一顆）
+            if not ref:
+                return False, "這個角色沒有參考音"
+            ok, msg = cc.run_tts_test(text, ref.get("prompt", ""), Path(ref["ref"]), 8, "_" + lang)
             if ok: cc.play_test_wav()
             return ok, ("已合成並播放" if ok else f"合成失敗：{msg}")
         self._run_bg(task)
 
-    def adv_rename(self):
-        m = self._selected_model()
-        if not m: return
-        new = simpledialog.askstring("重新命名", "新名稱：", initialvalue=m.get("name",""), parent=self.root)
-        if not new or not new.strip(): return
-        def task():
-            records = cc.load_history()
-            for r in records:
-                if r.get("id") == m.get("id"): r["name"] = new.strip()
-            cc.save_history(records)
-            return True, f"已重新命名為「{new.strip()}」"
-        self._run_bg(task)
 
     def adv_stopgen(self):
         self.set_adv_status(self.t("中止合成中…"))
