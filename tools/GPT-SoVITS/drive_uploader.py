@@ -68,18 +68,31 @@ def deps_ok():
 
 # ── 認證 ─────────────────────────────────────────────
 def _load_saved():
+    """讀本機 token。**scope 不足就當作沒登入**——否則舊 token（只有 drive.file）
+    會被當成有效，永遠不會重新登入、Firebase 也永遠連不上（登入合一失效）。
+
+    注意：不能用 creds.has_scopes()——from_authorized_user_file(tp, SCOPES) 會把
+    creds.scopes 直接覆寫成傳入的 SCOPES，比對必然成立。要讀 token 檔自己記的 scopes。
+    """
     from google.oauth2.credentials import Credentials
     tp = token_path()
-    if os.path.isfile(tp):
-        try:
-            return Credentials.from_authorized_user_file(tp, SCOPES)
-        except Exception:
-            return None
-    return None
+    if not os.path.isfile(tp):
+        return None
+    try:
+        with open(tp, encoding="utf-8") as f:
+            saved = set(json.load(f).get("scopes") or [])
+    except Exception:
+        return None
+    if not set(SCOPES).issubset(saved):
+        return None          # scope 不夠 → 視為未登入，強制重新授權拿 Drive+身分
+    try:
+        return Credentials.from_authorized_user_file(tp, SCOPES)
+    except Exception:
+        return None
 
 
 def is_signed_in():
-    """已有可用（可自動更新）的憑證＝已登入，不需再開瀏覽器。"""
+    """已有可用（可自動更新）且 scope 足夠的憑證＝已登入，不需再開瀏覽器。"""
     creds = _load_saved()
     return bool(creds and (creds.valid or creds.refresh_token))
 
