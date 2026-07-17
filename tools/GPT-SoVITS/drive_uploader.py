@@ -41,6 +41,18 @@ def _here():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def parse_ref_filename(fname):
+    """『【情緒】逐字稿.wav』→ (canon情緒, 逐字稿)。沿用 emotion_models 同一套解析。"""
+    try:
+        import sys
+        if _here() not in sys.path:
+            sys.path.insert(0, _here())
+        import emotion_models
+        return emotion_models.parse_ref_filename(fname)
+    except Exception:
+        return "中立", os.path.splitext(fname)[0]
+
+
 def client_secret_path():
     """找 client_secret.json：環境變數 → AppSupport → 本檔同目錄。回路徑或 ""。"""
     cand = [os.environ.get("VOICEWEAVER_GOOGLE_CLIENT_SECRET", ""),
@@ -341,6 +353,221 @@ def upload_character(root, lang, char, progress=None):
     except Exception as e:  # noqa: BLE001
         res["error"] = str(e)
     return res
+
+
+# ── 讀雲端曲庫 / 下載到本機快取（Drive＝主體，本機＝快取）────────
+def _list_children(svc, parent, folders_only=False):
+    q = f"{_q(parent)} in parents and trashed = false"
+    if folders_only:
+        q += f" and mimeType = '{FOLDER_MIME}'"
+    out, tok = [], None
+    while True:
+        r = _retry(lambda: svc.files().list(
+            q=q, spaces="drive", fields="nextPageToken, files(id,name,size,mimeType)",
+            pageSize=200, pageToken=tok).execute())
+        out += r.get("files", [])
+        tok = r.get("nextPageToken")
+        if not tok:
+            break
+    return out
+
+
+def is_downloaded(local_root, lang, char, refs_expected=None):
+    """本機快取是否已有這個角色（要有 .ckpt + .pth + 至少一顆參考音才算）。"""
+    cdir = os.path.join(local_root, (lang or "").upper(), char)
+    if not os.path.isdir(cdir):
+        return False
+    names = os.listdir(cdir)
+    has_gpt = any(n.lower().endswith(".ckpt") for n in names)
+    has_sov = any(n.lower().endswith(".pth") for n in names)
+    n_refs = sum(1 for _r, _d, fs in os.walk(os.path.join(cdir, "reference_audios"))
+                 for f in fs if f.lower().endswith((".wav", ".mp3", ".flac")))
+    return bool(has_gpt and has_sov and n_refs)
+
+
+def list_drive_catalog(local_root=None, creds=None):
+    """從 Drive 讀整個曲庫 → 角色清單（含每個角色是否已下載到本機快取）。
+
+    這是「雲端＝唯一曲庫」的資料來源：畫面列什麼由 Drive 決定，不是掃本機。
+    回 {ok, characters:[{name,character,lang,emotions[],bytes,files,downloaded}], error}
+    """
+    local_root = local_root or emotion_root()
+    res = {"ok": False, "characters": [], "error": ""}
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"
+            return res
+        svc = _service(creds)
+        root_id = _find_folder(svc, ROOT_FOLDER, "root")
+        if not root_id:
+            res["ok"] = True          # 已登入但 Drive 上還沒有曲庫（還沒上傳過）
+            return res
+        for lf in _list_children(svc, root_id, folders_only=True):
+            lang = lf["name"].upper()
+            if lang not in LANG_DIRS:
+                continue
+            for cf in _list_children(svc, lf["id"], folders_only=True):
+                char = cf["name"]
+                total, nfiles, emos = 0, 0, []
+                stack = [cf["id"]]
+                while stack:                      # 走訪角色資料夾下所有層
+                    for f in _list_children(svc, stack.pop()):
+                        if f["mimeType"] == FOLDER_MIME:
+                            stack.append(f["id"]); continue
+                        nfiles += 1
+                        total += int(f.get("size") or 0)
+                        if f["name"].lower().endswith((".wav", ".mp3", ".flac")):
+                            emo, _p = parse_ref_filename(f["name"])
+                            if emo not in emos:
+                                emos.append(emo)
+                res["characters"].append({
+                    "name": f"{char} {lang}", "character": char, "lang": lang,
+                    "emotions": sorted(emos), "bytes": total, "files": nfiles,
+                    "downloaded": is_downloaded(local_root, lang, char) if local_root else False,
+                })
+        res["characters"].sort(key=lambda c: (c["lang"], c["character"]))
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+def download_character(local_root, lang, char, progress=None, creds=None):
+    """把角色從 Drive 抓到本機快取 <local_root>/<LANG>/<角色>/（同名同大小跳過）。
+
+    回 {ok, downloaded, skipped, bytes, error}。
+    """
+    from googleapiclient.http import MediaIoBaseDownload
+    import io
+    res = {"ok": False, "character": char, "lang": (lang or "").upper(),
+           "downloaded": 0, "skipped": 0, "bytes": 0, "error": ""}
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        root_id = _find_folder(svc, ROOT_FOLDER, "root")
+        lang_id = _find_folder(svc, res["lang"], root_id) if root_id else None
+        char_id = _find_folder(svc, char, lang_id) if lang_id else None
+        if not char_id:
+            res["error"] = "Drive 上找不到這個角色"; return res
+
+        def _walk(fid, rel):
+            for f in _list_children(svc, fid):
+                sub = os.path.join(rel, f["name"])
+                if f["mimeType"] == FOLDER_MIME:
+                    _walk(f["id"], sub); continue
+                dst = os.path.join(local_root, res["lang"], char, sub)
+                size = int(f.get("size") or 0)
+                if os.path.isfile(dst) and os.path.getsize(dst) == size:
+                    res["skipped"] += 1; res["bytes"] += size; continue
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                req = svc.files().get_media(fileId=f["id"])
+                tmp = dst + ".part"
+                with io.FileIO(tmp, "wb") as fh:
+                    dl = MediaIoBaseDownload(fh, req, chunksize=8 * 1024 * 1024)
+                    done = False
+                    while not done:
+                        status, done = _retry(lambda: dl.next_chunk())
+                        if status and progress:
+                            progress(f["name"], int(status.progress() * 100))
+                os.replace(tmp, dst)
+                res["downloaded"] += 1; res["bytes"] += size
+
+        _walk(char_id, "")
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+def remove_download(local_root, lang, char):
+    """移除本機快取（雲端保留）。回 (ok, 釋出bytes)。"""
+    import shutil
+    cdir = os.path.join(local_root, (lang or "").upper(), char)
+    if not os.path.isdir(cdir):
+        return False, 0
+    freed = 0
+    for r, _d, fs in os.walk(cdir):
+        for f in fs:
+            try:
+                freed += os.path.getsize(os.path.join(r, f))
+            except OSError:
+                pass
+    try:
+        shutil.rmtree(cdir)
+        return True, freed
+    except OSError:
+        return False, 0
+
+
+def delete_character(local_root, lang, char, also_local=True, creds=None):
+    """從 Drive 刪掉這個角色（丟垃圾桶，可在 Drive 還原），預設同時清本機快取。
+
+    回 {ok, error}。注意：這會影響所有裝置看到的曲庫。
+    """
+    res = {"ok": False, "error": ""}
+    LANG = (lang or "").upper()
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        root_id = _find_folder(svc, ROOT_FOLDER, "root")
+        lang_id = _find_folder(svc, LANG, root_id) if root_id else None
+        char_id = _find_folder(svc, char, lang_id) if lang_id else None
+        if not char_id:
+            res["error"] = "Drive 上找不到這個角色"; return res
+        # 丟垃圾桶而非永久刪除 → 使用者可在 Drive 自行還原
+        _retry(lambda: svc.files().update(fileId=char_id, body={"trashed": True}).execute())
+        if also_local and local_root:
+            remove_download(local_root, LANG, char)
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+# ── 離線用：記住上次讀到的雲端曲庫 ─────────────────────
+_CACHED_LIST = os.path.join(_APP_DIR, "drive_catalog_cache.json")
+
+
+def save_cached_catalog(chars):
+    try:
+        os.makedirs(_APP_DIR, exist_ok=True)
+        with open(_CACHED_LIST, "w", encoding="utf-8") as f:
+            json.dump({"updatedAt": int(time.time() * 1000), "characters": chars}, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def load_cached_catalog():
+    """回上次成功讀到的雲端曲庫（離線時用）；沒有回 []。"""
+    try:
+        with open(_CACHED_LIST, encoding="utf-8") as f:
+            return json.load(f).get("characters", [])
+    except (OSError, ValueError):
+        return []
+
+
+def cloud_catalog(local_root=None, allow_offline=True):
+    """畫面用的單一入口：連得上就讀 Drive（並存快取）；連不上就回上次的清單。
+
+    離線時 downloaded 旗標會即時用本機重算 → 只有已下載的能用（決策 3a）。
+    回 {ok, offline, characters[], error}
+    """
+    local_root = local_root or emotion_root()
+    r = list_drive_catalog(local_root)
+    if r.get("ok"):
+        save_cached_catalog(r["characters"])
+        return {"ok": True, "offline": False, "characters": r["characters"], "error": ""}
+    if not allow_offline:
+        return {"ok": False, "offline": True, "characters": [], "error": r.get("error", "")}
+    chars = load_cached_catalog()
+    for c in chars:      # 離線也要正確標示哪些是現成可用的
+        c["downloaded"] = is_downloaded(local_root, c.get("lang", ""), c.get("character", "")) if local_root else False
+    return {"ok": bool(chars), "offline": True, "characters": chars, "error": r.get("error", "")}
 
 
 def upload_catalog(root, creds=None):
