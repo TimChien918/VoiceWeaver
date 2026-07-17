@@ -49,12 +49,32 @@ object CloudSync {
     val displayName: String?
         get() = auth.currentUser?.let { it.displayName ?: it.email ?: if (it.isAnonymous) "匿名使用者" else "已登入" }
 
+    /** 登入合一：同一次 Google 登入既是 Firebase 身分，也要到 Drive（drive.file）權限。 */
+    const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+
     fun googleClient(ctx: Context): GoogleSignInClient {
         val opt = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(ctx.getString(R.string.default_web_client_id))
             .requestEmail()
+            .requestScopes(com.google.android.gms.common.api.Scope(DRIVE_SCOPE))
             .build()
         return GoogleSignIn.getClient(ctx, opt)
+    }
+
+    /** 是否已拿到 Drive 權限（登入合一後應為 true）。 */
+    fun hasDriveScope(ctx: Context): Boolean =
+        GoogleSignIn.getLastSignedInAccount(ctx)?.grantedScopes
+            ?.any { it.scopeUri == DRIVE_SCOPE } == true
+
+    /**
+     * 取 Drive API 用的 access token（阻塞，需在背景執行緒呼叫）。
+     * 依附同一個已登入的 Google 帳號 → 存取的是「使用者自己的」Drive。
+     */
+    fun driveAccessToken(ctx: Context): String? {
+        val acct = GoogleSignIn.getLastSignedInAccount(ctx)?.account ?: return null
+        return runCatching {
+            com.google.android.gms.auth.GoogleAuthUtil.getToken(ctx, acct, "oauth2:$DRIVE_SCOPE")
+        }.getOrNull()
     }
 
     fun signInWithGoogle(idToken: String, done: (Boolean, String) -> Unit) {

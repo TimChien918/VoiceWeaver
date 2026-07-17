@@ -11,14 +11,30 @@
                  ~/Library/Application Support/VoiceWeaver/google_client_secret.json，或本檔同目錄。
   token（登入後自動存）：~/Library/Application Support/VoiceWeaver/google_token.json
 """
+import json
 import os
 import time
+import urllib.request
 
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+# 一次登入要到「Drive + 身分」兩件事：drive.file 給曲庫上傳，openid/email/profile 換 id_token
+# 再去換 Firebase 身分（signInWithIdp）→ Firebase 與 Drive 共用同一個 Google 帳號。
+SCOPES = [
+    "https://www.googleapis.com/auth/drive.file",
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 ROOT_FOLDER = "VoiceWeaver"                          # Drive 上曲庫根資料夾名
 LANG_DIRS = {"ZH", "EN", "JA", "KO"}
 _APP_DIR = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+
+# Firebase Web API Key 依設計是公開識別碼（網頁版 config.js 本來就明文內嵌），
+# 安全性靠 Auth + Firestore 規則，不是靠藏這把 key。放預設值讓安裝即可用。
+FIREBASE_API_KEY = os.environ.get("VW_FIREBASE_WEB_API_KEY", "AIzaSyDawUNHovFwAjjxy3jfs55aSOjEnrtk4qQ")
+FIREBASE_PROJECT = os.environ.get("VW_FIREBASE_PROJECT_ID", "voiceweaver-af4da")
+# 與 firebase_ip_beacon 共用同一個 token 檔 → 登入後 beacon 也變成「這個 Google 帳號」的身分
+_BEACON_TOKEN = os.path.join(os.path.expanduser("~/.voiceweaver"), "beacon_token.json")
 
 
 def _here():
@@ -92,15 +108,70 @@ def get_credentials(interactive=True):
                                   authorization_prompt_message="請在開啟的瀏覽器登入你自己的 Google 帳號並授權…")
     with open(token_path(), "w", encoding="utf-8") as f:
         f.write(creds.to_json())
+    try:
+        os.chmod(token_path(), 0o600)
+    except OSError:
+        pass
+    # 同一次登入順便換 Firebase 身分 → Firebase 與 Drive 共用同一個 Google 帳號（登入合一）
+    firebase_sign_in_with_google(creds)
     return creds
 
 
 def sign_out():
-    """刪除本機 token（下次要重新登入）。"""
+    """刪除本機 token（Drive + Firebase 都登出，下次要重新登入）。"""
+    for p in (token_path(), _BEACON_TOKEN):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+
+
+# ── Firebase 身分：與 Drive 同一次 Google 登入 ──────────────
+def firebase_sign_in_with_google(creds):
+    """拿 Google id_token 去換 Firebase 身分（signInWithIdp），寫進 beacon token 檔。
+
+    效果：Mac 的 Firebase 身分不再是「匿名」，而是與 Drive 同一個 Google 帳號
+    → 與手機／網頁同帳號互通（devices/{uid}、設定同步都對得起來）。
+    回 (ok, uid_or_error)。
+    """
+    id_token = getattr(creds, "id_token", None)
+    if not id_token:
+        return False, "Google 未回傳 id_token（缺 openid 範圍？）"
     try:
-        os.remove(token_path())
-    except OSError:
-        pass
+        body = json.dumps({
+            "postBody": f"id_token={id_token}&providerId=google.com",
+            "requestUri": "http://localhost",
+            "returnIdpCredential": True,
+            "returnSecureToken": True,
+        }).encode()
+        req = urllib.request.Request(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key={FIREBASE_API_KEY}",
+            data=body, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            res = json.load(r)
+        os.makedirs(os.path.dirname(_BEACON_TOKEN), exist_ok=True)
+        with open(_BEACON_TOKEN, "w", encoding="utf-8") as f:
+            json.dump({"idToken": res["idToken"], "refreshToken": res["refreshToken"],
+                       "localId": res["localId"], "email": res.get("email", ""),
+                       "provider": "google.com"}, f)
+        try:
+            os.chmod(_BEACON_TOKEN, 0o600)
+        except OSError:
+            pass
+        return True, res.get("email") or res["localId"]
+    except Exception as e:  # noqa: BLE001
+        return False, str(e)
+
+
+def firebase_identity():
+    """回目前 Firebase 身分 {uid, email, provider}；未登入回 {}。"""
+    try:
+        with open(_BEACON_TOKEN, encoding="utf-8") as f:
+            d = json.load(f)
+        return {"uid": d.get("localId", ""), "email": d.get("email", ""),
+                "provider": d.get("provider", "anonymous")}
+    except Exception:
+        return {}
 
 
 def account_email(creds=None):

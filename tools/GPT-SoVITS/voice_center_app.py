@@ -2869,8 +2869,10 @@ class App:
             return f"（尚未放 google_client_secret.json 到 {os.path.expanduser('~/Library/Application Support/VoiceWeaver')}）"
         try:
             if gdrive.is_signed_in():
-                email = gdrive.account_email() or ""
-                return f"✅ 已登入 Google{'：' + email if email else ''}"
+                ident = gdrive.firebase_identity() or {}
+                email = ident.get("email") or gdrive.account_email() or ""
+                fb = "＋Firebase" if ident.get("provider") == "google.com" else "（Firebase 未連結）"
+                return f"✅ 已登入 Google{'：' + email if email else ''}｜Drive{fb}"
         except Exception:
             pass
         return "尚未登入 Google"
