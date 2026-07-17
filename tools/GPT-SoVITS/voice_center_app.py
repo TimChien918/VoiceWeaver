@@ -137,8 +137,13 @@ try:
 except Exception:
     gdrive = None
 
-# 預設曲庫根：使用者家目錄下的 VoiceWeaver（自動當情緒曲庫，免手動挑資料夾）
-DEFAULT_LIBRARY_ROOT = os.path.expanduser("~/VoiceWeaver")
+# 預設曲庫根：App 自己的儲存空間（Mac: ~/Library/Application Support/VoiceWeaver，
+# Windows: %LOCALAPPDATA%\VoiceWeaver），不是使用者家目錄／外接磁碟。
+# 曲庫是「本機快取」，理應由 App 管理、跟著這台電腦的系統帳號走，
+# 不該放在使用者看得到、可能移動/移除的位置（外接硬碟拔掉快取就消失了）。
+DEFAULT_LIBRARY_ROOT = os.path.join(
+    APPSUP if IS_WIN else os.path.expanduser("~/Library/Application Support/VoiceWeaver"),
+    "library")
 
 VOICE_CFG = "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
 
