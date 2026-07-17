@@ -600,7 +600,6 @@ I18N = {
                    "ja":"自分の Google アカウントでログインし、曲庫を自分の Google Drive（VoiceWeaver/）にアップロード。Colab/スマホ/Web が同じものを参照。",
                    "ko":"본인 Google 계정으로 로그인해 라이브러리를 본인 Google Drive(VoiceWeaver/)에 업로드. Colab/휴대폰/웹이 동일본을 공유."},
     "adv.gdLogin": {"zh-TW":"🔑 Google 登入", "en":"🔑 Sign in Google", "ja":"🔑 Google ログイン", "ko":"🔑 Google 로그인"},
-    "adv.gdUpload": {"zh-TW":"⬆️ 上傳曲庫到 Drive", "en":"⬆️ Upload library to Drive", "ja":"⬆️ 曲庫を Drive へ", "ko":"⬆️ 라이브러리 Drive 업로드"},
     "adv.gdLogout": {"zh-TW":"登出", "en":"Sign out", "ja":"ログアウト", "ko":"로그아웃"},
     "adv.stopgen":  {"zh-TW":"⏹ 中止合成", "en":"⏹ Stop synthesis", "ja":"⏹ 合成を中止", "ko":"⏹ 합성 중지"},
     "adv.secTest":  {"zh-TW":"測試合成", "en":"Test synthesis", "ja":"合成テスト", "ko":"합성 테스트"},
@@ -1909,17 +1908,17 @@ class App:
         self._model_grid_frame.pack(fill="x", padx=20, pady=(0, 4))
         self._track(self._model_grid_frame, "bg")
 
-        # 動作：切換（沒下載會自動先抓）／下載／移除下載（雲端保留）／刪除角色（雲端也砍）
+        # 動作：切換（沒下載會自動先抓）／下載⇄移除下載（依選取狀態切換同一顆）／重新整理
         row1 = tk.Frame(parent); row1.pack(fill="x", padx=20, pady=(8, 4)); self._track(row1, "bg")
         self.tr(self._btn(row1, "", self.adv_switch, C_GREEN), "adv.switch").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._btn(row1, "", self.adv_download, C_BLUE), "adv.dl").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row1, "", self.adv_remove_download), "adv.rmDl").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self._dl_btn = self._btn(row1, self.t("adv.dl"), self.adv_toggle_download, C_BLUE)
+        self._dl_btn.pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._neutral_btn(row1, "", self.adv_reload), "adv.reload").pack(side="left", expand=True, fill="x")
 
+        # 匯入即上傳到雲端曲庫，所以不需要另一顆「上傳曲庫」按鈕
         row2 = tk.Frame(parent); row2.pack(fill="x", padx=20, pady=(4, 4)); self._track(row2, "bg")
         self.tr(self._btn(row2, "", self.adv_import, C_BLUE), "adv.import").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._btn(row2, "", self.adv_import_batch, C_AMBER), "adv.importBatch").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row2, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._btn(row2, "", self.adv_delete, C_RED), "adv.delCloud").pack(side="left", expand=True, fill="x")
 
         # ── 雲端曲庫（Google Drive）＝唯一曲庫；本機只是快取，路徑由程式決定不給挑 ──
@@ -1929,10 +1928,12 @@ class App:
         self.gd_status = tk.Label(parent, text=self._gdrive_status_text(),
                                   font=(FONT_UI, SZ_SMALL), anchor="w")
         self.gd_status.pack(fill="x", padx=20, pady=(0, 4)); self._track(self.gd_status, "muted")
-        row_gd = tk.Frame(parent); row_gd.pack(fill="x", padx=20, pady=(0, 4)); self._track(row_gd, "bg")
-        self.tr(self._btn(row_gd, "", self.adv_gdrive_login, C_GREEN), "adv.gdLogin").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._btn(row_gd, "", self.adv_gdrive_upload, C_BLUE), "adv.gdUpload").pack(side="left", expand=True, fill="x", padx=(0,4))
-        self.tr(self._neutral_btn(row_gd, "", self.adv_gdrive_logout), "adv.gdLogout").pack(side="left", expand=True, fill="x")
+        # 已登入就只留「登出」；沒登入就只留「登入」（不要兩顆同時擺著）
+        self._row_gd = tk.Frame(parent); self._row_gd.pack(fill="x", padx=20, pady=(0, 4))
+        self._track(self._row_gd, "bg")
+        self._gd_login_btn = self._btn(self._row_gd, self.t("adv.gdLogin"), self.adv_gdrive_login, C_GREEN)
+        self._gd_logout_btn = self._neutral_btn(self._row_gd, self.t("adv.gdLogout"), self.adv_gdrive_logout)
+        self._sync_gd_buttons()
 
         _section("adv.secTest")
         tr = tk.Frame(parent); tr.pack(fill="x", padx=20, pady=(4, 4)); self._track(tr, "bg")
@@ -1945,6 +1946,7 @@ class App:
         ta = tk.Frame(parent); ta.pack(fill="x", padx=20, pady=(4, 4)); self._track(ta, "bg")
         self.tr(self._neutral_btn(ta, "", self.adv_play), "adv.play").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._neutral_btn(ta, "", self.adv_stopplay), "adv.stopPlay").pack(side="left", expand=True, fill="x", padx=(0,4))
+        self.tr(self._neutral_btn(ta, "", self.adv_stopgen), "adv.stopgen").pack(side="left", expand=True, fill="x", padx=(0,4))
         self.tr(self._neutral_btn(ta, "", self.adv_reveal), ("adv.revealWin" if IS_WIN else "adv.revealMac")).pack(side="left", expand=True, fill="x")
 
         _section("adv.secUsb")
@@ -2120,6 +2122,7 @@ class App:
             self._selected_card_idx = None
 
         self.root.after(0, self._build_card_grid)
+        self.root.after(0, self._sync_dl_btn)     # 下載完/移除完重繪後，按鈕文字要跟著對
 
         total = len(self.adv_history); shown = len(self.adv_filtered)
         if total != shown:
@@ -2233,6 +2236,7 @@ class App:
     def _select_card(self, idx: int):
         self._selected_card_idx = idx
         self._refresh_card_visuals()
+        self._sync_dl_btn()      # 下載⇄移除下載 隨選取狀態切換
 
     def _refresh_card_visuals(self):
         t = self.theme()
@@ -2339,6 +2343,29 @@ class App:
             self.root.after(0, self.adv_reload)
             return True, f"已切換並載入：{char}（{msg}）"
         self._run_bg(task)
+
+    def _sync_dl_btn(self):
+        """同一顆按鈕：選到未下載的角色顯示「下載」，已下載顯示「移除下載」。"""
+        btn = getattr(self, "_dl_btn", None)
+        if btn is None:
+            return
+        idx = self._selected_card_idx
+        m = self.adv_filtered[idx] if (idx is not None and idx < len(self.adv_filtered)) else None
+        key = "adv.rmDl" if (m and m.get("downloaded")) else "adv.dl"
+        try:
+            btn.config(text=self.t(key), bg=(None if m and m.get("downloaded") else C_BLUE))
+        except Exception:
+            try: btn.config(text=self.t(key))
+            except Exception: pass
+
+    def adv_toggle_download(self):
+        """依選取角色的狀態：未下載→下載；已下載→移除下載（雲端保留）。"""
+        m = self._selected_model()
+        if not m: return
+        if m.get("downloaded"):
+            self.adv_remove_download()
+        else:
+            self.adv_download()
 
     def adv_download(self):
         """把角色從 Drive 抓到本機快取。"""
@@ -2928,11 +2955,24 @@ class App:
             pass
         return "尚未登入 Google"
 
+    def _sync_gd_buttons(self):
+        """已登入只顯示「登出」，未登入只顯示「登入」。"""
+        try:
+            signed = bool(gdrive and gdrive.deps_ok() and gdrive.is_signed_in())
+            self._gd_login_btn.pack_forget(); self._gd_logout_btn.pack_forget()
+            if signed:
+                self._gd_logout_btn.pack(side="left", expand=True, fill="x")
+            else:
+                self._gd_login_btn.pack(side="left", expand=True, fill="x")
+        except Exception:
+            pass
+
     def _refresh_gd_status(self):
         try:
             self.gd_status.config(text=self._gdrive_status_text())
         except Exception:
             pass
+        self._sync_gd_buttons()
 
     def adv_gdrive_login(self):
         from tkinter import messagebox
@@ -2962,34 +3002,6 @@ class App:
         self._refresh_gd_status()
         self.set_adv_status(self.t("已登出 Google"))
 
-    def adv_gdrive_upload(self):
-        from tkinter import messagebox
-        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
-        if gdrive is None or not gdrive.deps_ok():
-            messagebox.showinfo("VoiceWeaver", "環境缺 google 套件；請更新語音中心。"); return
-        if not root or not os.path.isdir(root):
-            messagebox.showinfo("VoiceWeaver", "找不到曲庫資料夾。"); return
-        if not gdrive.client_secret_path():
-            messagebox.showinfo("VoiceWeaver", "請先放 google_client_secret.json 並登入。"); return
-        # 先確保 catalog 是最新，再整庫上傳
-        self._write_catalog_line(root)
-        self.set_adv_status(self.t("上傳曲庫到你的 Google Drive 中…（大檔需時間）"))
-        def task():
-            try:
-                res = gdrive.upload_library(
-                    root, progress=self._dl_progress("上傳"),
-                    log=lambda m: self.root.after(0, lambda: self.set_adv_status(m)))
-                self.root.after(0, self._refresh_gd_status)
-                mb = res.get("bytes", 0) / (1024 * 1024)
-                msg = (f"完成：{res.get('characters',0)} 角色，"
-                       f"上傳 {res.get('uploaded',0)}／跳過 {res.get('skipped',0)}，約 {mb:.0f} MB")
-                errs = res.get("errors", [])
-                if errs:
-                    msg += f"；{len(errs)} 項失敗（第一項：{errs[0]}）"
-                return (not errs), msg
-            except Exception as e:
-                return False, f"上傳失敗：{e}"
-        self._run_bg(task)
 
     def _write_catalog_line(self, root: str) -> str:
         """更新雲端曲庫目錄索引 catalog.json，回一行摘要（給健檢彈窗附上）。"""
