@@ -1058,7 +1058,7 @@ private fun CloudLibraryPanel(
             }
         }
         Text(
-            I18n.tr("整個雲端曲庫的角色（來自 Drive）。按「預備」請電腦/Colab 先把該角色下載到運算端，之後合成不用等。"),
+            I18n.tr("整個雲端曲庫的角色（來自 Drive）。未下載的按「下載」請電腦/Colab 先抓到運算端，之後合成不用等。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
         )
         if (msg.isNotBlank()) Text(msg, fontSize = 11.sp, color = p.auraAmber)
@@ -1071,33 +1071,41 @@ private fun CloudLibraryPanel(
                     .background(p.darkBg.copy(alpha = 0.20f))
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
+                // 綠＝已下載到運算端（可直接用）；灰＝只在雲端，要先下載
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(if (e.ready) p.neonGreen else p.auraAmber)
+                        .background(if (e.downloaded) p.neonGreen else p.textMuted)
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text("${e.character}${e.lang.tag}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
                     Text(
-                        "${e.sizeLabel} · ${if (e.emotions.isEmpty()) I18n.tr("無情緒") else e.emotions.joinToString("／")}",
+                        (if (e.downloaded) I18n.tr("✅ 已下載") else I18n.tr("☁️ 未下載")) +
+                            " · ${e.sizeLabel} · ${if (e.emotions.isEmpty()) I18n.tr("無情緒") else e.emotions.joinToString("／")}",
                         fontSize = 10.sp, color = p.textMuted
                     )
                 }
-                TextButton(
-                    onClick = {
-                        preparing = e.name; msg = ""
-                        scope.launch {
-                            val (ok, m) = com.example.ai.LocalSovitsHelper.prepareCharacter(apiBaseUrl, e.character, e.lang)
-                            preparing = null
-                            msg = (if (ok) "✅ " else "⚠️ ") + "${e.character}${e.lang.tag}：$m"
-                        }
-                    },
-                    enabled = preparing == null
-                ) {
-                    Text(if (preparing == e.name) I18n.tr("下載中…") else I18n.tr("⬇ 預備"),
-                        fontSize = 11.sp, color = if (preparing == e.name) p.textMuted else p.neonCyan)
+                if (e.downloaded) {
+                    Text(I18n.tr("✅ 已下載"), fontSize = 11.sp, color = p.neonGreen,
+                        modifier = Modifier.padding(horizontal = 8.dp))
+                } else {
+                    TextButton(
+                        onClick = {
+                            preparing = e.name; msg = ""
+                            scope.launch {
+                                val (ok, m) = com.example.ai.LocalSovitsHelper.prepareCharacter(apiBaseUrl, e.character, e.lang)
+                                preparing = null
+                                msg = (if (ok) "✅ " else "⚠️ ") + "${e.character}${e.lang.tag}：$m"
+                                if (ok) refresh()   // 下載完要刷新，狀態才會變「已下載」
+                            }
+                        },
+                        enabled = preparing == null
+                    ) {
+                        Text(if (preparing == e.name) I18n.tr("下載中…") else I18n.tr("⬇ 下載"),
+                            fontSize = 11.sp, color = if (preparing == e.name) p.textMuted else p.neonCyan)
+                    }
                 }
             }
         }

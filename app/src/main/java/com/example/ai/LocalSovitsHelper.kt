@@ -371,14 +371,16 @@ object LocalSovitsHelper {
         }.getOrElse { Log.w(TAG, "refreshModels 失敗（離線？），沿用現有清單：${it.message}"); false }
     }
 
-    /** 雲端曲庫一筆（Apple Music 式瀏覽用）：整個 Drive 曲庫的角色，不限目前載入的。 */
+    /** 雲端曲庫一筆：Drive＝唯一曲庫，downloaded 表示運算端本機快取有沒有這個角色。 */
     data class CatalogEntry(
         val name: String,
         val character: String,
         val lang: VoiceLang,
         val ready: Boolean,          // 權重+參考音齊全
         val emotions: List<String>,
-        val bytes: Long
+        val bytes: Long,
+        /** 已下載到運算端＝可直接合成；未下載＝要先從 Drive 抓（會等） */
+        val downloaded: Boolean = false
     ) {
         /** 顯示用大小，例「231 MB」；不足 1 MB 顯示 KB。 */
         val sizeLabel: String get() = when {
@@ -409,9 +411,10 @@ object LocalSovitsHelper {
                         name = name,
                         character = o.optString("character").ifBlank { name },
                         lang = langFromModelName(o.optString("lang").ifBlank { name }) ?: VoiceLang.ZH,
-                        ready = o.optBoolean("ok"),
+                        ready = o.optBoolean("ok", true),
                         emotions = emos,
-                        bytes = o.optLong("bytes")
+                        bytes = o.optLong("bytes"),
+                        downloaded = o.optBoolean("downloaded")
                     )
                 }
             }
