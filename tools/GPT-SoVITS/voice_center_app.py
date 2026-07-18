@@ -93,6 +93,16 @@ def _service_env() -> dict:
               "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "TORCH_NUM_THREADS",
               "VOICEWEAVER_NUM_THREADS"):
         env[k] = n
+    # conda/框架版 Python 的 ssl 沒配系統 CA → 任何子程序內的 urllib/requests 下載
+    # （fast_langdetect 語言模型、huggingface…）都會 CERTIFICATE_VERIFY_FAILED。
+    # 指到 certifi 的 CA bundle 一次解決所有子程序的 SSL（根因修法）。
+    try:
+        import certifi
+        ca = certifi.where()
+        env.setdefault("SSL_CERT_FILE", ca)
+        env.setdefault("REQUESTS_CA_BUNDLE", ca)
+    except Exception:
+        pass
     return env
 
 # 服務程序用「低於一般」的優先權啟動 → 即使 torch 吃滿核心，系統/滑鼠仍搶得到 CPU、不會整台凍住。
@@ -796,6 +806,7 @@ PRETRAINED_NEEDED = [
     "s1v3.ckpt",
     "gsv-v4-pretrained/s2Gv4.pth",
     "gsv-v4-pretrained/vocoder.pth",   # v4 BigVGAN vocoder，缺了 api_v2 起不來
+    "sv/pretrained_eres2netv2w24s4ep4.ckpt",  # ERes2Net 音色嵌入，載 SoVITS 權重時要用
     "chinese-hubert-base/config.json",
     "chinese-hubert-base/preprocessor_config.json",
     "chinese-hubert-base/pytorch_model.bin",
@@ -896,6 +907,9 @@ def download_pretrained(files=None, progress=None, log=None):
         if sizes.get(rel) and os.path.getsize(tmp) != sizes[rel]:
             return False, f"{rel} 下載不完整（{os.path.getsize(tmp)}/{sizes[rel]}）"
         os.replace(tmp, dst)
+    # langsegmenter 把 fast_langdetect 語言模型指到這個目錄，且目錄不存在會直接報錯；
+    # 先建好，模型本身會在首次合成時自動下載（env 已設 SSL_CERT_FILE，下載不會 SSL 失敗）。
+    os.makedirs(os.path.join(d, "fast_langdetect"), exist_ok=True)
     return True, "完成"
 
 def find_adb_bg(callback=None):
