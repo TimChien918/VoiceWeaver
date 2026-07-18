@@ -306,16 +306,19 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
     /**
      * Qwen2.5 ChatML 格式，要求模型以 JSON 鏈式思考(CoT)輸出。
      * 碎詞附逐字辨識信心度 → 模型對低信心字依情境修正；confidence 由模型自評，
-     * 供 ReconstructionUseCase 的 <0.7 fallback 真正生效。
+     * 供 ReconstructionUseCase 的 <0.40 fallback 真正生效（短碎詞給合理猜測、標低把握而非藏掉）。
      */
     private fun buildChatPrompt(vault: GlobalTagsVault) = buildString {
         appendLine("<|im_start|>system")
         appendLine(
             "你是輔助失語症患者溝通的語言助理。使用者碎詞來自語音辨識，部分字附信心度(%)；" +
             "信心低的字很可能聽錯，請依地點與周邊物件推測修正。" +
+            "碎詞很短甚至只有一個字（例如「十」「水」「痛」）時，仍要給最可能的日常說法，不要因為短就拒答：" +
+            "例如「十」→「我要十個」或「現在十點」、「水」→「我想喝水」、「痛」→「我這裡會痛」。" +
             "請只輸出一個 JSON 物件，格式：" +
             "{\"reasoning\":\"簡短分析\",\"reconstructed\":\"完整繁體中文句子\",\"confidence\":0到100的整數}。" +
-            "confidence 代表你對重組正確的把握；碎詞越模糊、與情境越搭不上，分數越低。不要輸出 JSON 以外的任何文字。<|im_end|>"
+            "confidence 標準：清楚可確定給80-100；短或有歧義但你給了合理常見猜測給50-79（單字碎詞多半在此）；" +
+            "真的無意義才給1-49。不要一律保守。不要輸出 JSON 以外的任何文字。<|im_end|>"
         )
         appendLine("<|im_start|>user")
         appendLine("碎詞：渴 水 倒")

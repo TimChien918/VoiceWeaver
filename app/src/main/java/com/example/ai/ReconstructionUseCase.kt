@@ -44,8 +44,12 @@ class ReconstructionUseCase(
         }
 
         // 3. 雙層防護機制審核
-        // A. 判定信心度：confidence < 0.7 (對應 0~100 中的 70 分)
-        val isConfidenceLow = data.confidence < 0.70
+        // A. 判定信心度：只有「極低把握（<0.40）」才整句蓋成 fallback。
+        //    原本 0.70 太嚴——失語症碎詞（例如單字「十」）LLM 常自評 0.4~0.6，
+        //    卻被整句藏掉、換成「我不確定您的意思」，等於很多可用的最佳猜測都看不到。
+        //    幻覺由 NativeRuleCritic 另外把關（憑空捏造照樣擋），所以這裡放寬即可；
+        //    0.40~0.75 的猜測仍會顯示，UI 會自動標「△ 把握較低，請確認再唸」讓照護者確認。
+        val isConfidenceLow = data.confidence < 0.40
 
         // B. 判定幻覺：NativeRuleCritic 是否審核不通過
         val passesCritic = try {
