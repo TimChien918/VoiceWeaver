@@ -595,10 +595,10 @@ I18N = {
     "adv.switch":   {"zh-TW":"✅ 切換為此模型", "en":"✅ Switch to this", "ja":"✅ このモデルに切替", "ko":"✅ 이 모델로 전환"},
     "adv.reload":   {"zh-TW":"重新整理", "en":"Refresh", "ja":"更新", "ko":"새로고침"},
     "adv.dl":       {"zh-TW":"⬇ 下載", "en":"⬇ Download", "ja":"⬇ ダウンロード", "ko":"⬇ 다운로드"},
-    "adv.fetchPre": {"zh-TW":"⬇ 下載基礎語音模型（語音服務起不來時按，約 1.6GB）",
-                     "en":"⬇ Download base voice models (needed for the voice service, ~1.6GB)",
-                     "ja":"⬇ 基礎音声モデルを取得（音声サービスに必須、約 1.6GB）",
-                     "ko":"⬇ 기본 음성 모델 내려받기 (음성 서비스에 필요, 약 1.6GB)"},
+    "adv.fetchPre": {"zh-TW":"⬇ 下載基礎語音模型（約 1.6GB）",
+                     "en":"⬇ Download base voice models (~1.6GB)",
+                     "ja":"⬇ 基礎音声モデルを取得（約 1.6GB）",
+                     "ko":"⬇ 기본 음성 모델 내려받기 (약 1.6GB)"},
     "adv.rmDl":     {"zh-TW":"移除下載", "en":"Remove download", "ja":"ダウンロード削除", "ko":"다운로드 제거"},
     "adv.delCloud": {"zh-TW":"🗑 從雲端刪除角色", "en":"🗑 Delete from cloud", "ja":"🗑 クラウドから削除", "ko":"🗑 클라우드에서 삭제"},
     "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
@@ -1927,10 +1927,9 @@ class App:
             fill="x", pady=(12, 2))
 
 
-        # 操作按鈕
+        # 操作按鈕（「同步聲音模型」是舊的 USB 同步，已被雲端曲庫取代——模型走
+        # Google Drive，手機不需要合成模型，故移除，避免與進階分頁的曲庫功能重複）
         act = tk.Frame(parent); act.pack(fill="x", padx=20, pady=(0, 8)); self._track(act, "bg")
-        self.tr(self._btn(act, "", self.manual_sync, C_BLUE), "main.sync").pack(
-            side="left", expand=True, fill="x", padx=(0, 6))
         self.tr(self._btn(act, "", self.on_close, C_RED), "main.quit").pack(
             side="left", expand=True, fill="x")
 
@@ -2058,16 +2057,17 @@ class App:
         self._track(self.test_entry, "entry")
         self.tr(self._btn(tr, "", self.adv_test, C_BLUE), "adv.audition").pack(side="left")
 
-        # 基礎語音模型（DMG 不內建）缺了語音服務就起不來 → 給一顆可以直接補下載
-        row_pre = tk.Frame(parent); row_pre.pack(fill="x", padx=20, pady=(4, 4)); self._track(row_pre, "bg")
-        self._pre_btn = self._btn(row_pre, self.t("adv.fetchPre"), self.adv_fetch_pretrained, C_AMBER)
-        self._pre_btn.pack(fill="x")
+        # 基礎語音模型（DMG 不內建）缺了語音服務就起不來 → 只在「缺模型時」才顯示這顆
+        self._pre_row = tk.Frame(parent); self._track(self._pre_row, "bg")
+        self._pre_btn = self._btn(self._pre_row, self.t("adv.fetchPre"), self.adv_fetch_pretrained, C_AMBER)
+        self._pre_btn.pack(fill="x", padx=20)
         # 下載進度條（平時隱藏，下載時顯示）
         self._pre_prog = tk.Frame(parent); self._track(self._pre_prog, "bg")
         self._pre_bar = ttk.Progressbar(self._pre_prog, length=480, mode="determinate", maximum=1000)
         self._pre_bar.pack(fill="x", padx=20, pady=(2, 0))
         self._pre_lbl = tk.Label(self._pre_prog, text="", font=(FONT_UI, SZ_SMALL), anchor="w")
         self._pre_lbl.pack(fill="x", padx=20); self._track(self._pre_lbl, "muted")
+        self._sync_pre_visibility()   # 模型齊全就整排隱藏，不占版面
 
         ta = tk.Frame(parent); ta.pack(fill="x", padx=20, pady=(4, 4)); self._track(ta, "bg")
         self.tr(self._neutral_btn(ta, "", self.adv_play), "adv.play").pack(side="left", expand=True, fill="x", padx=(0,4))
@@ -3081,6 +3081,17 @@ class App:
             pass
         return "尚未登入 Google"
 
+    def _sync_pre_visibility(self):
+        """基礎模型齊全就把「下載基礎模型」整排藏起來，不占版面；缺才顯示。"""
+        try:
+            if missing_pretrained():
+                self._pre_row.pack(fill="x", pady=(4, 4))
+            else:
+                self._pre_row.pack_forget()
+                self._pre_prog.pack_forget()
+        except Exception:
+            pass
+
     def adv_fetch_pretrained(self):
         """下載 GPT-SoVITS 基礎預訓練模型（語音服務的前置條件，約 1.6GB）。"""
         from tkinter import messagebox
@@ -3127,6 +3138,7 @@ class App:
             try:
                 self._pre_btn.config(state="normal")
                 self._pre_prog.pack_forget()
+                self._sync_pre_visibility()   # 齊全就整排收起
             except Exception:
                 pass
 
