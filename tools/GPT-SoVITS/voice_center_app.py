@@ -1269,7 +1269,7 @@ class App:
         threading.Thread(target=work, daemon=True).start()
 
     def _on_usb_connected(self, serial: str):
-        self.set_status(self.t("偵測到手機（USB %s）→ 自動同步聲音模型…").format(serial[:14]))
+        self.set_status(self.t("偵測到手機（USB %s）→ 自動同步聲音模型…") % (serial[:14]))
         self._adb_reverse_bg()
         # 不再併發 _arm_wireless——tcpip 會瞬斷 USB 害同步失敗。改成同步完成後才開無線。
         self.sync_models(arm_serial=serial)
@@ -1612,7 +1612,7 @@ class App:
             self.root.clipboard_clear(); self.root.clipboard_append(url)
         except Exception:
             pass
-        self.set_status(self.t("已複製：%s").format(url))
+        self.set_status(self.t("已複製：%s") % (url))
         cp = info.get("copy")
         if cp is not None:
             cp.config(text="✓", fg=C_GREEN)
@@ -2234,7 +2234,7 @@ class App:
                     self.set_adv_status(self.t("離線：顯示上次的曲庫，只有已下載的可用"))
             except Exception as exc:
                 self.adv_history = []
-                self.set_adv_status(self.t("讀取雲端曲庫失敗：%s").format(exc))
+                self.set_adv_status(self.t("讀取雲端曲庫失敗：%s") % (exc))
 
         # 套用語言篩選（雲端項目本身就有 lang）
         if self.lang_filter == "ALL":
@@ -2252,7 +2252,7 @@ class App:
 
         total = len(self.adv_history); shown = len(self.adv_filtered)
         if total != shown:
-            self.set_adv_status(self.t("顯示 %d/%d 個模型（篩選：%s）").format(shown, total, self.lang_filter))
+            self.set_adv_status(self.t("顯示 %d/%d 個模型（篩選：%s）") % (shown, total, self.lang_filter))
 
         def upd():
             try:
@@ -2408,7 +2408,7 @@ class App:
                 return
             last["t"], last["pct"] = now, pct
             short = fname if len(fname) <= 28 else fname[:26] + "…"
-            msg = self.t("⬇ 下載「%s」 %s %d%%").format(char, short, pct)
+            msg = self.t("⬇ 下載「%s」 %s %d%%") % (char, short, pct)
             self.root.after(0, lambda: self.set_adv_status(msg))
         return cb
 
@@ -2421,7 +2421,7 @@ class App:
         if gdrive is None or not gdrive.is_signed_in():
             return False, "尚未登入 Google，無法下載"
         if log:
-            log(self.t("從 Drive 下載「%s」中…").format(char))
+            log(self.t("從 Drive 下載「%s」中…") % (char))
         r = gdrive.download_character(root, lang, char, progress=self._dl_progress(char))
         if not r.get("ok"):
             return False, r.get("error", "下載失敗")
@@ -2436,7 +2436,7 @@ class App:
         m = self._selected_model()
         if not m: return
         char = m.get("character") or m.get("name", "")
-        self.set_adv_status(self.t("切換為「%s」中…").format(char))
+        self.set_adv_status(self.t("切換為「%s」中…") % (char))
         def task():
             ok, msg = self._ensure_downloaded(
                 m, log=lambda s: self.root.after(0, lambda: self.set_adv_status(s)))
@@ -2498,7 +2498,7 @@ class App:
         m = self._selected_model()
         if not m: return
         char = m.get("character") or m.get("name", "")
-        self.set_adv_status(self.t("從 Drive 下載「%s」中…").format(char))
+        self.set_adv_status(self.t("從 Drive 下載「%s」中…") % (char))
         def task():
             ok, msg = self._ensure_downloaded(m)
             self.root.after(0, self.adv_reload)
@@ -2678,7 +2678,7 @@ class App:
         edited = self._model_edit_dialog("匯入聲音模型", initial)
         if not edited: return
 
-        self.set_adv_status(self.t("匯入「%s」中…").format(edited['name']))
+        self.set_adv_status(self.t("匯入「%s」中…") % (edited['name']))
         def task():
             ver = edited["version"]
             lang_val = edited.get("lang", "") or "ZH"
@@ -2908,7 +2908,7 @@ class App:
             subprocess.Popen([get_py() or sys.executable, "webui.py"], cwd=ROOT,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **POPEN_KW)
         except Exception as exc:
-            self.set_adv_status(self.t("啟動失敗：%s").format(exc)); return
+            self.set_adv_status(self.t("啟動失敗：%s") % (exc)); return
         def wait_open():
             import time as _t
             for _ in range(30):
@@ -2970,7 +2970,7 @@ class App:
                     subprocess.run(["kill", pid], capture_output=True, timeout=4)
         except Exception: pass
         name = self.rows[port]["name"] if port in self.rows else f"服務 {port}"
-        self.set_status(self.t("已停止 %s").format(name))
+        self.set_status(self.t("已停止 %s") % (name))
 
     def toggle(self, port):
         if port_up(int(port)) or port in self.procs:
@@ -3146,7 +3146,7 @@ class App:
             ok, msg = download_pretrained(
                 miss, progress=prog,
                 log=lambda r: self.root.after(0, lambda: self.set_adv_status(
-                    self.t("下載基礎模型：%s").format(os.path.basename(r)))))
+                    self.t("下載基礎模型：%s") % (os.path.basename(r)))))
             self.root.after(0, done_ui)
             if not ok:
                 return False, msg
@@ -3367,7 +3367,7 @@ class App:
             ip = self._autodetect_phone_ip_blocking()
             if ip:
                 self._save_phone_ip(ip)
-                self.root.after(0, lambda: (self.phone_ip_var.set(ip), self.set_status(self.t("已自動填入手機 IP：%s").format(ip))))
+                self.root.after(0, lambda: (self.phone_ip_var.set(ip), self.set_status(self.t("已自動填入手機 IP：%s") % (ip))))
             else:
                 self.root.after(0, lambda: self.set_status(self.t("找不到手機 IP——請用 USB 接一次，或在欄位手動輸入")))
         threading.Thread(target=work, daemon=True).start()
@@ -3400,7 +3400,7 @@ class App:
                                    capture_output=True, text=True, timeout=8, **POPEN_KW)
                 out = (r.stdout or "") + (r.stderr or "")
                 if "connected" in out.lower():     # connected / already connected 皆算成功
-                    self.root.after(0, lambda i=ip: self.set_status(self.t("已轉為無線連線（%s:5555），拔掉 USB 也能同步").format(i)))
+                    self.root.after(0, lambda i=ip: self.set_status(self.t("已轉為無線連線（%s:5555），拔掉 USB 也能同步") % (i)))
                     break
                 time.sleep(1.0)
         except Exception:
@@ -3417,7 +3417,7 @@ class App:
                 if ip:
                     self._save_phone_ip(ip)
                     self.root.after(0, lambda: (self.phone_ip_var.set(ip),
-                                                self.set_status(self.t("未接 USB，自動無線同步（%s）…").format(ip)),
+                                                self.set_status(self.t("未接 USB，自動無線同步（%s）…") % (ip)),
                                                 self.sync_models(ip)))
                 else:
                     self.root.after(0, lambda: self.set_status(
@@ -3465,7 +3465,7 @@ class App:
             return
         self._sync_running = True
         via = f"無線 {wifi_ip}" if wifi_ip else "USB"
-        self.set_status(self.t("同步聲音模型中（%s）…（首次較久）").format(via))
+        self.set_status(self.t("同步聲音模型中（%s）…（首次較久）") % (via))
         def work():
             try:
                 py = get_py() or sys.executable
@@ -3484,11 +3484,11 @@ class App:
                 err_tail = [l for l in (r.stderr or "").splitlines() if l.strip()]
                 if r.returncode != 0:
                     detail = err_tail[-1] if err_tail else (out_tail[-1] if out_tail else self.t("未知錯誤"))
-                    msg = self.t("同步失敗：%s").format(detail)
+                    msg = self.t("同步失敗：%s") % (detail)
                 else:
                     msg = out_tail[-1] if out_tail else self.t("同步完成")
             except Exception as exc:
-                msg = self.t("同步失敗：%s").format(exc)
+                msg = self.t("同步失敗：%s") % (exc)
             finally:
                 self._sync_running = False
             self.root.after(0, lambda: self.set_status(msg))
