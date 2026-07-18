@@ -818,6 +818,77 @@ def have_voice_models() -> bool:
     """語音服務能不能起：基礎預訓練模型要齊全（不是只看資料夾存在）。"""
     return not missing_pretrained()
 
+
+def _hf_url(rel: str) -> str:
+    return f"https://huggingface.co/{PRETRAINED_REPO}/resolve/main/{rel}?download=true"
+
+
+def download_pretrained(files=None, progress=None, log=None):
+    """串流下載 GPT-SoVITS 基礎模型到 pretrained_models/，位元組級進度＋續傳。
+
+    progress(done_bytes, total_bytes, fname)；log(str)。回 (ok, msg)。
+    """
+    import ssl
+    import urllib.request
+    files = files if files is not None else missing_pretrained()
+    if not files:
+        return True, "已齊全"
+    d = pretrained_dir()
+    os.makedirs(d, exist_ok=True)
+
+    # conda 版 Python 的 urllib 沒配 CA → 打 huggingface 會 CERTIFICATE_VERIFY_FAILED，用 certifi
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        ctx = ssl.create_default_context()
+
+    # 先問每個檔的大小算總量（HEAD；拿不到就邊下邊算）
+    sizes, total = {}, 0
+    for rel in files:
+        try:
+            req = urllib.request.Request(_hf_url(rel), method="HEAD")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
+                sizes[rel] = int(r.headers.get("Content-Length") or 0)
+        except Exception:
+            sizes[rel] = 0
+        total += sizes[rel]
+
+    done = 0
+    for rel in files:
+        dst = os.path.join(d, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        tmp = dst + ".part"
+        have = os.path.getsize(tmp) if os.path.isfile(tmp) else 0
+        if sizes.get(rel) and have > sizes[rel]:
+            os.remove(tmp); have = 0
+        done += have
+        if log:
+            log(rel)
+        try:
+            req = urllib.request.Request(_hf_url(rel))
+            if have:
+                req.add_header("Range", f"bytes={have}-")
+            with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+                mode = "ab" if (have and resp.status == 206) else "wb"
+                if mode == "wb":
+                    done -= have; have = 0
+                with open(tmp, mode) as fh:
+                    while True:
+                        chunk = resp.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        fh.write(chunk)
+                        done += len(chunk)
+                        if progress:
+                            progress(done, total, os.path.basename(rel))
+        except Exception as e:  # noqa: BLE001
+            return False, f"下載 {rel} 失敗：{e}"
+        if sizes.get(rel) and os.path.getsize(tmp) != sizes[rel]:
+            return False, f"{rel} 下載不完整（{os.path.getsize(tmp)}/{sizes[rel]}）"
+        os.replace(tmp, dst)
+    return True, "完成"
+
 def find_adb_bg(callback=None):
     """背景執行緒搜尋 adb，找到後呼叫 callback(path)。"""
     def _work():
@@ -1980,7 +2051,14 @@ class App:
 
         # 基礎語音模型（DMG 不內建）缺了語音服務就起不來 → 給一顆可以直接補下載
         row_pre = tk.Frame(parent); row_pre.pack(fill="x", padx=20, pady=(4, 4)); self._track(row_pre, "bg")
-        self.tr(self._btn(row_pre, "", self.adv_fetch_pretrained, C_AMBER), "adv.fetchPre").pack(fill="x")
+        self._pre_btn = self._btn(row_pre, self.t("adv.fetchPre"), self.adv_fetch_pretrained, C_AMBER)
+        self._pre_btn.pack(fill="x")
+        # 下載進度條（平時隱藏，下載時顯示）
+        self._pre_prog = tk.Frame(parent); self._track(self._pre_prog, "bg")
+        self._pre_bar = ttk.Progressbar(self._pre_prog, length=480, mode="determinate", maximum=1000)
+        self._pre_bar.pack(fill="x", padx=20, pady=(2, 0))
+        self._pre_lbl = tk.Label(self._pre_prog, text="", font=(FONT_UI, SZ_SMALL), anchor="w")
+        self._pre_lbl.pack(fill="x", padx=20); self._track(self._pre_lbl, "muted")
 
         ta = tk.Frame(parent); ta.pack(fill="x", padx=20, pady=(4, 4)); self._track(ta, "bg")
         self.tr(self._neutral_btn(ta, "", self.adv_play), "adv.play").pack(side="left", expand=True, fill="x", padx=(0,4))
@@ -3008,26 +3086,51 @@ class App:
                 "（用行動網路分享的話會很久，建議接 Wi-Fi）"):
             return
         self.set_adv_status(self.t("下載基礎語音模型中…（約 1.6GB）"))
+        try:
+            self._pre_prog.pack(fill="x", pady=(0, 4), after=self._pre_btn.master)
+            self._pre_btn.config(state="disabled")
+        except Exception:
+            pass
+
+        import time as _t
+        state = {"t0": _t.time(), "last": 0.0, "lastb": 0}
+
+        def prog(done, total, fname):
+            now = _t.time()
+            if now - state["last"] < 0.4 and done < total:
+                return
+            spd = (done - state["lastb"]) / max(0.001, now - state["last"])
+            state["last"], state["lastb"] = now, done
+            pct = (done / total * 100) if total else 0
+            eta = ((total - done) / spd) if (spd > 0 and total) else 0
+            txt = (f"{done/1024/1024:.0f} / {total/1024/1024:.0f} MB  "
+                   f"({pct:.0f}%)  {spd/1024/1024:.1f} MB/s  "
+                   f"剩約 {eta/60:.0f} 分  · {fname}")
+            def _u(v=int(pct*10), s=txt):
+                try:
+                    self._pre_bar["value"] = v
+                    self._pre_lbl.config(text=s)
+                except Exception:
+                    pass
+            self.root.after(0, _u)
+
+        def done_ui():
+            try:
+                self._pre_btn.config(state="normal")
+                self._pre_prog.pack_forget()
+            except Exception:
+                pass
 
         def task():
-            try:
-                from huggingface_hub import hf_hub_download
-            except Exception as e:
-                return False, f"缺 huggingface_hub：{e}"
-            d = pretrained_dir()
-            os.makedirs(d, exist_ok=True)
-            for i, rel in enumerate(miss, 1):
-                self.root.after(0, lambda r=rel, n=i: self.set_adv_status(
-                    self.t("下載基礎模型 %d/%d：%s").format(n, len(miss), r)))
-                try:
-                    hf_hub_download(repo_id=PRETRAINED_REPO, filename=rel,
-                                    local_dir=d, local_dir_use_symlinks=False)
-                except Exception as e:  # noqa: BLE001
-                    return False, f"下載 {rel} 失敗：{e}"
-            left = missing_pretrained()
-            if left:
-                return False, f"仍缺 {len(left)} 個檔"
-            # 齊全了 → 語音服務現在可以起來
+            ok, msg = download_pretrained(
+                miss, progress=prog,
+                log=lambda r: self.root.after(0, lambda: self.set_adv_status(
+                    self.t("下載基礎模型：%s").format(os.path.basename(r)))))
+            self.root.after(0, done_ui)
+            if not ok:
+                return False, msg
+            if missing_pretrained():
+                return False, "下載後仍有缺檔，請再按一次補齊"
             self.root.after(0, lambda: self.start("9880"))
             return True, "基礎語音模型下載完成，語音服務啟動中…"
         self._run_bg(task)
