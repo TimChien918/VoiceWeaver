@@ -805,7 +805,15 @@ PRETRAINED_NEEDED = [
 
 
 def pretrained_dir() -> str:
-    return os.path.join(ROOT, "GPT_SoVITS", "pretrained_models")
+    """基礎模型資料夾。若是壞掉的 symlink（指向已不存在的舊安裝位置）就清掉，
+    否則 os.makedirs/寫檔都會踩 FileExistsError／找不到目標。"""
+    p = os.path.join(ROOT, "GPT_SoVITS", "pretrained_models")
+    if os.path.islink(p) and not os.path.exists(p):
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+    return p
 
 
 def missing_pretrained() -> list:
