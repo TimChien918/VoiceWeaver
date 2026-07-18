@@ -795,6 +795,7 @@ PRETRAINED_REPO = "lj1995/GPT-SoVITS"
 PRETRAINED_NEEDED = [
     "s1v3.ckpt",
     "gsv-v4-pretrained/s2Gv4.pth",
+    "gsv-v4-pretrained/vocoder.pth",   # v4 BigVGAN vocoder，缺了 api_v2 起不來
     "chinese-hubert-base/config.json",
     "chinese-hubert-base/preprocessor_config.json",
     "chinese-hubert-base/pytorch_model.bin",
