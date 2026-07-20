@@ -34,6 +34,25 @@ IMAGE_BASE = os.environ.get("IMAGE_BASE", "http://127.0.0.1:9881").rstrip("/")
 TEXT_BASE = os.environ.get("TEXT_BASE", "http://127.0.0.1:9882").rstrip("/")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "9879"))
 
+# 「已預載」標記：Colab 上 Drive 是掛載的，/prepare 把角色整包讀一遍＝抓進本地快取。
+# 成功後記在這份 json，/catalog 靠它回 downloaded → 網頁才能亮綠燈「已下載」。
+_MARKS_PATH = os.environ.get("PREFETCH_MARKS", "/tmp/vw_prefetched.json")
+
+def _load_marks():
+    try:
+        with open(_MARKS_PATH, encoding="utf-8") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+def _mark_prefetched(key):
+    m = _load_marks(); m.add(key)
+    try:
+        with open(_MARKS_PATH, "w", encoding="utf-8") as f:
+            json.dump(sorted(m), f, ensure_ascii=False)
+    except OSError:
+        pass
+
 PROXY_PREFIXES = ("/tts", "/set_gpt_weights", "/set_sovits_weights",
                   "/set_refer_audio", "/control", "/stop")
 _LANG_TAG_TO_API = {"ZH": "zh", "EN": "en", "JA": "ja", "KO": "ko"}
@@ -389,7 +408,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                     "emotions": sorted((m or {}).get("emotions", {}).keys()),
                                     "all": list(EMOTION_ALIASES.keys())})
         if path == "/catalog":   # 雲端曲庫目錄索引（給手機 Apple Music 式瀏覽整個曲庫）
-            return self._json(200, {"ok": True, "catalog": _load_or_build_catalog()})
+            cat = _load_or_build_catalog()
+            marks = _load_marks()
+            for c in cat.get("characters", []):   # 已預載的角色亮綠燈
+                c["downloaded"] = f'{c.get("lang","")}/{c.get("character") or c.get("name","")}' in marks
+            return self._json(200, {"ok": True, "catalog": cat})
         if path == "/prepare":   # 隨選下載：讀該角色檔案，觸發 Drive 掛載串流下載到 Colab 本地
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             who = (q.get("character") or q.get("name") or [""])[0]
@@ -408,7 +431,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     files += 1
                 except OSError:
                     pass
-            return self._json(200, {"ok": files > 0, "name": m.get("name", ""),
+            ok = files > 0
+            if ok:   # 整包讀完＝已進本地快取 → 記住，/catalog 之後回 downloaded=true
+                _mark_prefetched(f'{m.get("lang","")}/{m.get("character") or m.get("name","")}')
+            return self._json(200, {"ok": ok, "downloaded": ok, "name": m.get("name", ""),
                                     "lang": m.get("lang", ""), "bytes": total, "files": files})
         if path.startswith(PROXY_PREFIXES):
             return self._proxy()

@@ -509,7 +509,10 @@ def download_character(local_root, lang, char, progress=None, creds=None):
                 res["downloaded"] += 1; res["bytes"] += size
 
         _walk(char_id, "")
-        res["ok"] = True
+        # 有任何檔案中斷/不完整就不能算成功——否則 UI 彈「已下載」但 is_downloaded
+        # 判 False，畫面永遠停在「未下載」（使用者：我明明下載了）。
+        res["ok"] = not res["error"]
+        res["complete"] = is_downloaded(local_root, res["lang"], char)
     except Exception as e:  # noqa: BLE001
         res["error"] = str(e)
     return res

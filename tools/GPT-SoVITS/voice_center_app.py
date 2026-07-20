@@ -1418,7 +1418,10 @@ class App:
                         res = gdrive.download_character(app_ref._cache_root(), lang, who)
                     except Exception as e:
                         return self._json(500, {"ok": False, "error": str(e)})
-                    return self._json(200, {"ok": res.get("ok", False), **res})
+                    # 下載後「實測」本機是否齊全（.ckpt+.pth+參考音），別讓 UI 靠猜
+                    dl_ok = bool(gdrive.is_downloaded(app_ref._cache_root(), (lang or "").upper(), who))
+                    return self._json(200, {"ok": res.get("ok", False) and dl_ok,
+                                            "downloaded": dl_ok, **res})
                 self._json(404, {"ok": False, "error": "not found"})
 
             def do_POST(self):
