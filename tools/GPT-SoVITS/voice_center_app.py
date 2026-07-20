@@ -1335,7 +1335,8 @@ class App:
             def _cors(self):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                # ngrok-skip-browser-warning：網頁繞 ngrok 免費版攔截頁的標頭；把 Mac 經 ngrok 分享時也要放行
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, ngrok-skip-browser-warning")
 
             def _json(self, code, obj):
                 body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -2315,8 +2316,6 @@ class App:
             dl        = bool(m.get("downloaded"))
             mb        = (m.get("bytes", 0) or 0) / (1024 * 1024)
             emos      = m.get("emotions") or []
-            sub_text  = (f"{'✅ 已下載' if dl else '☁️ 未下載'} · {mb:.0f}MB"
-                         + (f" · {len(emos)} 種情緒" if emos else ""))
 
             border_bg = C_BLUE  if is_sel else t["border"]
             card_bg   = t["listsel"] if is_sel else t["card"]
@@ -2337,18 +2336,25 @@ class App:
                                 bg=card_bg, fg=muted_fg, anchor="w", cursor="hand2")
             lang_lbl.pack(fill="x")
 
-            # 下載狀態列：一眼看出哪些現成可用、哪些要等下載
-            state_lbl = tk.Label(inner, text=sub_text, font=(FONT_UI, SZ_SMALL),
-                                 bg=card_bg, fg=(C_WHITE if is_sel else (C_GREEN if dl else t["muted"])),
-                                 anchor="w", cursor="hand2")
-            state_lbl.pack(fill="x")
+            # 下載狀態：小圓點（綠＝已下載／琥珀＝未下載）＋低調灰字「大小 · 情緒數」，
+            # 不再用整條亮綠色（會太搶眼、像按鈕）。
+            info_text = f"{mb:.0f}MB" + (f" · {len(emos)} 種情緒" if emos else "")
+            status_row = tk.Frame(inner, bg=card_bg, cursor="hand2")
+            status_row.pack(fill="x", pady=(2, 0))
+            dot_lbl = tk.Label(status_row, text="●", font=(FONT_UI, SZ_SMALL), bg=card_bg,
+                               fg=(C_WHITE if is_sel else (C_GREEN if dl else C_AMBER)), cursor="hand2")
+            dot_lbl.pack(side="left")
+            info_lbl = tk.Label(status_row, text=info_text, font=(FONT_UI, SZ_SMALL),
+                                bg=card_bg, fg=muted_fg, anchor="w", cursor="hand2")
+            info_lbl.pack(side="left", padx=(4, 0))
 
-            for w in (outer, inner, name_lbl, lang_lbl, state_lbl):
+            for w in (outer, inner, name_lbl, lang_lbl, status_row, dot_lbl, info_lbl):
                 w.bind("<Button-1>", lambda e, idx=i: self._select_card(idx))
 
             self._model_card_items.append({
-                "outer": outer, "inner": inner,
-                "name_lbl": name_lbl, "lang_lbl": lang_lbl, "state_lbl": state_lbl,
+                "outer": outer, "inner": inner, "dl": dl,
+                "name_lbl": name_lbl, "lang_lbl": lang_lbl,
+                "status_row": status_row, "dot_lbl": dot_lbl, "info_lbl": info_lbl,
             })
 
         # 還原捲動位置（等版面重排與 scrollregion 更新後再設定）
@@ -2386,11 +2392,15 @@ class App:
             card_bg   = t["listsel"] if is_sel else t["card"]
             name_fg   = C_WHITE if is_sel else t["fg"]
             muted_fg  = C_WHITE if is_sel else t["muted"]
+            dot_fg = C_WHITE if is_sel else (C_GREEN if item.get("dl") else C_AMBER)
             try:
                 item["outer"].configure(bg=border_bg)
                 item["inner"].configure(bg=card_bg)
                 item["name_lbl"].configure(bg=card_bg, fg=name_fg)
                 item["lang_lbl"].configure(bg=card_bg, fg=muted_fg)
+                item["status_row"].configure(bg=card_bg)
+                item["dot_lbl"].configure(bg=card_bg, fg=dot_fg)
+                item["info_lbl"].configure(bg=card_bg, fg=muted_fg)
             except Exception:
                 pass
 

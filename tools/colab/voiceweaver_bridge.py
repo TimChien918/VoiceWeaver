@@ -318,7 +318,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # ngrok-skip-browser-warning：網頁繞過 ngrok 免費版攔截頁用的自訂標頭，
+        # 不放行的話瀏覽器 preflight 會被拒 → 網頁永遠連不上 Colab。
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, ngrok-skip-browser-warning")
 
     def _json(self, code, obj):
         b = json.dumps(obj, ensure_ascii=False).encode("utf-8")
