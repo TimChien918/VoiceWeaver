@@ -147,6 +147,26 @@ try:
 except Exception:
     gdrive = None
 
+def _provision_client_secret():
+    """把 App 內建的 google_client_secret.json 就位到 %LOCALAPPDATA%\\VoiceWeaver，
+    讓 Drive 登入「安裝即可用」、使用者永遠不用手動放。桌面版 OAuth 的 client_secret
+    依 Google 定義非機密（本就隨 App 散布），所以內建進 App。"""
+    try:
+        target = os.path.join(APPSUP, "google_client_secret.json")
+        if os.path.isfile(target):
+            return
+        # 內建位置：凍結 exe 的 _MEIPASS / 本檔同目錄（zip 安裝目錄）
+        for d in (_MEIPASS, EXE_DIR, os.path.dirname(os.path.abspath(__file__))):
+            src = os.path.join(d, "google_client_secret.json")
+            if os.path.isfile(src):
+                os.makedirs(APPSUP, exist_ok=True)
+                shutil.copy2(src, target)
+                return
+    except Exception:
+        pass
+
+_provision_client_secret()
+
 # 預設曲庫根：App 自己的儲存空間（Mac: ~/Library/Application Support/VoiceWeaver，
 # Windows: %LOCALAPPDATA%\VoiceWeaver），不是使用者家目錄／外接磁碟。
 # 曲庫是「本機快取」，理應由 App 管理、跟著這台電腦的系統帳號走，

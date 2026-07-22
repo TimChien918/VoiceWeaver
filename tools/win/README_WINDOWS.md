@@ -83,8 +83,8 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 ### 單一 exe（推薦）
 
 ```powershell
-# 任何系統 Python 皆可（不需 AI 環境），先裝打包工具：
-python -m pip install pyinstaller pillow
+# 任何系統 Python 皆可（不需 AI 環境），先裝打包工具 + Google 套件（Drive 上傳要內建進 exe）：
+python -m pip install pyinstaller pillow google-api-python-client google-auth google-auth-oauthlib
 # 打包：
 pwsh tools\win\build_win_exe.ps1
 # 產出：dist\VoiceWeaver語音中心.exe
@@ -92,6 +92,11 @@ pwsh tools\win\build_win_exe.ps1
 
 `build_win_exe.ps1` 會即時把正規的後端檔（`api_v2.py`、各 server、`GPT_SoVITS/configs`）塞進 exe，
 不需在 repo 提交重複的 `backend/` 目錄。
+
+> **Google Drive 上傳的 OAuth 用戶端**：`google_client_secret.json`（桌面版 client_secret）依 `.gitignore`
+> **不進 repo**。打包時若 `tools/GPT-SoVITS/google_client_secret.json` 存在，會自動內建進 exe/zip，
+> App 開機時 `_provision_client_secret()` 再把它就位到 `%LOCALAPPDATA%\VoiceWeaver`，使用者永遠不用手動放。
+> 缺這個檔也能打包，只是 Drive 登入會提示要放憑證。憑證取自 Google Cloud Console →「桌面應用程式」OAuth 用戶端。
 
 ### 既成環境 zip（快速路徑用）
 

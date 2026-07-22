@@ -67,6 +67,10 @@ $args = @(
 # 「VoiceWeaver 語音中心」產品名而非空白檔名，看起來正常許多（詳見 README_WINDOWS.md）。
 $verFile = Join-Path $WinDir 'version_info.txt'
 if (Test-Path $verFile) { $args += @('--version-file', $verFile) }
+# Google Drive OAuth 用戶端（桌面版 client_secret 非機密，內建進 App 讓「安裝即可用」）。
+# 放 exe 根目錄；控制程式啟動時 _provision_client_secret() 會複製到 %LOCALAPPDATA%\VoiceWeaver。
+$gcs = Join-Path $GS 'google_client_secret.json'
+if (Test-Path $gcs) { $addData += "$gcs;." }
 foreach ($d in $addData) { $args += @('--add-data', $d) }
 $args += "$GS\voice_center_app.py"
 
