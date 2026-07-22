@@ -56,7 +56,7 @@ ENV_PY    = os.path.join(ENV_DIR, "python.exe")
 ENV_PYW   = os.path.join(ENV_DIR, "pythonw.exe")
 GS_DIR    = os.path.join(TOOLS_DIR, "GPT-SoVITS")
 READY_MARK = os.path.join(APPSUP, ".ready")
-CONTROL_VER = "3"
+CONTROL_VER = "4"
 
 # GPT-SoVITS 推論引擎程式碼來源（官方上游，使用者已授權）
 GPTSOVITS_CODE_URL = "https://codeload.github.com/RVC-Boss/GPT-SoVITS/zip/refs/heads/main"

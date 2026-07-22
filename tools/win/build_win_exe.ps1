@@ -39,6 +39,8 @@ $addData = @(
   "$GS\image_gen_server.py;backend",
   "$GS\text_infer_server.py;backend",
   "$GS\sync_voice_models.py;backend",
+  "$GS\emotion_models.py;backend",        # 情緒感知（api_v2 /models 與控制程式共用）
+  "$GS\drive_uploader.py;backend",        # 曲庫上傳使用者自己的 Google Drive（OAuth，純 urllib）
   "$GS\GPT_SoVITS\configs;backend\GPT_SoVITS\configs"
 )
 $args = @(
@@ -48,8 +50,12 @@ $args = @(
   '--distpath',$Dist,
   '--workpath',"$env:TEMP\pyi_build",
   '--specpath',"$env:TEMP\pyi_build",
+  '--paths',$GS,                          # 讓 hidden-import 找得到 emotion_models / drive_uploader
   # qrcode 在「掃描連線」功能裡才 import（try/except 內），PyInstaller 靜態分析可能漏掉 → 強制收進來
   '--collect-all','qrcode',
+  # 情緒感知 / Google Drive 曲庫上傳：控制程式在 try/except 內 import，強制收進凍結檔
+  '--hidden-import','emotion_models',
+  '--hidden-import','drive_uploader',
   '--noupx'
 )
 # 內嵌版本/產品資訊：未簽章 exe 仍可能被 SmartScreen 攔，但「其他資訊」會顯示

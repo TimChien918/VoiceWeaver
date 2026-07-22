@@ -4,8 +4,8 @@
 # 有這份檔，build_win_exe.ps1 會用 --version-file 帶入。
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 1, 0, 0),
-    prodvers=(1, 1, 0, 0),
+    filevers=(1, 2, 0, 0),
+    prodvers=(1, 2, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -21,12 +21,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'VoiceWeaver'),
             StringStruct('FileDescription', 'VoiceWeaver 語音中心'),
-            StringStruct('FileVersion', '1.1.0.0'),
+            StringStruct('FileVersion', '1.2.0.0'),
             StringStruct('InternalName', 'VoiceWeaver語音中心'),
             StringStruct('LegalCopyright', 'VoiceWeaver'),
             StringStruct('OriginalFilename', 'VoiceWeaver語音中心.exe'),
             StringStruct('ProductName', 'VoiceWeaver 語音中心'),
-            StringStruct('ProductVersion', '1.1.0.0'),
+            StringStruct('ProductVersion', '1.2.0.0'),
           ],
         )
       ]
