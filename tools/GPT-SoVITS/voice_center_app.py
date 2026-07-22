@@ -3100,7 +3100,9 @@ class App:
         if not gdrive.deps_ok():
             return "（缺 google-api-python-client；請更新環境）"
         if not gdrive.client_secret_path():
-            return f"（尚未放 google_client_secret.json 到 {os.path.expanduser('~/Library/Application Support/VoiceWeaver')}）"
+            _app_dir = getattr(gdrive, "_APP_DIR",
+                               APPSUP if IS_WIN else os.path.expanduser('~/Library/Application Support/VoiceWeaver'))
+            return f"（尚未放 google_client_secret.json 到 {_app_dir}）"
         try:
             if gdrive.is_signed_in():
                 ident = gdrive.firebase_identity() or {}
@@ -3211,10 +3213,11 @@ class App:
             messagebox.showinfo("VoiceWeaver", "環境缺 google 套件；請更新語音中心。")
             return
         if not gdrive.client_secret_path():
+            _app_dir = getattr(gdrive, "_APP_DIR",
+                               APPSUP if IS_WIN else os.path.expanduser('~/Library/Application Support/VoiceWeaver'))
             messagebox.showinfo("VoiceWeaver",
                                 "尚未放置 google_client_secret.json。\n請放到：\n"
-                                + os.path.join(os.path.expanduser('~/Library/Application Support/VoiceWeaver'),
-                                               'google_client_secret.json'))
+                                + os.path.join(_app_dir, 'google_client_secret.json'))
             return
         self.set_adv_status(self.t("開啟瀏覽器登入 Google…"))
         def task():
