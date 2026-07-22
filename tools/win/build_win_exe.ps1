@@ -56,6 +56,11 @@ $args = @(
   # 情緒感知 / Google Drive 曲庫上傳：控制程式在 try/except 內 import，強制收進凍結檔
   '--hidden-import','emotion_models',
   '--hidden-import','drive_uploader',
+  # Google Drive 曲庫上傳需要的 google 套件——控制程式在 exe 內用「凍結的 Python」跑，
+  # 無法從 AI 環境(3.10)借用套件，必須把 google 套件本體收進 exe(3.12)，否則會顯示「缺 google 套件」。
+  '--collect-all','googleapiclient',
+  '--collect-all','google_auth_oauthlib',
+  '--collect-all','google',               # google.auth / google.oauth2 / protobuf 等命名空間
   '--noupx'
 )
 # 內嵌版本/產品資訊：未簽章 exe 仍可能被 SmartScreen 攔，但「其他資訊」會顯示

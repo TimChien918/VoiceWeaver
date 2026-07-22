@@ -345,6 +345,9 @@ def run_bootstrap(progress):
                 "x_transformers", "torchmetrics<=1.5", "pydantic<=2.10.6",
                 "ctranslate2>=4.0,<5", "av>=11", "pytorch-lightning",
                 "qrcode",   # 控制台「掃描連線」用，產生 QR Code 給手機掃
+                # 曲庫上傳使用者自己的 Google Drive（zip 版控制程式跑在此環境時需要；
+                # exe 版另把這些收進凍結檔，見 build_win_exe.ps1）
+                "google-api-python-client", "google-auth", "google-auth-oauthlib",
             ]
             _nvp = len(voice_pkgs)
             for _i, pkg in enumerate(voice_pkgs):
