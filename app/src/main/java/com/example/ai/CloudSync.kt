@@ -49,6 +49,10 @@ object CloudSync {
     val displayName: String?
         get() = auth.currentUser?.let { it.displayName ?: it.email ?: if (it.isAnonymous) "匿名使用者" else "已登入" }
 
+    /** Google 帳號頭像（Firebase 會自動從 Google 登入帶入）；匿名/無頭像時為 null。 */
+    val photoUrl: String?
+        get() = auth.currentUser?.photoUrl?.toString()
+
     /** 登入合一：同一次 Google 登入既是 Firebase 身分，也要到 Drive（drive.file）權限。 */
     const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 

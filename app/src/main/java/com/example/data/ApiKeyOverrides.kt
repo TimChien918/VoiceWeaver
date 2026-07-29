@@ -63,12 +63,18 @@ object ApiKeyOverrides {
     }
 }
 
-/** LLM 內建預設端點與模型。使用者在 API 金鑰管理留空時採用。 */
+/**
+ * LLM 內建預設端點與模型。使用者在 API 金鑰管理留空時採用。
+ * 2026-07-29 更新：llama-3.3-70b-versatile 將於 2026-08-16 被 Groq 淘汰，
+ * 官方建議改用 openai/gpt-oss-120b，但該模型中文（C-Eval）表現差；
+ * 本 App 重組提示詞全繁中，改採 qwen/qwen3.6-27b（Groq 預覽模型，中文能力較好）。
+ * OpenRouter 同步升級到 Qwen3 世代（qwen3-14b，價格更低、上下文更大）。
+ */
 object LlmDefaults {
     const val GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-    const val GROQ_MODEL = "llama-3.3-70b-versatile"
+    const val GROQ_MODEL = "qwen/qwen3.6-27b"
     const val OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-    const val OPENROUTER_MODEL = "qwen/qwen-2.5-7b-instruct"
+    const val OPENROUTER_MODEL = "qwen/qwen3-14b"
     const val COHERE_ENDPOINT = "https://api.cohere.com/v2/chat"
     const val COHERE_MODEL = "command-r7b-12-2024"
 }

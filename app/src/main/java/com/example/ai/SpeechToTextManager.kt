@@ -48,7 +48,8 @@ sealed class SttState {
  */
 class SpeechToTextManager(
     private val context: Context,
-    private val onResult: (text: String, words: List<WordConf>) -> Unit
+    /** alternatives：除了最佳解之外的其他候選（N-best），供重組 AI 依情境挑選。 */
+    private val onResult: (text: String, words: List<WordConf>, alternatives: List<String>) -> Unit
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -57,6 +58,7 @@ class SpeechToTextManager(
     private var speechService: SpeechService? = null
     private val collected = StringBuilder()
     private val collectedWords = mutableListOf<WordConf>()
+    private val collectedAlternatives = mutableListOf<String>()
 
     private val _sttState = MutableStateFlow<SttState>(SttState.Idle)
     val sttState: StateFlow<SttState> = _sttState.asStateFlow()
@@ -67,21 +69,30 @@ class SpeechToTextManager(
         override fun onResult(hypothesis: String?) {
             // 一段語音（自然停頓）結束 → 累積文字與逐字信心
             Log.d(TAG, "Vosk onResult raw: $hypothesis")
-            val (text, words) = parseResult(hypothesis)
-            if (text.isNotBlank()) collected.append(text)
-            collectedWords.addAll(words)
+            val parsed = parseResult(hypothesis)
+            if (parsed.text.isNotBlank()) collected.append(parsed.text)
+            collectedWords.addAll(parsed.words)
+            collectedAlternatives.addAll(parsed.alternatives)
         }
 
         override fun onFinalResult(hypothesis: String?) {
             Log.d(TAG, "Vosk onFinalResult raw: $hypothesis")
-            val (text, words) = parseResult(hypothesis)
-            if (text.isNotBlank()) collected.append(text)
-            collectedWords.addAll(words)
+            val parsed = parseResult(hypothesis)
+            if (parsed.text.isNotBlank()) collected.append(parsed.text)
+            collectedWords.addAll(parsed.words)
+            collectedAlternatives.addAll(parsed.alternatives)
             val finalText = collected.toString().trim()
             val finalWords = collectedWords.toList()
+            // 去重、剔除跟最佳解一樣的，最多留 3 個給 LLM 判斷
+            val finalAlts = collectedAlternatives
+                .map { it.trim() }
+                .filter { it.isNotBlank() && it != finalText }
+                .distinct()
+                .take(MAX_ALTERNATIVES)
             collected.clear()
             collectedWords.clear()
-            if (finalText.isNotEmpty()) onResult(finalText, finalWords)
+            collectedAlternatives.clear()
+            if (finalText.isNotEmpty()) onResult(finalText, finalWords, finalAlts)
             _sttState.value = SttState.Idle
         }
 
@@ -133,9 +144,15 @@ class SpeechToTextManager(
             speechService = null
             collected.clear()
             collectedWords.clear()
+            collectedAlternatives.clear()
 
             // setWords(true) → 結果 JSON 帶 result[] 逐字 conf
-            val recognizer = Recognizer(m, SAMPLE_RATE).apply { setWords(true) }
+            // setMaxAlternatives(N) → 結果 JSON 改帶 alternatives[]，前 N 名一起回。
+            //   失語症口齒不清時第一名常聽錯，正確的常在第 2、3 名；多拿幾個交給 LLM 用情境挑。
+            val recognizer = Recognizer(m, SAMPLE_RATE).apply {
+                setWords(true)
+                setMaxAlternatives(N_BEST)
+            }
             speechService = SpeechService(recognizer, SAMPLE_RATE)
             speechService?.startListening(voskListener)
             _sttState.value = SttState.Listening
@@ -163,32 +180,65 @@ class SpeechToTextManager(
         _sttState.value = SttState.Idle
     }
 
-    /** 解析 Vosk 結果 → (純文字, 逐字信心列表) */
-    private fun parseResult(hypothesis: String?): Pair<String, List<WordConf>> {
-        if (hypothesis.isNullOrBlank()) return "" to emptyList()
+    /** 一次辨識的解析結果：最佳解文字、逐字信心、其餘 N-best 候選。 */
+    private data class ParsedHypothesis(
+        val text: String,
+        val words: List<WordConf>,
+        val alternatives: List<String>
+    )
+
+    /**
+     * 解析 Vosk 結果。開了 setMaxAlternatives 之後 JSON 結構會變成
+     * `{"alternatives":[{"text":..,"confidence":..,"result":[..]}, ...]}`，
+     * 第一筆是最佳解；沒開或舊格式時退回原本的 `{"text":..,"result":[..]}`。
+     */
+    private fun parseResult(hypothesis: String?): ParsedHypothesis {
+        val empty = ParsedHypothesis("", emptyList(), emptyList())
+        if (hypothesis.isNullOrBlank()) return empty
         val trimmed = hypothesis.trim()
         if (!trimmed.startsWith("{")) {
             // 部分版本直接回傳純文字，無逐字信心
-            return trimmed.replace(" ", "").trim() to emptyList()
+            return ParsedHypothesis(trimmed.replace(" ", "").trim(), emptyList(), emptyList())
         }
         return try {
             val o = JSONObject(trimmed)
-            val words = mutableListOf<WordConf>()
-            o.optJSONArray("result")?.let { arr ->
-                for (i in 0 until arr.length()) {
-                    val w = arr.optJSONObject(i) ?: continue
-                    val word = w.optString("word").trim()
-                    if (word.isNotEmpty()) {
-                        words.add(WordConf(word, w.optDouble("conf", 1.0).toFloat()))
-                    }
+
+            // N-best 格式：alternatives[0] 為最佳解，其餘為候選
+            o.optJSONArray("alternatives")?.let { alts ->
+                if (alts.length() == 0) return empty
+                val best = alts.optJSONObject(0) ?: return empty
+                val bestText = best.optString("text").replace(" ", "").trim()
+                val others = mutableListOf<String>()
+                for (i in 1 until alts.length()) {
+                    alts.optJSONObject(i)?.optString("text")
+                        ?.replace(" ", "")?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let(others::add)
                 }
+                return ParsedHypothesis(bestText, parseWords(best), others)
             }
+
+            // 舊/單一結果格式
             val text = o.optString("text").ifBlank { o.optString("partial") }
                 .replace(" ", "").trim()
-            text to words
+            ParsedHypothesis(text, parseWords(o), emptyList())
         } catch (e: Exception) {
-            trimmed.replace(" ", "").trim() to emptyList()
+            ParsedHypothesis(trimmed.replace(" ", "").trim(), emptyList(), emptyList())
         }
+    }
+
+    private fun parseWords(o: JSONObject): List<WordConf> {
+        val words = mutableListOf<WordConf>()
+        o.optJSONArray("result")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val w = arr.optJSONObject(i) ?: continue
+                val word = w.optString("word").trim()
+                if (word.isNotEmpty()) {
+                    words.add(WordConf(word, w.optDouble("conf", 1.0).toFloat()))
+                }
+            }
+        }
+        return words
     }
 
     // ─── 模型管理（下載 + 解壓 + 驗證）────────────────────────────────
@@ -277,6 +327,10 @@ class SpeechToTextManager(
     companion object {
         private const val TAG = "SpeechToTextManager"
         private const val SAMPLE_RATE = 16000.0f
+        /** 向 Vosk 要幾個候選；要太多會拖慢解碼，4 個足以涵蓋大部分聽錯的情況。 */
+        private const val N_BEST = 4
+        /** 實際往上送給重組 AI 的候選數（扣掉最佳解本身）。 */
+        private const val MAX_ALTERNATIVES = 3
         private const val MODEL_DIR_NAME = "vosk-model-small-cn-0.22"
         // 公開模型，免帳號（已 curl 驗證 200 / application/zip / ~44MB）
         private const val MODEL_URL =

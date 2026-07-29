@@ -88,7 +88,7 @@ fun ExtendedSettingsScreen(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(I18n.tr("靈敏度即時生效，數值越大頭轉一點點游標移越多。"),
-                        fontSize = 10.sp, color = p.textMuted, lineHeight = 13.sp)
+                        fontSize = 13.sp, color = p.textMuted, lineHeight = 13.sp)
                     Spacer(Modifier.height(12.dp))
                     RowToggle(I18n.tr("每日復健提醒"), I18n.tr("每天固定時間通知來練習"),
                         settings.dailyReminderEnabled, p) { on ->
@@ -107,10 +107,11 @@ fun ExtendedSettingsScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text(I18n.tr("成績單自動推送家屬"), color = p.textLight, fontWeight = FontWeight.Bold)
-                    Text(I18n.tr("定期把成績單發到緊急聯絡人 Telegram"), fontSize = 11.sp, color = p.textMuted)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Text(I18n.tr("成績單自動推送家屬"), color = p.textLight, fontSize = 17.sp)
+                    Text(I18n.tr("定期把成績單發到緊急聯絡人 Telegram"), fontSize = 13.sp, color = p.textMuted)
+                    Spacer(Modifier.height(8.dp))
+                    // iOS segmented control 風：整排等寬、緊湊、選中才上色
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("none" to I18n.tr("關閉"), "daily" to I18n.tr("每日"), "weekly" to I18n.tr("每週")).forEach { (key, label) ->
                             val sel = settings.reportPushFrequency == key
@@ -121,13 +122,16 @@ fun ExtendedSettingsScreen(
                                         com.example.work.RehabScheduler.scheduleReportPush(ctx, key)
                                     }
                                 },
-                                border = BorderStroke(1.dp, if (sel) p.neonCyan else p.textMuted.copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                border = BorderStroke(1.dp, if (sel) p.neonCyan else p.textMuted.copy(alpha = 0.35f)),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = if (sel) p.neonCyan else p.textMuted),
-                                modifier = Modifier.weight(1f)
-                            ) { Text(label, fontSize = 12.sp) }
+                                modifier = Modifier.weight(1f).heightIn(min = 34.dp)
+                            ) { Text(label, fontSize = 13.sp, maxLines = 1) }
                         }
                     }
-                    Text(I18n.tr("需先填下方「緊急聯絡人 Chat ID」。"), fontSize = 10.sp, color = p.textMuted)
+                    Spacer(Modifier.height(4.dp))
+                    Text(I18n.tr("需先填下方「緊急聯絡人 Chat ID」。"), fontSize = 12.sp, color = p.textMuted)
                 }
             }
 
@@ -168,13 +172,15 @@ fun ExtendedSettingsScreen(
                             newLabel = ""; newEmoji = "⭐"
                         },
                         enabled = newLabel.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = p.neonGreen, contentColor = p.darkBg),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(I18n.tr("新增圖卡"), fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                        shape = BTN_SHAPE,
+                        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF), contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = BTN_MIN_H.dp)
+                    ) { Text(I18n.tr("新增圖卡"), fontSize = 15.sp, fontWeight = FontWeight.Medium) }
                     if (existing.length() > 0) {
                         Spacer(Modifier.height(4.dp))
                         TextButton(onClick = { scope.launch { settingsRepo.setCustomAacItems("") } }) {
-                            Text(I18n.tr("清除全部自訂圖卡"), fontSize = 12.sp, color = p.dangerRose)
+                            Text(I18n.tr("清除全部自訂圖卡"), fontSize = 14.sp, color = Color(0xFFFF3B30))
                         }
                     }
                 }
@@ -186,12 +192,14 @@ fun ExtendedSettingsScreen(
                     var showQr by remember { mutableStateOf(false) }
                     var scanStatus by remember { mutableStateOf<String?>(null) }
                     Text(I18n.tr("電腦啟動語音中心後，點「顯示 QR Code」按鈕，再用下方「掃描」對準即可自動填入 IP。"),
-                        fontSize = 11.sp, color = p.textMuted, lineHeight = 15.sp)
+                        fontSize = 13.sp, color = p.textMuted, lineHeight = 15.sp)
                     Spacer(Modifier.height(10.dp))
                     Button(
                         onClick = { showQr = true; scanStatus = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan, contentColor = p.darkBg),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = BTN_SHAPE,
+                        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF), contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = BTN_MIN_H.dp)
                     ) {
                         Icon(Icons.Default.QrCodeScanner, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -248,18 +256,21 @@ fun ExtendedSettingsScreen(
                         Button(
                             onClick = { scope.launch { settingsRepo.setEmergencyChatId(chatIdDraft) } },
                             enabled = chatIdDraft.isNotBlank() && chatIdDraft != settings.emergencyChatId,
-                            colors = ButtonDefaults.buttonColors(containerColor = p.neonGreen, contentColor = p.darkBg),
-                            modifier = Modifier.weight(1f)
-                        ) { Text(I18n.tr("儲存")) }
+                            shape = BTN_SHAPE,
+                            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF), contentColor = Color.White),
+                            modifier = Modifier.weight(1f).heightIn(min = BTN_MIN_H.dp)
+                        ) { Text(I18n.tr("儲存"), fontSize = 15.sp, fontWeight = FontWeight.Medium) }
                         OutlinedButton(
                             onClick = {
                                 chatIdDraft = AppSettings.DEFAULT_EMERGENCY_CHAT_ID
                                 scope.launch { settingsRepo.setEmergencyChatId(AppSettings.DEFAULT_EMERGENCY_CHAT_ID) }
                             },
+                            shape = BTN_SHAPE,
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = p.textLight),
-                            border = BorderStroke(1.dp, p.textMuted),
-                            modifier = Modifier.weight(1f)
-                        ) { Text(I18n.tr("回預設值")) }
+                            border = BorderStroke(1.dp, p.textMuted.copy(alpha = 0.4f)),
+                            modifier = Modifier.weight(1f).heightIn(min = BTN_MIN_H.dp)
+                        ) { Text(I18n.tr("回預設值"), fontSize = 15.sp) }
                     }
                 }
             }
@@ -268,16 +279,18 @@ fun ExtendedSettingsScreen(
             item {
                 Section(title = I18n.tr("歷史紀錄管理"), icon = Icons.Default.History, p = p) {
                     Text(I18n.tr("刪除所有重組歷史、復健紀錄、AAC 組合紀錄、故事訓練紀錄。DataStore 設定（風格、語言等）不會被清除。"),
-                        color = p.textMuted, fontSize = 12.sp)
+                        color = p.textMuted, fontSize = 13.sp)
                     Spacer(Modifier.height(10.dp))
-                    Button(
+                    OutlinedButton(
                         onClick = { showClearDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = p.dangerRose, contentColor = Color.White),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = BTN_SHAPE,
+                        border = BorderStroke(1.dp, Color(0xFFFF3B30).copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF3B30)),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = BTN_MIN_H.dp)
                     ) {
-                        Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Delete, null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(I18n.tr("清除所有歷史紀錄"))
+                        Text(I18n.tr("清除所有歷史紀錄"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -286,17 +299,18 @@ fun ExtendedSettingsScreen(
             item {
                 Section(title = I18n.tr("一鍵重置"), icon = Icons.Default.RestartAlt, p = p) {
                     Text(I18n.tr("將所有 App 設定（主題、語言、TTS 速率、Chat ID 等）回到出廠預設。**不會**刪除歷史紀錄。"),
-                        color = p.textMuted, fontSize = 12.sp)
+                        color = p.textMuted, fontSize = 13.sp)
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = { showResetDialog = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = p.auraAmber),
-                        border = BorderStroke(1.dp, p.auraAmber),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = BTN_SHAPE,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF3B30)),
+                        border = BorderStroke(1.dp, Color(0xFFFF3B30).copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = BTN_MIN_H.dp)
                     ) {
-                        Icon(Icons.Default.RestartAlt, null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.RestartAlt, null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(I18n.tr("重置為預設設定"))
+                        Text(I18n.tr("重置為預設設定"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -305,15 +319,17 @@ fun ExtendedSettingsScreen(
             item {
                 Section(title = I18n.tr("匯入外部語料庫（JSON / CSV）"), icon = Icons.Default.UploadFile, p = p) {
                     Text(I18n.tr("支援 .json（含完整欄位）或 .csv（家屬可用 Excel 編輯）。範例格式請見專案 README。"),
-                        color = p.textMuted, fontSize = 12.sp)
+                        color = p.textMuted, fontSize = 13.sp)
                     Spacer(Modifier.height(10.dp))
                     Button(
                         onClick = {
                             importLauncher.launch(arrayOf("application/json", "text/csv",
                                 "text/comma-separated-values", "*/*"))
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan, contentColor = p.darkBg),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = BTN_SHAPE,
+                        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF), contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = BTN_MIN_H.dp)
                     ) {
                         Icon(Icons.Default.UploadFile, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -321,7 +337,7 @@ fun ExtendedSettingsScreen(
                     }
                     importStatus?.let {
                         Spacer(Modifier.height(6.dp))
-                        Text(it, color = p.textMuted, fontSize = 12.sp)
+                        Text(it, color = p.textMuted, fontSize = 13.sp)
                     }
                 }
             }
@@ -377,6 +393,69 @@ fun ExtendedSettingsScreen(
 
 // ── 私用 helper composables ──
 
+// ─── 統一按鈕視覺 ───
+// 這頁原本混了 6 種按鈕樣式（青色實心／綠色實心／紅色實心／黃框／灰底／白框），
+// 高度、圓角、字級全都不一樣。統一成三種語意：主要動作、次要動作、破壞性動作。
+private val BTN_SHAPE = RoundedCornerShape(10.dp)
+private const val BTN_MIN_H = 44
+
+/** 主要動作：實心藍（iOS 系統藍）。 */
+@Composable
+private fun PrimaryBtn(
+    text: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = BTN_SHAPE,
+        elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF), contentColor = Color.White),
+        modifier = modifier.heightIn(min = BTN_MIN_H.dp)
+    ) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
+}
+
+/** 次要動作：灰框，不搶主要動作的視覺。 */
+@Composable
+private fun SecondaryBtn(
+    text: String,
+    p: com.example.ui.theme.AppPalette,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = BTN_SHAPE,
+        border = BorderStroke(1.dp, p.textMuted.copy(alpha = 0.4f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = p.textLight),
+        modifier = modifier.heightIn(min = BTN_MIN_H.dp)
+    ) { Text(text, fontSize = 15.sp, maxLines = 1) }
+}
+
+/** 破壞性動作：紅字紅框（iOS 慣例，不用整片紅底嚇人）。 */
+@Composable
+private fun DestructiveBtn(
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = BTN_SHAPE,
+        border = BorderStroke(1.dp, Color(0xFFFF3B30).copy(alpha = 0.5f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF3B30)),
+        modifier = modifier.heightIn(min = BTN_MIN_H.dp)
+    ) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
+}
+
+// ─── iOS inset-grouped 樣式（與設定主頁一致）───
+// 統一在這裡定字級，不要讓任何 Text 落到「沒指定 fontSize」——那會吃到
+// 預設 bodyLarge，再乘上使用者的字體倍率（可到 1.8x），標題就會腫成兩倍大。
+
 @Composable
 private fun Section(
     title: String,
@@ -384,21 +463,25 @@ private fun Section(
     p: com.example.ui.theme.AppPalette,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(p.surface)
-            .border(1.dp, p.neonCyan.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = p.neonCyan, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(title, color = p.textLight, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 分組標題在卡片外（iOS 風：小灰字、非粗體）
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 6.dp)
+        ) {
+            Icon(icon, null, tint = p.textMuted, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(5.dp))
+            Text(title, color = p.textMuted, fontSize = 13.sp)
         }
-        Spacer(Modifier.height(12.dp))
-        content()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(p.surface)
+                .padding(horizontal = 14.dp, vertical = 4.dp)
+        ) {
+            content()
+        }
     }
 }
 
@@ -410,15 +493,24 @@ private fun RowToggle(
     p: com.example.ui.theme.AppPalette,
     onChecked: (Boolean) -> Unit
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(vertical = 8.dp)
+    ) {
         Column(Modifier.weight(1f)) {
-            Text(label, color = p.textLight, fontWeight = FontWeight.Bold)
-            Text(sub, fontSize = 11.sp, color = p.textMuted)
+            Text(label, color = p.textLight, fontSize = 17.sp)
+            if (sub.isNotBlank()) {
+                Text(sub, fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp)
+            }
         }
+        Spacer(Modifier.width(10.dp))
         Switch(
             checked = checked, onCheckedChange = onChecked,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = p.neonCyan, checkedTrackColor = p.neonCyan.copy(alpha = 0.5f)
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF34C759),
+                checkedBorderColor = Color(0xFF34C759),
+                uncheckedThumbColor = Color.White
             )
         )
     }
@@ -435,17 +527,20 @@ private fun SliderRow(
     thumbColor: Color = p.neonCyan,
     onValue: (Float) -> Unit
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = p.textMuted, fontSize = 12.sp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+    ) {
+        Text(label, color = p.textMuted, fontSize = 13.sp)
         Spacer(Modifier.width(8.dp))
         Slider(
             value = value, onValueChange = onValue,
             valueRange = range, steps = steps,
-            colors = SliderDefaults.colors(thumbColor = thumbColor, activeTrackColor = thumbColor),
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = thumbColor),
             modifier = Modifier.weight(1f)
         )
-        Spacer(Modifier.width(6.dp))
-        Text(fmt.format(value), color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(8.dp))
+        Text(fmt.format(value), color = p.textMuted, fontSize = 13.sp)
     }
 }
 

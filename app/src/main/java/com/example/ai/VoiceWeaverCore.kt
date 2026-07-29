@@ -60,7 +60,13 @@ data class GlobalTagsVault(
     val locationTag: String = "",
     val visionTags: List<String> = emptyList(),
     /** 來自 Vosk 的逐字信心度（0~1），供重組 AI 判斷哪些字可能聽錯 */
-    val sttWords: List<WordConf> = emptyList()
+    val sttWords: List<WordConf> = emptyList(),
+    /**
+     * 語音辨識的其他候選（N-best）。失語症患者口齒不清時，Vosk 第一名常常聽錯，
+     * 但正確答案往往落在第 2、3 名——把整批候選一起餵給重組 AI，讓它用情境挑，
+     * 比只拿第一名硬猜準得多。rawText 是第一名；這裡放其餘候選。
+     */
+    val sttAlternatives: List<String> = emptyList()
 )
 
 /** 單字（或詞）的辨識信心度 */
@@ -75,8 +81,13 @@ enum class DeviceTier {
     LOW_END    // RAM < 4GB: 嚴禁載入 LLM，僅允許傳統規則模板匹配 (Rule-based Template)
 }
 
+/** 自我一致性取樣出的候選重組句（文字＋該候選自己的信心度）。 */
+data class ReconstructedCandidate(val text: String, val confidence: Double)
+
 /**
- * 語料重組後的資料結構
+ * 語料重組後的資料結構。
+ * alternatives：雲端自我一致性取樣時的候選清單（去重後最多 3 個，第一個＝目前顯示的
+ * reconstructedText）；本機/規則引擎等單次結果的引擎會維持空清單，UI 不顯示「換一個」。
  */
 data class ReconstructedData(
     val originalText: String,
@@ -84,6 +95,8 @@ data class ReconstructedData(
     val confidence: Double,
     val engineUsed: String,
     val inferenceTimeMs: Long,
+    val alternatives: List<ReconstructedCandidate> = emptyList(),
+    val alternativeIndex: Int = 0,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -415,14 +428,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var rehabTarget = ""
 
     // STT（Vosk）— 依 sttMode 將辨識結果導向「碎詞輸入」或「復健評分」
-    private val sttManager = SpeechToTextManager(application) { text, words ->
+    private val sttManager = SpeechToTextManager(application) { text, words, alternatives ->
         when (sttMode) {
             SttMode.NORMAL -> {
                 val current = _globalTagsVault.value.rawText
                 val appended = if (current.isEmpty()) text else "$current $text"
-                _globalTagsVault.value = _globalTagsVault.value.copy(rawText = appended, sttWords = words)
+                _globalTagsVault.value = _globalTagsVault.value.copy(
+                    rawText = appended,
+                    sttWords = words,
+                    sttAlternatives = alternatives
+                )
             }
             SttMode.REHAB -> {
+                // 復健評分要的是「病人實際唸出來的樣子」，用最佳解即可，不看其他候選。
                 sttMode = SttMode.NORMAL
                 scoreRehabAttempt(text, words)
             }
@@ -520,12 +538,18 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 朗讀前的風險閘門狀態。NeedConfirm = 醫療/疼痛需確認；Locked = 自傷/拒療鎖定。 */
     sealed class SpeakGate {
         object Idle : SpeakGate()
-        data class NeedConfirm(val text: String) : SpeakGate()
+        data class NeedConfirm(val text: String, val useTakes: Boolean = false) : SpeakGate()
         data class Locked(val reason: String) : SpeakGate()
     }
 
     private val _speakGate = MutableStateFlow<SpeakGate>(SpeakGate.Idle)
     val speakGate: StateFlow<SpeakGate> = _speakGate.asStateFlow()
+
+    // GPT-SoVITS「一次合成 3 個版本、講錯了再換」——只用在重組主卡的「唸出這句」，
+    // 直接把 TtsModule 的狀態透出給 UI，不需要另外包一層。
+    val synthesisTakes: StateFlow<List<java.io.File?>> = ttsModule.synthesisTakes
+    val currentTakeIndex: StateFlow<Int> = ttsModule.currentTakeIndex
+    fun cycleSpeechTake() = ttsModule.cycleNextTake()
 
     /** 行為數據彙總（報表頁顯示，治療師評估趨勢用）。lazy：settingsRepo 在下方才初始化。 */
     val behaviorMetrics: StateFlow<com.example.data.BehaviorMetrics> by lazy {
@@ -538,24 +562,25 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var firstSpeakRecorded = false
 
     /** 所有實際 TTS 出口（含反應時間指標）。不要直接呼 ttsModule.speak。 */
-    private fun doSpeak(text: String) {
+    private fun doSpeak(text: String, useTakes: Boolean = false) {
         if (!firstSpeakRecorded) {
             firstSpeakRecorded = true
             val latency = System.currentTimeMillis() - appOpenAtMs
             viewModelScope.launch { settingsRepo.recordFirstSpeakLatency(latency) }
         }
-        ttsModule.speak(text)
+        if (useTakes) ttsModule.speakWithTakes(text) else ttsModule.speak(text)
     }
 
     /**
      * 帶風險分級的朗讀請求：一般 → 直接發聲；醫療/疼痛 → 跳確認；
      * 自傷/拒絕治療 → 鎖定語音輸出僅顯示警示。
+     * useTakes：GPT-SoVITS 一次合成 3 個版本供「換一個」；只給重組主卡的主要朗讀按鈕用。
      */
-    fun requestSpeak(text: String) {
+    fun requestSpeak(text: String, useTakes: Boolean = false) {
         when (com.example.safety.SafetyGuard.classifyRisk(text)) {
-            com.example.safety.SafetyGuard.RiskLevel.NORMAL -> doSpeak(text)
+            com.example.safety.SafetyGuard.RiskLevel.NORMAL -> doSpeak(text, useTakes)
             com.example.safety.SafetyGuard.RiskLevel.CONFIRM ->
-                _speakGate.value = SpeakGate.NeedConfirm(text)
+                _speakGate.value = SpeakGate.NeedConfirm(text, useTakes)
             com.example.safety.SafetyGuard.RiskLevel.LOCK -> {
                 // 自傷類危機字眼：鎖語音 + 立即觸發緊急通報（取 GPS → 發 Telegram）
                 if (com.example.safety.SafetyGuard.containsCrisisSignal(text)) {
@@ -768,16 +793,46 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 風險確認對話框按「確認朗讀」。 */
     fun confirmGatedSpeak() {
-        (_speakGate.value as? SpeakGate.NeedConfirm)?.let { doSpeak(it.text) }
+        (_speakGate.value as? SpeakGate.NeedConfirm)?.let { doSpeak(it.text, it.useTakes) }
         _speakGate.value = SpeakGate.Idle
     }
 
     fun dismissSpeakGate() { _speakGate.value = SpeakGate.Idle }
 
-    /** 重組候選句被點選：index 0 = AI 第一候選（記選句成功率），之後過風險閘門。 */
+    /**
+     * 重組候選句被點選：index 0 = AI 第一候選（記選句成功率，且用 GPT-SoVITS 一次合成 3 個版本
+     * 供「換一個」），之後過風險閘門。
+     */
     fun chooseCandidate(index: Int, text: String) {
         viewModelScope.launch { settingsRepo.recordCandidateChoice(index == 0) }
-        requestSpeak(text)
+        requestSpeak(text, useTakes = index == 0)
+    }
+
+    /**
+     * 「換一個說法」：在自我一致性取樣出的候選句之間循環切換，不重新呼叫 LLM。
+     * 直接原地更新 reconstructedText/confidence，卡片上所有按鈕（朗讀/複製/收藏/多語）
+     * 都讀同一份 data，自動跟著換，不必逐一改動。
+     * 三個都不對（已經在看最後一個）→ 不是繞回去重看被拒絕過的第一個，而是重新呼叫 LLM
+     * 生成全新一批候選（沿用同一份 vault，即同一段碎詞／地點／物件）。
+     */
+    fun cycleReconstructionAlternative() {
+        val state = _reconstructionState.value as? ReconstructionUiState.Success ?: return
+        val data = state.data
+        if (data.alternatives.size <= 1) return
+        if (data.alternativeIndex >= data.alternatives.size - 1) {
+            triggerSentenceReconstruction()
+            return
+        }
+        val nextIndex = data.alternativeIndex + 1
+        val next = data.alternatives[nextIndex]
+        val updated = data.copy(
+            reconstructedText = next.text,
+            confidence = next.confidence,
+            alternativeIndex = nextIndex
+        )
+        _reconstructionState.value = ReconstructionUiState.Success(updated)
+        if (settings.value.aacIntentImageEnabled) generateIntentImage(updated.reconstructedText)
+        else clearIntentImage()
     }
 
     /** 臨床高頻一鍵發聲：固定句、預先核可，不過 LLM 直接朗讀。 */
@@ -872,6 +927,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // ── 雲端同步（Firebase，與網頁版共用 users/{uid}）──────────────
     private val _cloudUser = MutableStateFlow(CloudSync.displayName)
     val cloudUser: StateFlow<String?> = _cloudUser.asStateFlow()
+    private val _cloudUserPhoto = MutableStateFlow(CloudSync.photoUrl)
+    val cloudUserPhoto: StateFlow<String?> = _cloudUserPhoto.asStateFlow()
     private val _cloudStatus = MutableStateFlow(if (CloudSync.isSignedIn) "已登入" else "未登入")
     val cloudStatus: StateFlow<String> = _cloudStatus.asStateFlow()
     @Volatile private var suppressPushUntil = 0L
@@ -892,18 +949,18 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         }
         CloudSync.signInWithGoogle(idToken) { ok, msg ->
             _cloudStatus.value = msg
-            if (ok) { _cloudUser.value = CloudSync.displayName; pullCloud() }
+            if (ok) { _cloudUser.value = CloudSync.displayName; _cloudUserPhoto.value = CloudSync.photoUrl; pullCloud() }
         }
     }
     fun cloudSignInAnon() {
         CloudSync.signInAnon { ok, msg ->
             _cloudStatus.value = msg
-            if (ok) { _cloudUser.value = CloudSync.displayName; pullCloud() }
+            if (ok) { _cloudUser.value = CloudSync.displayName; _cloudUserPhoto.value = CloudSync.photoUrl; pullCloud() }
         }
     }
     fun cloudSignOut() {
         CloudSync.signOut(getApplication())
-        _cloudUser.value = null; _cloudStatus.value = "已登出"
+        _cloudUser.value = null; _cloudUserPhoto.value = null; _cloudStatus.value = "已登出"
     }
     private fun pullCloud() {
         CloudSync.pull { llm, img, tg, chat, places ->

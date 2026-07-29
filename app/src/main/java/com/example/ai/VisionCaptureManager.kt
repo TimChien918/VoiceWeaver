@@ -16,6 +16,8 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.example.data.CameraLens
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +48,20 @@ class VisionCaptureManager(private val context: Context) {
     }
 
     /**
+     * 影像標籤器：物件偵測的預設分類器只有 5 個粗類（Fashion good / Food / Home good /
+     * Place / Plant），對 AAC 完全不夠用——病人需要的是「水杯」「藥」「輪椅」這種具體詞。
+     * ImageLabeling 有 400+ 個具體標籤，是這個場景真正該用的 API；物件偵測只留著補位。
+     * 門檻 0.6：寧可少講幾個，也不要把不確定的東西講進病人的句子裡。
+     */
+    private val imageLabeler by lazy {
+        ImageLabeling.getClient(
+            ImageLabelerOptions.Builder()
+                .setConfidenceThreshold(MIN_LABEL_CONFIDENCE)
+                .build()
+        )
+    }
+
+    /**
      * 靜默啟動相機、擷取單張影像、實施 ML 辨識，隨後「立即自動執行 unbindAll()」關閉硬體。
      */
     suspend fun captureAndAnalyzeSingleFrame(
@@ -55,7 +71,7 @@ class VisionCaptureManager(private val context: Context) {
         if (lens == CameraLens.Both) {
             val backTags = captureOneLens(lifecycleOwner, CameraLens.Back)
             val frontTags = captureOneLens(lifecycleOwner, CameraLens.Front)
-            return@withContext (backTags + frontTags).distinct().take(6).ifEmpty { simulateOfflineImageObjects() }
+            return@withContext (backTags + frontTags).distinct().take(6)
         }
         return@withContext captureOneLens(lifecycleOwner, lens)
     }
@@ -65,8 +81,9 @@ class VisionCaptureManager(private val context: Context) {
         lens: CameraLens
     ): List<String> = withContext(Dispatchers.Default) {
         if (!hasCameraPermission()) {
-            Log.w("VisionCaptureManager", "Camera Permission is missing!")
-            return@withContext listOf("影像權限未核准")
+            // 不回「影像權限未核准」當標籤——那會被當成「病人看到的東西」餵進重組 prompt。
+            Log.w("VisionCaptureManager", "沒有相機權限，回傳空辨識結果")
+            return@withContext emptyList()
         }
 
         // 若無傳入 LifecycleOwner，採用全域進程生命週期 ProcessLifecycleOwner (無預覽背景相機經典方案)
@@ -74,7 +91,7 @@ class VisionCaptureManager(private val context: Context) {
             ProcessLifecycleOwner.get()
         } catch (e: Exception) {
             Log.e("VisionCaptureManager", "Failed to retrieve ProcessLifecycleOwner", e)
-            return@withContext simulateOfflineImageObjects()
+            return@withContext emptyList()
         }
 
         var cameraProvider: ProcessCameraProvider? = null
@@ -93,7 +110,7 @@ class VisionCaptureManager(private val context: Context) {
             }
 
             if (cameraProvider == null) {
-                return@withContext simulateOfflineImageObjects()
+                return@withContext emptyList()
             }
 
             // 2. 設置 ImageCapture 單次擷取管道
@@ -123,8 +140,10 @@ class VisionCaptureManager(private val context: Context) {
             }
 
             if (!isBound) {
-                // 如果是虛擬機/模擬器環境，無法綁定實體相機，則優雅降級模擬
-                return@withContext simulateOfflineImageObjects()
+                // 綁不到實體相機（模擬器 / 相機被占用）→ 回空清單。
+                // 絕不編造看到的東西：這是 AAC 溝通輔具，捏造的物品會被組進病人「說出口」的句子。
+                Log.w("VisionCaptureManager", "無法綁定相機，回傳空辨識結果（不編造）")
+                return@withContext emptyList()
             }
 
             // 4. 單格快照擷取與分析並寫入協程回復
@@ -139,25 +158,10 @@ class VisionCaptureManager(private val context: Context) {
                                 if (mediaImage != null) {
                                     val rotationDegrees = imageProxy.imageInfo.rotationDegrees
                                     val inputImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-                                    
-                                    // 餵入 ML Kit Object Detection
-                                    objectDetector.process(inputImage)
-                                        .addOnSuccessListener { detectedObjects ->
-                                            val tags = detectedObjects
-                                                .flatMap { obj ->
-                                                    obj.labels.map { "${it.text} (${"%.0f".format(it.confidence * 100)}%)" }
-                                                }
-                                                .distinct()
-                                                .take(3)
-                                            continuation.resume(tags)
-                                        }
-                                        .addOnFailureListener { exception ->
-                                            Log.e("VisionCaptureManager", "ML Kit model inference failed", exception)
-                                            continuation.resume(emptyList())
-                                        }
-                                        .addOnCompleteListener {
-                                            imageProxy.close()
-                                        }
+                                    analyzeImage(inputImage) { tags ->
+                                        imageProxy.close()
+                                        continuation.resume(tags)
+                                    }
                                 } else {
                                     imageProxy.close()
                                     continuation.resume(emptyList())
@@ -177,11 +181,11 @@ class VisionCaptureManager(private val context: Context) {
                 )
             }
 
-            return@withContext detectedTags.ifEmpty { simulateOfflineImageObjects() }
+            return@withContext detectedTags
 
         } catch (e: Exception) {
             Log.e("VisionCaptureManager", "Vision analysis pipe exception", e)
-            return@withContext simulateOfflineImageObjects()
+            return@withContext emptyList()
         } finally {
             // CRITICAL: 擷取程序一經了結，在此處 unbindAll()，關閉鏡頭，熄滅硬體電源指示，保證省電環保！
             withContext(Dispatchers.Main) {
@@ -195,6 +199,50 @@ class VisionCaptureManager(private val context: Context) {
         }
     }
 
+    /**
+     * 同一張影格同時跑「影像標籤」與「物件偵測」，合併去重後回傳。
+     * - 影像標籤（主力）：400+ 具體標籤，認得出杯子、藥、輪椅這類 AAC 真正需要的詞。
+     * - 物件偵測（補位）：只有 5 個粗類，但偶爾標籤器沒抓到時能補一兩個大方向。
+     * 兩邊都以信心度排序，只留 [MIN_LABEL_CONFIDENCE] 以上、最多 [MAX_TAGS] 個。
+     */
+    private fun analyzeImage(inputImage: InputImage, onDone: (List<String>) -> Unit) {
+        val results = java.util.Collections.synchronizedList(mutableListOf<Pair<String, Float>>())
+        val pending = java.util.concurrent.atomic.AtomicInteger(2)
+
+        fun finishOne() {
+            if (pending.decrementAndGet() == 0) {
+                val merged = results
+                    .filter { VisionLabelZh.isUseful(it.first) }
+                    .sortedByDescending { it.second }
+                    .map { (label, conf) -> VisionLabelZh.toZh(label) to conf }
+                    .distinctBy { it.first }
+                    .take(MAX_TAGS)
+                    .map { (label, conf) -> "$label (${"%.0f".format(conf * 100)}%)" }
+                onDone(merged)
+            }
+        }
+
+        imageLabeler.process(inputImage)
+            .addOnSuccessListener { labels ->
+                labels.forEach { results.add(it.text to it.confidence) }
+            }
+            .addOnFailureListener { e ->
+                Log.e("VisionCaptureManager", "ImageLabeling 失敗", e)
+            }
+            .addOnCompleteListener { finishOne() }
+
+        objectDetector.process(inputImage)
+            .addOnSuccessListener { objects ->
+                objects.flatMap { it.labels }
+                    .filter { it.confidence >= MIN_LABEL_CONFIDENCE }
+                    .forEach { results.add(it.text to it.confidence) }
+            }
+            .addOnFailureListener { e ->
+                Log.e("VisionCaptureManager", "ObjectDetection 失敗", e)
+            }
+            .addOnCompleteListener { finishOne() }
+    }
+
     private fun hasCameraPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -202,11 +250,9 @@ class VisionCaptureManager(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * 後備離線模擬產物：保證即便運行在 headless 雲端、無相機、或沒點選權限的特異環境，
-     * 程式一律維持最高可用性、不死機，完美反饋高可用 mock 串詞。
-     */
-    private fun simulateOfflineImageObjects(): List<String> {
-        return listOf("水杯", "看診單", "拐杖")
+    companion object {
+        /** 低於此信心度的標籤一律丟掉——寧可少講，也不要把猜的東西講進病人的句子。 */
+        private const val MIN_LABEL_CONFIDENCE = 0.6f
+        private const val MAX_TAGS = 5
     }
 }

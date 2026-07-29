@@ -79,11 +79,13 @@ class ReconstructionUseCase(
             // 全部通過，返回重組後的句子。
             // 收斂空白：任何引擎都可能吐出前後換行/多段空行，壓成單行避免輸出卡爆高一片空白；
             // 萬一壓完變空字串，退回 fallbackMessage，不讓卡片空白無內容。
-            val cleaned = preserveExplicitQuestions(vault.rawText, data.reconstructedText)
+            fun cleanOne(text: String) = preserveExplicitQuestions(vault.rawText, text)
                 .trim().replace(Regex("\\s*\\n\\s*"), " ")
                 .ifBlank { fallbackMessage }
+            // 「換一個」候選也要套同一套問句保留／收斂空白規則，切換時才不會漏字或跑版。
             data.copy(
-                reconstructedText = cleaned,
+                reconstructedText = cleanOne(data.reconstructedText),
+                alternatives = data.alternatives.map { it.copy(text = cleanOne(it.text)) },
                 inferenceTimeMs = elapsed
             )
         }

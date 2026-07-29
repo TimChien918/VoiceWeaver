@@ -62,6 +62,8 @@ fun VoiceWeaverScreen(
     val vault by viewModel.globalTagsVault.collectAsState()
     val reconstructionState by viewModel.reconstructionState.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val synthesisTakes by viewModel.synthesisTakes.collectAsState()
+    val currentTakeIndex by viewModel.currentTakeIndex.collectAsState()
     val intentImagePath by viewModel.intentImagePath.collectAsState()
     val intentImageLoading by viewModel.intentImageLoading.collectAsState()
 
@@ -1093,6 +1095,33 @@ fun VoiceWeaverScreen(
                                         fontWeight = FontWeight.Medium
                                     )
 
+                                    // AI 一次取樣 3 個候選句（自我一致性）；不只 1 個時給「換一個」按鈕，
+                                    // 原地循環切換，不必重新呼叫 LLM；三個都不對時最後一顆改叫「重新生成」，
+                                    // 按下去才會真的再呼叫一次 LLM 生出全新一批。
+                                    if (data.alternatives.size > 1) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        val isLastAlternative = data.alternativeIndex >= data.alternatives.size - 1
+                                        OutlinedButton(
+                                            onClick = { viewModel.cycleReconstructionAlternative() },
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.5f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                if (isLastAlternative) Icons.Default.Autorenew else Icons.Default.Refresh,
+                                                null, tint = neonCyan, modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                if (isLastAlternative)
+                                                    I18n.tr("三個都不對？重新生成")
+                                                else
+                                                    I18n.tr("換一個說法（%d/%d）").format(data.alternativeIndex + 1, data.alternatives.size),
+                                                fontSize = 12.sp, color = neonCyan, fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
                                     Spacer(modifier = Modifier.height(10.dp))
 
                                     // 候選句二次確認（醫師臨床建議）：AI 句禁止自動發聲，
@@ -1129,6 +1158,35 @@ fun VoiceWeaverScreen(
                                         }
                                     }
 
+                                    // GPT-SoVITS 聲音克隆一次合成 3 個版本（每次抽樣抑揚頓挫不同）；
+                                    // 唸的這句不對勁（口氣怪、發音糊）可以換一個版本，不用重新整句朗讀。
+                                    // 三個都不滿意時最後一顆改叫「重新合成」，按下去才會真的重打 3 個新版本。
+                                    if (settings.gptSovitEnabled && synthesisTakes.size > 1) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        val readyCount = synthesisTakes.count { it != null }
+                                        val isLastTake = currentTakeIndex >= synthesisTakes.size - 1
+                                        OutlinedButton(
+                                            onClick = { viewModel.cycleSpeechTake() },
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, neonGreen.copy(alpha = 0.5f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(
+                                                if (isLastTake) Icons.Default.Autorenew else Icons.Default.RecordVoiceOver,
+                                                null, tint = neonGreen, modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                if (isLastTake)
+                                                    I18n.tr("三個都不對？重新合成")
+                                                else
+                                                    I18n.tr("換一個聲音（%d/%d，%d 個已完成）")
+                                                        .format(currentTakeIndex + 1, synthesisTakes.size, readyCount),
+                                                fontSize = 12.sp, color = neonGreen, fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
                                     // 候選 2：AI 重組不符合意圖時，改唸原始輸入（不經 LLM）
                                     if (data.originalText.isNotBlank() && data.originalText != data.reconstructedText) {
                                         Spacer(modifier = Modifier.height(6.dp))
@@ -1151,7 +1209,28 @@ fun VoiceWeaverScreen(
                                         }
                                     }
 
+                                    // ── 次要動作收進「更多」──
+                                    // 病人當下真正要的只有「唸出來」跟「不對就換一個」；
+                                    // 練習發音／複製／分享／收藏／四國語言共 8 顆按鈕平常只是干擾，
+                                    // 收起來讓卡片一眼就看得完，要用時再展開。
                                     Spacer(modifier = Modifier.height(6.dp))
+                                    var showMoreActions by remember(data.reconstructedText) { mutableStateOf(false) }
+                                    TextButton(
+                                        onClick = { showMoreActions = !showMoreActions },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            if (showMoreActions) I18n.tr("收起") else I18n.tr("更多"),
+                                            fontSize = 12.sp, color = textMuted
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(
+                                            if (showMoreActions) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            null, tint = textMuted, modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    if (showMoreActions) {
                                     // 跳轉到獨立的「語音復健」分頁，並把這句帶過去
                                     OutlinedButton(
                                         onClick = { onPracticeSentence(data.reconstructedText) },
@@ -1217,6 +1296,7 @@ fun VoiceWeaverScreen(
                                             ) { Text(label, fontSize = 12.sp, color = neonCyan) }
                                         }
                                     }
+                                    }   // ← 「更多」展開區塊結束
                                 }
                             }
                         }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -101,6 +102,7 @@ fun SettingsScreen(
 
     // 雲端同步（Firebase）：Google 登入 launcher + 狀態
     val cloudUser by viewModel.cloudUser.collectAsState()
+    val cloudUserPhoto by viewModel.cloudUserPhoto.collectAsState()
     val cloudStatus by viewModel.cloudStatus.collectAsState()
     val googleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -160,6 +162,94 @@ fun SettingsScreen(
         }
     }
 
+    // 使用模式（嚴重程度）子頁
+    var showSeverity by remember { mutableStateOf(false) }
+    if (showSeverity) {
+        FloatingPanel(title = I18n.tr("使用模式"), icon = Icons.Default.Accessibility, onDismiss = { showSeverity = false }) {
+            Section(title = I18n.tr("依嚴重程度"), icon = Icons.Default.Accessibility, p = p.iosReadable) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    com.example.data.SeverityMode.values().forEach { m ->
+                        ChoiceRow(
+                            label = m.displayName,
+                            sub = m.description,
+                            selected = settings.severityMode == m,
+                            onClick = { viewModel.setSeverityMode(m) },
+                            p = p.iosReadable,
+                            icon = Icons.Filled.Accessible, iconTint = IosCategory.Blue
+                        )
+                    }
+                }
+            }
+        }
+    }
+    // 外觀（佈景主題 + 自訂背景）子頁
+    var showAppearance by remember { mutableStateOf(false) }
+    if (showAppearance) {
+        FloatingPanel(title = I18n.tr("外觀"), icon = Icons.Default.Palette, onDismiss = { showAppearance = false }) {
+            AppearanceSettingsPanel(
+                settings = settings,
+                onThemeChange = { viewModel.setTheme(it) },
+                onPickBackground = { backgroundPicker.launch(arrayOf("image/*")) },
+                onClearBackground = { viewModel.setCustomBackgroundUri("") },
+                p = p.iosReadable
+            )
+        }
+    }
+    // 效能與硬體（耗能模式 + RAM/模型偵測 + AI 推理來源）子頁
+    var showPerformance by remember { mutableStateOf(false) }
+    if (showPerformance) {
+        FloatingPanel(title = I18n.tr("效能與硬體"), icon = Icons.Default.Memory, onDismiss = { showPerformance = false }) {
+            PerformanceSettingsPanel(
+                settings = settings,
+                onPowerModeChange = { viewModel.setPowerMode(it) },
+                deviceRam = deviceRam,
+                deviceTier = deviceTier,
+                modelDownloadState = modelDownloadState,
+                onDownloadDefault = { viewModel.startModelDownload() },
+                onCancelDownload = { viewModel.cancelModelDownload() },
+                onCloudProviderChange = { viewModel.setCloudProvider(it) },
+                p = p.iosReadable
+            )
+        }
+    }
+    // 顯示與朗讀（語言 + 語速 + 字體大小）子頁
+    var showDisplay by remember { mutableStateOf(false) }
+    if (showDisplay) {
+        FloatingPanel(title = I18n.tr("顯示與朗讀"), icon = Icons.Default.RecordVoiceOver, onDismiss = { showDisplay = false }) {
+            DisplaySettingsPanel(
+                settings = settings,
+                onLanguageChange = { viewModel.setLanguage(it) },
+                onTtsRateChange = { viewModel.setTtsRate(it) },
+                onFontScaleChange = { viewModel.setFontScale(it) },
+                p = p.iosReadable
+            )
+        }
+    }
+    // 無障礙輔助功能（頭控 + AAC 確認卡）子頁
+    var showAccessibility by remember { mutableStateOf(false) }
+    if (showAccessibility) {
+        FloatingPanel(title = I18n.tr("無障礙輔助功能"), icon = Icons.Default.Accessibility, onDismiss = { showAccessibility = false }) {
+            AccessibilitySettingsPanel(
+                settings = settings,
+                eyeControlEnabled = settings.eyeControlEnabled,
+                onEyeControlToggle = { on ->
+                    if (on && !cameraPerm.status.isGranted) {
+                        pendingEyeEnable = true
+                        cameraPerm.launchPermissionRequest()
+                    } else {
+                        pendingEyeEnable = false
+                        viewModel.setEyeControlEnabled(on)
+                    }
+                },
+                onEyeControlModeChange = { viewModel.setEyeControlMode(it) },
+                onStartCalibration = onStartCalibration,
+                onAacIntentConfirmChange = { viewModel.setAacIntentConfirmEnabled(it) },
+                onAacIntentImageChange = { viewModel.setAacIntentImageEnabled(it) },
+                p = p.iosReadable
+            )
+        }
+    }
+
     val isLightTheme = (p.darkBg.red * 0.299f + p.darkBg.green * 0.587f + p.darkBg.blue * 0.114f) > 0.5f
     val iosScheme = if (isLightTheme) IosLightScheme else IosDarkScheme
     Scaffold(
@@ -170,6 +260,16 @@ fun SettingsScreen(
                     Text(
                         stringResource(R.string.title_settings),
                         fontSize = 22.sp, fontWeight = FontWeight.Bold, color = iosScheme.label
+                    )
+                },
+                actions = {
+                    AccountAvatarButton(
+                        cloudUser = cloudUser,
+                        cloudUserPhoto = cloudUserPhoto,
+                        cloudStatus = cloudStatus,
+                        onSignInGoogle = { googleLauncher.launch(com.example.ai.CloudSync.googleClient(context).signInIntent) },
+                        onSignInAnon = { viewModel.cloudSignInAnon() },
+                        onSignOut = { viewModel.cloudSignOut() }
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = iosScheme.bg)
@@ -183,343 +283,76 @@ fun SettingsScreen(
         ) {
             item { Spacer(Modifier.height(4.dp)) }
 
-            // 無障礙嚴重程度分級（醫師臨床建議）：中度/重度會隱藏複雜設定並套用大字體/識字卡預設
+            // 無障礙嚴重程度分級（醫師臨床建議）：中度/重度會隱藏複雜設定並套用大字體/識字卡預設。
+            // 收成單一導覽列（跟「外觀」同樣式）：右邊直接顯示目前選的模式，點進去才展開三個選項。
             item {
-                Section(title = I18n.tr("使用模式（依嚴重程度）"), icon = Icons.Default.Accessibility, p = p) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        com.example.data.SeverityMode.values().forEach { m ->
-                            ChoiceRow(
-                                label = m.displayName,
-                                sub = m.description,
-                                selected = settings.severityMode == m,
-                                onClick = { viewModel.setSeverityMode(m) },
-                                p = p
-                            )
-                        }
-                    }
+                Section(title = I18n.tr("使用模式"), icon = Icons.Default.Accessibility, p = p) {
+                    AdvancedEntryRow(
+                        label = I18n.tr("嚴重程度"),
+                        value = settings.severityMode.displayName,
+                        onClick = { showSeverity = true }, p = p,
+                        icon = Icons.Filled.Accessible, iconTint = IosCategory.Blue
+                    )
                 }
             }
 
-            // 雲端同步（Firebase）：與網頁版用同一個 Google 帳號共用金鑰/供應商
-            item {
-                Section(title = I18n.tr("雲端同步（與網頁共用）"), icon = Icons.Default.Cloud, p = p) {
-                    Text(
-                        cloudUser?.let { I18n.tr("已登入：%s").format(it) } ?: I18n.tr("未登入"),
-                        fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold
-                    )
-                    if (cloudStatus.isNotBlank()) {
-                        Text(cloudStatus, fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    if (cloudUser == null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            Button(
-                                onClick = { googleLauncher.launch(com.example.ai.CloudSync.googleClient(context).signInIntent) },
-                                colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
-                                modifier = Modifier.weight(1f)
-                            ) { Text(I18n.tr("Google 登入"), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                            OutlinedButton(onClick = { viewModel.cloudSignInAnon() }, modifier = Modifier.weight(1f)) {
-                                Text(I18n.tr("匿名"), fontSize = 12.sp)
-                            }
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = { viewModel.cloudSignOut() },
-                            border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(I18n.tr("登出"), fontSize = 12.sp, color = p.dangerRose) }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        I18n.tr("用同一個 Google 帳號登入手機與網頁，API 金鑰／供應商清單／Telegram 會自動雙向同步。"),
-                        fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
-                    )
-                }
-            }
+            // 雲端帳號狀態／登入登出已搬到右上角頭像選單（Chrome 風），不再佔頂層一張卡。
 
             // 中度/重度模式隱藏複雜設定，照護者可用「輕度」模式設定
             val showComplex = settings.severityMode == com.example.data.SeverityMode.Mild
 
-            // API 金鑰管理（浮動視窗）：集中管理所有 API 金鑰
-            if (showComplex) item {
-                Section(title = I18n.tr("API 金鑰管理"), icon = Icons.Default.Api, p = p) {
-                    AdvancedEntryRow(
-                        label = I18n.tr("管理所有 API 金鑰（LLM / 定位 / 通報）"),
-                        onClick = { showApiKeys = true }, p = p
-                    )
-                }
-            }
-
-            // ngrok 雲端通道（Colab）已併入「角色語音與雲端曲庫」的連接電腦頁（與本機/有線同一處）。
-
-            // 進階功能入口（資料治理）。
-            // ※ 故事訓練模式已搬到「語音復健」分頁，僅在開發者模式打開時顯示入口。
-            if (showComplex) item {
-                Section(title = I18n.tr("進階功能"), icon = Icons.Default.Settings, p = p) {
-                    AdvancedEntryRow(
-                        label = I18n.tr("進階設定（緊急聯絡人 / 清歷史 / 重置 / 匯入語料庫）"),
-                        onClick = { showExtended = true }, p = p
-                    )
-                }
-            }
-
-            // 視覺風格
+            // 一般：外觀／效能與硬體／顯示與朗讀／無障礙輔助功能，都收進子頁，頂層只留導覽列
             item {
-                Section(title = stringResource(R.string.section_theme), icon = Icons.Default.Palette, p = p) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AppTheme.values().forEach { t ->
-                            ChoiceRow(
-                                label = stringResource(themeLabelRes(t)),
-                                sub = stringResource(themeBlurbRes(t)),
-                                selected = settings.theme == t,
-                                onClick = { viewModel.setTheme(t) },
-                                p = p
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                Section(title = I18n.tr("自訂背景"), icon = Icons.Default.Image, p = p) {
-                    if (settings.customBackgroundUri.isNotBlank()) {
-                        AsyncImage(
-                            model = settings.customBackgroundUri,
-                            contentDescription = I18n.tr("自訂背景預覽"),
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(1.dp, p.neonCyan.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                Section(title = I18n.tr("一般"), icon = Icons.Default.Tune, p = p) {
+                    AdvancedEntryRow(
+                        label = I18n.tr("外觀"), onClick = { showAppearance = true }, p = p,
+                        icon = Icons.Filled.Palette, iconTint = IosCategory.Purple
+                    )
+                    AdvancedEntryRow(
+                        label = I18n.tr("效能與硬體"), onClick = { showPerformance = true }, p = p,
+                        icon = Icons.Filled.Bolt, iconTint = IosCategory.Green
+                    )
+                    AdvancedEntryRow(
+                        label = I18n.tr("顯示與朗讀"), onClick = { showDisplay = true }, p = p,
+                        icon = Icons.Filled.RecordVoiceOver, iconTint = IosCategory.Teal
+                    )
+                    AdvancedEntryRow(
+                        label = I18n.tr("無障礙輔助功能"), onClick = { showAccessibility = true }, p = p,
+                        icon = Icons.Filled.Accessible, iconTint = IosCategory.Blue
+                    )
+                    if (showComplex) {
+                        AdvancedEntryRow(
+                            label = I18n.tr("API 金鑰管理"), onClick = { showApiKeys = true }, p = p,
+                            icon = Icons.Filled.VpnKey, iconTint = IosCategory.Gray
                         )
-                        Spacer(Modifier.height(8.dp))
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(96.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(p.darkBg.copy(alpha = 0.35f))
-                                .border(1.dp, p.textMuted.copy(alpha = 0.22f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(I18n.tr("尚未設定背景"), fontSize = 12.sp, color = p.textMuted)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { backgroundPicker.launch(arrayOf("image/*")) },
-                            colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(I18n.tr("選擇背景"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.setCustomBackgroundUri("") },
-                            enabled = settings.customBackgroundUri.isNotBlank(),
-                            border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Delete, null, tint = p.dangerRose, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("刪除", fontSize = 12.sp, color = p.dangerRose)
-                        }
+                        AdvancedEntryRow(
+                            label = I18n.tr("進階設定"), onClick = { showExtended = true }, p = p,
+                            icon = Icons.Filled.Settings, iconTint = IosCategory.Gray
+                        )
+                        AdvancedEntryRow(
+                            label = I18n.tr("角色語音與雲端曲庫"), onClick = { showGptSovit = true }, p = p,
+                            icon = Icons.Filled.Mic, iconTint = IosCategory.Pink
+                        )
                     }
                 }
             }
 
-            // 耗能模式
-            item {
-                Section(title = stringResource(R.string.section_power), icon = Icons.Default.BatteryChargingFull, p = p) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PowerMode.values().forEach { mode ->
-                            ChoiceRow(
-                                label = stringResource(powerLabelRes(mode)),
-                                sub = stringResource(powerDescRes(mode)),
-                                selected = settings.powerMode == mode,
-                                onClick = { viewModel.setPowerMode(mode) },
-                                p = p
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                HardwareAllocationSection(
-                    deviceRam = deviceRam,
-                    deviceTier = deviceTier,
-                    modelDownloadState = modelDownloadState,
-                    onDownloadDefault = { viewModel.startModelDownload() },
-                    onCancelDownload = { viewModel.cancelModelDownload() },
-                    p = p
-                )
-            }
-
-            // 介面語言
-            item {
-                Section(title = stringResource(R.string.section_ai_provider), icon = Icons.Default.CloudQueue, p = p) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // 只留總開關：Auto＝用雲端（多供應商在「API 金鑰管理 → 文字 LLM」設定，自動備援）、
-                        // LocalOnly＝只用手機本機 AI。個別供應商不再用單選，改由清單管理。
-                        listOf(CloudProvider.Auto, CloudProvider.LocalOnly).forEach { provider ->
-                            ChoiceRow(
-                                label = stringResource(cloudLabelRes(provider)),
-                                sub = stringResource(cloudDescRes(provider)),
-                                selected = settings.cloudProvider == provider ||
-                                    (provider == CloudProvider.Auto && settings.cloudProvider !in listOf(CloudProvider.Auto, CloudProvider.LocalOnly)),
-                                onClick = { viewModel.setCloudProvider(provider) },
-                                p = p
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.cloud_note),
-                        fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
-                    )
-                }
-            }
-
-            // 介面語言
-            item {
-                Section(title = stringResource(R.string.section_language), icon = Icons.Default.Language, p = p) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AppLanguage.values().forEach { lang ->
-                            ChoiceRow(
-                                label = stringResource(langLabelRes(lang)),
-                                sub = lang.tag,
-                                selected = settings.language == lang,
-                                onClick = { viewModel.setLanguage(lang) },
-                                p = p
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.language_note),
-                        fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
-                    )
-                }
-            }
-
-            // 朗讀語速
-            item {
-                Section(title = stringResource(R.string.section_tts_rate), icon = Icons.Default.RecordVoiceOver, p = p) {
-                    SliderRow(
-                        valueLabel = "%.2fx".format(settings.ttsRate),
-                        value = settings.ttsRate,
-                        valueRange = 0.5f..1.5f,
-                        steps = 9,
-                        onChange = { viewModel.setTtsRate(it) },
-                        p = p
-                    )
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(stringResource(R.string.tts_rate_slow), fontSize = 10.sp, color = p.textMuted)
-                        Text(stringResource(R.string.tts_rate_fast), fontSize = 10.sp, color = p.textMuted)
-                    }
-                }
-            }
-
-            // 字體大小
-            item {
-                Section(title = stringResource(R.string.section_font_size), icon = Icons.Default.FormatSize, p = p) {
-                    SliderRow(
-                        valueLabel = "%.1fx".format(settings.fontScale),
-                        value = settings.fontScale,
-                        valueRange = 0.8f..1.8f,
-                        steps = 9,
-                        onChange = { viewModel.setFontScale(it) },
-                        p = p
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        FontPresetChip(I18n.tr("標準"), settings.fontScale, 1.0f, { viewModel.setFontScale(1.0f) }, Modifier.weight(1f), p)
-                        FontPresetChip(I18n.tr("大"), settings.fontScale, 1.25f, { viewModel.setFontScale(1.25f) }, Modifier.weight(1f), p)
-                        FontPresetChip(I18n.tr("特大"), settings.fontScale, 1.55f, { viewModel.setFontScale(1.55f) }, Modifier.weight(1f), p)
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(I18n.tr("字體倍率會套用到整個 App，包含 AAC、定位、設定與底部導覽。"), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
-                }
-            }
-
-            // 其他
+            // 其他：只留最常用的兩個開關，其餘搬進「一般」子頁
             item {
                 Section(title = stringResource(R.string.section_other), icon = Icons.Default.Tune, p = p) {
                     IosToggleRow(
                         title = stringResource(R.string.other_autosave_label),
                         sub = stringResource(R.string.other_autosave_sub),
                         checked = settings.autoSaveRehab,
-                        onChange = { viewModel.setAutoSaveRehab(it) }
+                        onChange = { viewModel.setAutoSaveRehab(it) },
+                        icon = Icons.Filled.SaveAlt, iconTint = IosCategory.Gray
                     )
-                    IosToggleRow(
-                        title = I18n.tr("鼻子頭控"),
-                        sub = I18n.tr("前鏡頭追蹤鼻子／頭部方向移動游標；轉頭瞄準、停留即選取（Camera Mouse 式頭控）。"),
-                        checked = settings.eyeControlEnabled,
-                        onChange = { on ->
-                            if (on && !cameraPerm.status.isGranted) {
-                                pendingEyeEnable = true
-                                cameraPerm.launchPermissionRequest()
-                            } else {
-                                pendingEyeEnable = false
-                                viewModel.setEyeControlEnabled(on)
-                            }
-                        }
-                    )
-                    if (settings.eyeControlEnabled) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            I18n.tr("轉頭移動游標，停在按鈕上約 1 秒會自動點擊（MediaPipe 鼻尖追蹤）。"),
-                            fontSize = 10.sp,
-                            color = p.textMuted,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Button(
-                            onClick = onStartCalibration,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(I18n.tr("重新置中（頭部歸零）"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Text(
-                            I18n.tr("先用自然舒適的姿勢正對螢幕，再按此鍵把目前頭部方向設為中央；之後轉頭即可移動游標。"),
-                            fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
                     IosToggleRow(
                         title = I18n.tr("本地端 AI 安全清理"),
-                        sub = I18n.tr("推理後清除快取、暫存與背景模型記憶體；不刪除模型檔。"),
+                        sub = I18n.tr("推理後自動清除快取與暫存。"),
                         checked = settings.autoLocalAiCleanup,
-                        onChange = { viewModel.setAutoLocalAiCleanup(it) }
-                    )
-                    IosToggleRow(
-                        title = I18n.tr("AAC 意圖確認大圖卡"),
-                        sub = I18n.tr("AI 組句後跳出大圖卡（emoji + 句子）讓不識字使用者 ✓/✗ 確認；關閉時改精簡列，但仍需點擊才朗讀。"),
-                        checked = settings.aacIntentConfirmEnabled,
-                        onChange = { viewModel.setAacIntentConfirmEnabled(it) }
-                    )
-                    IosToggleRow(
-                        title = I18n.tr("意圖卡 AI 生成專屬圖"),
-                        sub = I18n.tr("確認卡額外用 AI 生圖畫出意圖的專屬圖片（不識字更好懂）。會花幾秒、不擋確認鈕；建議搭配本機電腦生圖。"),
-                        checked = settings.aacIntentImageEnabled,
-                        onChange = { viewModel.setAacIntentImageEnabled(it) }
-                    )
-                }
-            }
-
-            if (showComplex) item {
-                Section(title = I18n.tr("角色語音"), icon = Icons.Default.GraphicEq, p = p) {
-                    AdvancedEntryRow(
-                        label = I18n.tr("🎙 角色語音與雲端曲庫（連接電腦／Colab、GPT-SoVITS 匯入）"),
-                        onClick = { showGptSovit = true }, p = p
+                        onChange = { viewModel.setAutoLocalAiCleanup(it) },
+                        icon = Icons.Filled.AutoFixHigh, iconTint = IosCategory.Gray
                     )
                 }
             }
@@ -592,20 +425,265 @@ private fun FontPresetChip(
             Icon(Icons.Default.FormatSize, null, modifier = Modifier.size(14.dp))
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = p.neonCyan.copy(alpha = 0.18f),
-            selectedLabelColor = p.textLight,
-            selectedLeadingIconColor = p.neonCyan,
-            labelColor = p.textMuted,
-            iconColor = p.textMuted
+            selectedContainerColor = currentIosScheme().blue.copy(alpha = 0.16f),
+            selectedLabelColor = currentIosScheme().blue,
+            selectedLeadingIconColor = currentIosScheme().blue,
+            labelColor = currentIosScheme().secondary,
+            iconColor = currentIosScheme().secondary
         ),
         border = FilterChipDefaults.filterChipBorder(
             enabled = true,
             selected = selected,
-            borderColor = p.textMuted.copy(alpha = 0.25f),
-            selectedBorderColor = p.neonCyan
+            borderColor = currentIosScheme().separator,
+            selectedBorderColor = Color.Transparent
         ),
         modifier = modifier.heightIn(min = 36.dp)
     )
+}
+
+/** 「外觀」子頁：佈景主題選色 + 自訂背景圖片。從頂層「一般」卡片的 chevron 進入。 */
+@Composable
+private fun AppearanceSettingsPanel(
+    settings: AppSettings,
+    onThemeChange: (AppTheme) -> Unit,
+    onPickBackground: () -> Unit,
+    onClearBackground: () -> Unit,
+    p: com.example.ui.theme.AppPalette
+) {
+    val iosC = currentIosScheme()
+    Section(title = stringResource(R.string.section_theme), icon = Icons.Default.Palette, p = p) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AppTheme.values().forEach { t ->
+                ChoiceRow(
+                    label = stringResource(themeLabelRes(t)),
+                    sub = stringResource(themeBlurbRes(t)),
+                    selected = settings.theme == t,
+                    onClick = { onThemeChange(t) },
+                    p = p,
+                    icon = Icons.Filled.Palette, iconTint = IosCategory.Purple
+                )
+            }
+        }
+    }
+    Section(title = I18n.tr("自訂背景"), icon = Icons.Default.Image, p = p) {
+        if (settings.customBackgroundUri.isNotBlank()) {
+            AsyncImage(
+                model = settings.customBackgroundUri,
+                contentDescription = I18n.tr("自訂背景預覽"),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            )
+            Spacer(Modifier.height(10.dp))
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iosC.bg),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(I18n.tr("尚未設定背景"), fontSize = 13.sp, color = iosC.secondary)
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        Button(
+            onClick = onPickBackground,
+            colors = ButtonDefaults.buttonColors(containerColor = iosC.blue),
+            shape = RoundedCornerShape(10.dp),
+            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(I18n.tr("選擇背景"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
+        if (settings.customBackgroundUri.isNotBlank()) {
+            IosTextActionRow(
+                label = I18n.tr("刪除背景"),
+                tint = iosC.red,
+                onClick = onClearBackground
+            )
+        }
+    }
+}
+
+/** 「效能與硬體」子頁：耗能模式 + RAM/模型偵測 + AI 推理來源。從頂層「一般」卡片的 chevron 進入。 */
+@Composable
+private fun PerformanceSettingsPanel(
+    settings: AppSettings,
+    onPowerModeChange: (PowerMode) -> Unit,
+    deviceRam: Double,
+    deviceTier: DeviceTier,
+    modelDownloadState: ModelDownloadState,
+    onDownloadDefault: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onCloudProviderChange: (CloudProvider) -> Unit,
+    p: com.example.ui.theme.AppPalette
+) {
+    Section(title = stringResource(R.string.section_power), icon = Icons.Default.BatteryChargingFull, p = p) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            PowerMode.values().forEach { mode ->
+                ChoiceRow(
+                    label = stringResource(powerLabelRes(mode)),
+                    sub = stringResource(powerDescRes(mode)),
+                    selected = settings.powerMode == mode,
+                    onClick = { onPowerModeChange(mode) },
+                    p = p,
+                    icon = Icons.Filled.BatteryChargingFull, iconTint = IosCategory.Green
+                )
+            }
+        }
+    }
+    HardwareAllocationSection(
+        deviceRam = deviceRam,
+        deviceTier = deviceTier,
+        modelDownloadState = modelDownloadState,
+        onDownloadDefault = onDownloadDefault,
+        onCancelDownload = onCancelDownload,
+        p = p
+    )
+    Section(title = stringResource(R.string.section_ai_provider), icon = Icons.Default.CloudQueue, p = p) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // 只留總開關：Auto＝用雲端（多供應商在「API 金鑰管理 → 文字 LLM」設定，自動備援）、
+            // LocalOnly＝只用手機本機 AI。個別供應商不再用單選，改由清單管理。
+            listOf(CloudProvider.Auto, CloudProvider.LocalOnly).forEach { provider ->
+                ChoiceRow(
+                    label = stringResource(cloudLabelRes(provider)),
+                    sub = stringResource(cloudDescRes(provider)),
+                    selected = settings.cloudProvider == provider ||
+                        (provider == CloudProvider.Auto && settings.cloudProvider !in listOf(CloudProvider.Auto, CloudProvider.LocalOnly)),
+                    onClick = { onCloudProviderChange(provider) },
+                    p = p,
+                    icon = Icons.Filled.SmartToy, iconTint = IosCategory.Indigo
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.cloud_note),
+            fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
+        )
+    }
+}
+
+/** 「顯示與朗讀」子頁：介面語言 + 朗讀語速 + 字體大小。從頂層「一般」卡片的 chevron 進入。 */
+@Composable
+private fun DisplaySettingsPanel(
+    settings: AppSettings,
+    onLanguageChange: (AppLanguage) -> Unit,
+    onTtsRateChange: (Float) -> Unit,
+    onFontScaleChange: (Float) -> Unit,
+    p: com.example.ui.theme.AppPalette
+) {
+    Section(title = stringResource(R.string.section_language), icon = Icons.Default.Language, p = p) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AppLanguage.values().forEach { lang ->
+                ChoiceRow(
+                    label = stringResource(langLabelRes(lang)),
+                    sub = lang.tag,
+                    selected = settings.language == lang,
+                    onClick = { onLanguageChange(lang) },
+                    p = p,
+                    icon = Icons.Filled.Language, iconTint = IosCategory.Teal
+                )
+            }
+        }
+    }
+    Section(title = stringResource(R.string.section_tts_rate), icon = Icons.Default.RecordVoiceOver, p = p) {
+        SliderRow(
+            valueLabel = "%.2fx".format(settings.ttsRate),
+            value = settings.ttsRate,
+            valueRange = 0.5f..1.5f,
+            steps = 9,
+            onChange = onTtsRateChange,
+            p = p
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(stringResource(R.string.tts_rate_slow), fontSize = 10.sp, color = p.textMuted)
+            Text(stringResource(R.string.tts_rate_fast), fontSize = 10.sp, color = p.textMuted)
+        }
+    }
+    Section(title = stringResource(R.string.section_font_size), icon = Icons.Default.FormatSize, p = p) {
+        SliderRow(
+            valueLabel = "%.1fx".format(settings.fontScale),
+            value = settings.fontScale,
+            valueRange = 0.8f..1.8f,
+            steps = 9,
+            onChange = onFontScaleChange,
+            p = p
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            FontPresetChip(I18n.tr("標準"), settings.fontScale, 1.0f, { onFontScaleChange(1.0f) }, Modifier.weight(1f), p)
+            FontPresetChip(I18n.tr("大"), settings.fontScale, 1.25f, { onFontScaleChange(1.25f) }, Modifier.weight(1f), p)
+            FontPresetChip(I18n.tr("特大"), settings.fontScale, 1.55f, { onFontScaleChange(1.55f) }, Modifier.weight(1f), p)
+        }
+    }
+}
+
+/** 「無障礙輔助功能」子頁：鼻子頭控（含游標模式、校正）+ AAC 確認卡兩個開關。從頂層「一般」卡片的 chevron 進入。 */
+@Composable
+private fun AccessibilitySettingsPanel(
+    settings: AppSettings,
+    eyeControlEnabled: Boolean,
+    onEyeControlToggle: (Boolean) -> Unit,
+    onEyeControlModeChange: (EyeControlMode) -> Unit,
+    onStartCalibration: () -> Unit,
+    onAacIntentConfirmChange: (Boolean) -> Unit,
+    onAacIntentImageChange: (Boolean) -> Unit,
+    p: com.example.ui.theme.AppPalette
+) {
+    val iosC = currentIosScheme()
+    Section(title = I18n.tr("鼻子頭控"), icon = Icons.Default.Accessibility, p = p) {
+        IosToggleRow(
+            title = I18n.tr("啟用鼻子頭控"),
+            sub = I18n.tr("轉頭移動游標，停留即選取。"),
+            checked = eyeControlEnabled,
+            onChange = onEyeControlToggle,
+            icon = Icons.Filled.Face, iconTint = IosCategory.Blue
+        )
+        if (eyeControlEnabled) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                EyeControlMode.values().forEach { mode ->
+                    ChoiceRow(
+                        label = mode.displayName,
+                        sub = "",
+                        selected = settings.eyeControlMode == mode,
+                        onClick = { onEyeControlModeChange(mode) },
+                        p = p,
+                        icon = Icons.Filled.GpsFixed, iconTint = IosCategory.Blue
+                    )
+                }
+            }
+            Button(
+                onClick = onStartCalibration,
+                colors = ButtonDefaults.buttonColors(containerColor = iosC.blue),
+                shape = RoundedCornerShape(10.dp),
+                elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(I18n.tr("重新置中（頭部歸零）"), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+    Section(title = I18n.tr("AAC 確認卡"), icon = Icons.Default.GraphicEq, p = p) {
+        IosToggleRow(
+            title = I18n.tr("意圖確認大圖卡"),
+            sub = I18n.tr("組句後跳出大圖卡供確認。"),
+            checked = settings.aacIntentConfirmEnabled,
+            onChange = onAacIntentConfirmChange,
+            icon = Icons.Filled.Layers, iconTint = IosCategory.Indigo
+        )
+        IosToggleRow(
+            title = I18n.tr("AI 生成專屬圖"),
+            sub = I18n.tr("需搭配電腦生圖服務。"),
+            checked = settings.aacIntentImageEnabled,
+            onChange = onAacIntentImageChange,
+            icon = Icons.Filled.PhotoLibrary, iconTint = IosCategory.Purple
+        )
+    }
 }
 
 @Composable
@@ -617,11 +695,12 @@ private fun HardwareAllocationSection(
     onCancelDownload: () -> Unit,
     p: com.example.ui.theme.AppPalette
 ) {
+    val iosC = currentIosScheme()
     Section(title = stringResource(R.string.main_sec_hardware), icon = Icons.Default.Memory, p = p) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        IosCell(icon = Icons.Filled.Memory, iconTint = IosCategory.Teal) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.main_ram_label), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-                Text(stringResource(R.string.main_ram_size, deviceRam), fontSize = 11.sp, color = p.textMuted)
+                Text(stringResource(R.string.main_ram_label), fontSize = 16.sp, color = iosC.label)
+                Text(stringResource(R.string.main_ram_size, deviceRam), fontSize = 13.sp, color = iosC.secondary)
             }
             TierBadge(deviceTier, p)
         }
@@ -685,24 +764,21 @@ private fun GptSovitDeveloperPanel(
     appLangTag: String = "zh-TW",
     p: com.example.ui.theme.AppPalette
 ) {
+    // 拿掉外層的青色描邊底框：這一層本來就已經在 FloatingPanel 裡面，
+    // 再套一個有色邊框等於卡中卡中卡，視覺很擠也很胖。改成平的、只靠留白分段。
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(p.neonCyan.copy(alpha = 0.08f))
-            .border(1.dp, p.neonCyan.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
-            .padding(12.dp),
+            .background(p.surface)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.ArrowBack, I18n.tr("關閉"), tint = p.textMuted, modifier = Modifier.size(18.dp))
-            }
-            Icon(Icons.Default.GraphicEq, null, tint = p.neonCyan, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
+            // 面板本身已有返回鍵，這裡不再重複一顆
             Column(modifier = Modifier.weight(1f)) {
-                Text(I18n.tr("GPT-SoVITS 實驗語音"), fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
-                Text(I18n.tr("可依句子自動切換中英文樣本。"), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                Text(I18n.tr("GPT-SoVITS 實驗語音"), fontSize = 16.sp, color = p.textLight)
+                Text(I18n.tr("可依句子自動切換中英文樣本。"), fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp)
             }
             // 聲紋授權（醫師臨床建議）：未勾選知情同意前不可啟用語音克隆
             var showConsentDialog by remember { mutableStateOf(false) }
@@ -1807,7 +1883,9 @@ private fun GptSovitSection(
         }
     }
 
-    Section(title = I18n.tr("🎙 角色語音與雲端曲庫"), icon = Icons.Default.GraphicEq, p = p) {
+    // 不再包一層 Section：FloatingPanel 頂部已經有「角色語音與雲端曲庫」標題，
+    // 再包一層等於同一個標題連出現三次（面板列 → Section → 內層卡），純粹浪費垂直空間。
+    Column(modifier = Modifier.fillMaxWidth()) {
         importDialog?.let { state ->
             GptSovitImportDialog(
                 state = state,
@@ -1927,11 +2005,10 @@ private fun TierBadge(tier: DeviceTier, p: com.example.ui.theme.AppPalette) {
     val color = tierColor(tier, p)
     Box(
         modifier = Modifier.clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.14f))
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Text(tier.name, color = color, fontSize = 11.sp, fontWeight = FontWeight.Black)
+        Text(tier.name, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1945,7 +2022,7 @@ private fun StatusRow(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-            .background(color.copy(alpha = 0.15f))
+            .background(color.copy(alpha = 0.12f))
             .padding(horizontal = 12.dp, vertical = 9.dp)
     ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(15.dp))
@@ -1961,71 +2038,81 @@ private fun ModelStatusBlock(
     onCancel: () -> Unit,
     p: com.example.ui.theme.AppPalette
 ) {
+    val iosC = currentIosScheme()
     when (state) {
         is ModelDownloadState.Downloading -> {
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                    .background(p.auraAmber.copy(alpha = 0.08f))
-                    .border(1.dp, p.auraAmber.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                    .background(IosCategory.Orange.copy(alpha = 0.10f))
                     .padding(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.main_dl_downloading), fontSize = 11.sp, color = p.auraAmber, fontWeight = FontWeight.Bold)
-                    Text("${state.progress}%", fontSize = 11.sp, color = p.auraAmber, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.main_dl_downloading), fontSize = 11.sp, color = IosCategory.Orange, fontWeight = FontWeight.Bold)
+                    Text("${state.progress}%", fontSize = 11.sp, color = IosCategory.Orange, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { state.progress / 100f },
                     modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
-                    color = p.auraAmber,
-                    trackColor = p.textMuted.copy(alpha = 0.18f)
+                    color = IosCategory.Orange,
+                    trackColor = iosC.separator
                 )
                 if (state.totalMb > 0) {
                     Spacer(Modifier.height(4.dp))
-                    Text("${state.downloadedMb} MB / ${state.totalMb} MB", fontSize = 10.sp, color = p.textMuted)
+                    Text("${state.downloadedMb} MB / ${state.totalMb} MB", fontSize = 10.sp, color = iosC.secondary)
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.main_dl_cancel), fontSize = 11.sp, color = p.dangerRose)
+                    Text(stringResource(R.string.main_dl_cancel), fontSize = 11.sp, color = iosC.red)
                 }
             }
         }
-        is ModelDownloadState.Ready -> StatusRow(I18n.tr("本地 AI 模型已就緒"), Icons.Default.CheckCircle, p.neonGreen, p)
+        is ModelDownloadState.Ready -> StatusRow(I18n.tr("本地 AI 模型已就緒"), Icons.Default.CheckCircle, iosC.green, p)
         is ModelDownloadState.Error -> {
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                    .background(p.dangerRose.copy(alpha = 0.08f))
-                    .border(1.dp, p.dangerRose.copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                    .background(iosC.red.copy(alpha = 0.10f))
                     .padding(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ErrorOutline, null, tint = p.dangerRose, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Default.ErrorOutline, null, tint = iosC.red, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.main_dl_failed), fontSize = 11.sp, color = p.dangerRose, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.main_dl_failed), fontSize = 11.sp, color = iosC.red, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(state.message, fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                Text(state.message, fontSize = 10.sp, color = iosC.secondary, lineHeight = 14.sp)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onDownloadDefault, colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan), modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.main_dl_retry), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = onDownloadDefault,
+                    colors = ButtonDefaults.buttonColors(containerColor = iosC.blue),
+                    shape = RoundedCornerShape(10.dp),
+                    elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.main_dl_retry), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
         is ModelDownloadState.NotAvailable -> {
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                    .background(p.neonGreen.copy(alpha = 0.07f))
-                    .border(1.dp, p.neonGreen.copy(alpha = 0.22f), RoundedCornerShape(10.dp))
+                    .background(iosC.green.copy(alpha = 0.10f))
                     .padding(10.dp)
             ) {
-                Text(stringResource(R.string.main_rule_engine_running), fontSize = 11.sp, color = p.neonGreen, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.main_rule_engine_running), fontSize = 11.sp, color = iosC.green, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
-                Text(state.instructions, fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                Text(state.instructions, fontSize = 10.sp, color = iosC.secondary, lineHeight = 14.sp)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onDownloadDefault, colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onDownloadDefault,
+                    colors = ButtonDefaults.buttonColors(containerColor = iosC.blue),
+                    shape = RoundedCornerShape(10.dp),
+                    elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(Icons.Default.Download, null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.main_dl_button), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.main_dl_button), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -2034,28 +2121,75 @@ private fun ModelStatusBlock(
 }
 
 private fun tierColor(tier: DeviceTier, p: com.example.ui.theme.AppPalette) = when (tier) {
-    DeviceTier.HIGH_END -> p.neonGreen
-    DeviceTier.MID_TIER -> p.auraAmber
-    DeviceTier.LOW_END -> p.dangerRose
+    DeviceTier.HIGH_END -> IosCategory.Green
+    DeviceTier.MID_TIER -> IosCategory.Orange
+    DeviceTier.LOW_END -> IosCategory.Red
 }
 
 // ─── iOS「設定」風格配色（蘋果設計美學，淺色 / 深色兩套，隨主題切換）───
 private data class IosScheme(
     val bg: Color, val card: Color, val label: Color, val secondary: Color,
-    val separator: Color, val blue: Color, val green: Color, val chevron: Color
+    val separator: Color, val blue: Color, val green: Color, val red: Color,
+    val orange: Color, val chevron: Color
 )
 
 private val IosDarkScheme = IosScheme(
     bg = Color(0xFF000000), card = Color(0xFF1C1C1E), label = Color(0xFFFFFFFF),
     secondary = Color(0xFF98989F), separator = Color(0xFF38383A),
-    blue = Color(0xFF0A84FF), green = Color(0xFF30D158), chevron = Color(0xFF5B5B60)
+    blue = Color(0xFF0A84FF), green = Color(0xFF30D158), red = Color(0xFFFF453A),
+    orange = Color(0xFFFF9F0A), chevron = Color(0xFF5B5B60)
 )
 
 private val IosLightScheme = IosScheme(
     bg = Color(0xFFF2F2F7), card = Color(0xFFFFFFFF), label = Color(0xFF000000),
     secondary = Color(0xFF6C6C70), separator = Color(0xFFC6C6C8),
-    blue = Color(0xFF007AFF), green = Color(0xFF34C759), chevron = Color(0xFFBFBFC4)
+    blue = Color(0xFF007AFF), green = Color(0xFF34C759), red = Color(0xFFFF3B30),
+    orange = Color(0xFFFF9500), chevron = Color(0xFFBFBFC4)
 )
+
+/**
+ * 分類圖示色彩對照（延伸 Apple 系統色板，語意固定不隨淺/深色主題切換——
+ * 色塊本身是實色背景＋白色圖示，在白卡或黑卡上都夠對比）。
+ */
+private object IosCategory {
+    val Blue = Color(0xFF007AFF)
+    val Green = Color(0xFF34C759)
+    val Red = Color(0xFFFF3B30)
+    val Orange = Color(0xFFFF9500)
+    val Purple = Color(0xFFAF52DE)
+    val Teal = Color(0xFF30B0C7)
+    val Pink = Color(0xFFFF2D55)
+    val Indigo = Color(0xFF5856D6)
+    val Gray = Color(0xFF8E8E93)
+}
+
+/**
+ * iOS 風彩色圓角圖示方塊（分類辨識用，取代個別發光邊框）。
+ *
+ * 用向量圖示（Material Icons）而不是 emoji：emoji 由系統字型渲染，
+ * 各家 Android 長得不一樣、也吃不到白色 tint；向量圖無限縮放不糊、
+ * 顏色可控，跟 iOS SF Symbols 的呈現一致。
+ */
+@Composable
+private fun IconChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    size: androidx.compose.ui.unit.Dp = 28.dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.25f))
+            .background(tint),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon, null,
+            tint = Color.White,
+            modifier = Modifier.size(size * 0.62f)
+        )
+    }
+}
 
 /**
  * 依「當前 LocalAppPalette 的亮度」推算 iOS 配色：
@@ -2090,7 +2224,7 @@ private fun Section(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(c.card)
                 .padding(horizontal = 16.dp, vertical = 6.dp)
         ) {
@@ -2099,9 +2233,11 @@ private fun Section(
     }
 }
 
-/** iOS 列容器：上下 11、最小 44dp（左右內縮由 Section 提供）。 */
+/** iOS 列容器：上下 11、最小 44dp（左右內縮由 Section 提供）。icon 非空時左側加彩色圖示方塊。 */
 @Composable
 private fun IosCell(
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconTint: Color = IosCategory.Gray,
     onClick: (() -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
@@ -2112,8 +2248,13 @@ private fun IosCell(
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .heightIn(min = 44.dp)
             .padding(vertical = 11.dp),
-        content = content
-    )
+    ) {
+        if (icon != null) {
+            IconChip(icon, iconTint)
+            Spacer(Modifier.width(11.dp))
+        }
+        content()
+    }
 }
 
 @Composable
@@ -2122,12 +2263,14 @@ private fun ChoiceRow(
     sub: String,
     selected: Boolean,
     onClick: () -> Unit,
-    p: com.example.ui.theme.AppPalette
+    p: com.example.ui.theme.AppPalette,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconTint: Color = IosCategory.Gray
 ) {
     val c = currentIosScheme()
-    IosCell(onClick = onClick) {
+    IosCell(icon = icon, iconTint = iconTint, onClick = onClick) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, fontSize = 16.sp, color = c.label)
+            Text(label, fontSize = 17.sp, color = c.label)
             if (sub.isNotBlank()) {
                 Text(sub, fontSize = 13.sp, color = c.secondary, lineHeight = 17.sp)
             }
@@ -2135,6 +2278,87 @@ private fun ChoiceRow(
         if (selected) {
             Spacer(Modifier.width(10.dp))
             Icon(Icons.Default.Check, null, tint = c.blue, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** 純文字動作列（Google 登入／登出／刪除背景這類無圖示的動作），indent 對齊上方有圖示的列。 */
+@Composable
+private fun IosTextActionRow(
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+    indent: Boolean = false
+) {
+    IosCell(onClick = onClick) {
+        if (indent) Spacer(Modifier.width(39.dp))
+        Text(label, fontSize = 17.sp, color = tint, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * 右上角帳號頭像（Chrome 風）：只顯示圓形頭像，不預先露出名字；
+ * 點開才是下拉選單，裡面才有名字／狀態／登出，或未登入時的登入選項。
+ */
+@Composable
+private fun AccountAvatarButton(
+    cloudUser: String?,
+    cloudUserPhoto: String?,
+    cloudStatus: String,
+    onSignInGoogle: () -> Unit,
+    onSignInAnon: () -> Unit,
+    onSignOut: () -> Unit
+) {
+    val iosC = currentIosScheme()
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(40.dp)) {
+            if (!cloudUserPhoto.isNullOrBlank()) {
+                AsyncImage(
+                    model = cloudUserPhoto,
+                    contentDescription = I18n.tr("帳號"),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(30.dp).clip(CircleShape)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(if (cloudUser != null) iosC.blue else iosC.separator),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Person, null,
+                        tint = if (cloudUser != null) Color.White else iosC.secondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (cloudUser != null) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).widthIn(min = 180.dp)) {
+                    Text(cloudUser, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = iosC.label)
+                    if (cloudStatus.isNotBlank()) {
+                        Text(cloudStatus, fontSize = 12.sp, color = iosC.secondary, lineHeight = 16.sp)
+                    }
+                }
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(I18n.tr("登出"), color = iosC.red) },
+                    onClick = { expanded = false; onSignOut() }
+                )
+            } else {
+                DropdownMenuItem(
+                    text = { Text(I18n.tr("Google 登入")) },
+                    onClick = { expanded = false; onSignInGoogle() }
+                )
+                DropdownMenuItem(
+                    text = { Text(I18n.tr("以訪客身份繼續")) },
+                    onClick = { expanded = false; onSignInAnon() }
+                )
+            }
         }
     }
 }
@@ -2167,11 +2391,19 @@ private fun SliderRow(
 private fun AdvancedEntryRow(
     label: String,
     onClick: () -> Unit,
-    p: com.example.ui.theme.AppPalette
+    p: com.example.ui.theme.AppPalette,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconTint: Color = IosCategory.Gray,
+    /** iOS 慣例：目前值以灰字顯示在 chevron 左邊（例如「嚴重程度  輕度 ›」）。 */
+    value: String? = null
 ) {
     val c = currentIosScheme()
-    IosCell(onClick = onClick) {
-        Text(label, color = c.label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+    IosCell(icon = icon, iconTint = iconTint, onClick = onClick) {
+        Text(label, color = c.label, fontSize = 17.sp, modifier = Modifier.weight(1f))
+        if (!value.isNullOrBlank()) {
+            Text(value, color = c.secondary, fontSize = 17.sp)
+            Spacer(Modifier.width(6.dp))
+        }
         Text("›", color = c.chevron, fontSize = 20.sp)
     }
 }
@@ -2182,12 +2414,14 @@ private fun IosToggleRow(
     title: String,
     sub: String,
     checked: Boolean,
-    onChange: (Boolean) -> Unit
+    onChange: (Boolean) -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconTint: Color = IosCategory.Gray
 ) {
     val c = currentIosScheme()
-    IosCell {
+    IosCell(icon = icon, iconTint = iconTint) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 16.sp, color = c.label)
+            Text(title, fontSize = 17.sp, color = c.label)
             if (sub.isNotBlank()) Text(sub, fontSize = 13.sp, color = c.secondary, lineHeight = 17.sp)
         }
         Spacer(Modifier.width(10.dp))

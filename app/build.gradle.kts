@@ -113,6 +113,9 @@ dependencies {
   implementation(libs.okhttp)
   implementation(libs.play.services.location)
   implementation(libs.play.services.mlkit.`object`.detection)
+  // 影像標籤（400+ 具體標籤）：物件偵測的預設分類器只有 5 個粗類（Fashion/Food/Home/Place/Plant），
+  // 認不出「水杯」「藥袋」這種具體物品；改用 ImageLabeling 才有辦法給 AAC 有用的詞。
+  implementation(libs.mlkit.image.labeling)
   implementation("com.google.mlkit:barcode-scanning:17.3.0")
   // Vosk 離線語音辨識（純裝置端 AI ASR，免帳號、免 Google 語言包）
   implementation("com.alphacephei:vosk-android:0.3.75")

@@ -10,6 +10,9 @@ import com.example.data.LlmApiStyle
 import com.example.data.LlmDefaults
 import com.example.data.LlmProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.MediaType.Companion.toMediaType
@@ -69,20 +72,38 @@ class HybridInferenceEngine(
 
         val start = System.currentTimeMillis()
         return try {
-            val (selected, cot) = tryCloudWithFailover(buildReconstructPrompt(vault), timeoutMs = 16_000) { raw ->
-                val parsed = parseCoT(raw)
-                if (parsed.reconstructed.isBlank()) error("雲端模型回傳空句子")
-                parsed
-            }
+            // 自我一致性（self-consistency）：同一份碎詞平行取樣 N 次（略提高溫度求多樣性），
+            // 用多數決挑最一致的重組結果，比單次呼叫更抗雲端模型偶發幻覺/失手。
+            // 平行送出，總延遲仍受單次 16s 逾時限制，不會疊加成 N 倍等待。
+            val basePrompt = buildReconstructPrompt(vault)
+            val samplePrompt = basePrompt.copy(temperature = RECONSTRUCT_SAMPLE_TEMPERATURE)
+            val samples = coroutineScope {
+                (1..RECONSTRUCT_SAMPLES).map {
+                    async {
+                        runCatching {
+                            tryCloudWithFailover(samplePrompt, timeoutMs = 16_000) { raw ->
+                                val parsed = parseCoT(raw)
+                                if (parsed.reconstructed.isBlank()) error("雲端模型回傳空句子")
+                                parsed
+                            }
+                        }.getOrNull()
+                    }
+                }.awaitAll()
+            }.filterNotNull()
+
+            if (samples.isEmpty()) error("雲端模型多次取樣皆失敗")
+
+            val ranked = rankBySelfConsistency(samples)
+            val (selected, top) = ranked.first()
+            val consensusNote = if (samples.size > 1) "自我一致性 ${samples.size} 取樣" else "單次取樣（其餘取樣失敗）"
             Result.success(
                 ReconstructedData(
                     originalText = vault.rawText,
-                    // 雲端 LLM 常回傳前後夾帶換行/空白（甚至多段空行），不清掉會在輸出卡撐出
-                    // 大片空白、把句子推到底部。壓成單行：trim + 把連續換行/空白收斂成單一空格。
-                    reconstructedText = cot.reconstructed.trim().replace(Regex("\\s*\\n\\s*"), " "),
-                    confidence = cot.confidence,
-                    engineUsed = "${selected.label}（本地備援待命）",
-                    inferenceTimeMs = System.currentTimeMillis() - start
+                    reconstructedText = top.text,
+                    confidence = top.confidence,
+                    engineUsed = "${selected.label}（$consensusNote／本地備援待命）",
+                    inferenceTimeMs = System.currentTimeMillis() - start,
+                    alternatives = ranked.map { it.second }
                 )
             )
         } catch (e: Exception) {
@@ -91,6 +112,31 @@ class HybridInferenceEngine(
                 local.copy(engineUsed = "${local.engineUsed} (Cloud fallback: ${provider.displayName})")
             }
         }
+    }
+
+    /**
+     * 多數決排名：把 N 次取樣依「正規化後的重組文字」分組去重，依票數（多數決）、
+     * 平手再比組內平均信心度排序，最多回傳 3 個候選給「換一個」UI 循環——
+     * 第一名＝目前顯示的句子；若三次都各說各話（無共識），退化成單純依信心度排序的
+     * best-of-3，也不會比只呼叫一次差。
+     */
+    private fun rankBySelfConsistency(
+        samples: List<Pair<LlmApiEntry, CoTParsed>>
+    ): List<Pair<LlmApiEntry, ReconstructedCandidate>> {
+        fun normalize(s: String) = s.trim().trimEnd('。', '！', '!', '?', '？', '，', ',').trim()
+        // 雲端 LLM 常回傳前後夾帶換行/空白，不清掉會在輸出卡撐出大片空白——壓成單行。
+        fun clean(s: String) = s.trim().replace(Regex("\\s*\\n\\s*"), " ")
+
+        val groups = samples.groupBy { normalize(it.second.reconstructed) }.values
+        return groups.map { group ->
+            val rep = group.maxBy { it.second.confidence }
+            val avgConfidence = group.sumOf { it.second.confidence } / group.size
+            Triple(group.size, avgConfidence, rep.first) to ReconstructedCandidate(clean(rep.second.reconstructed), avgConfidence)
+        }
+            .sortedWith(compareByDescending<Pair<Triple<Int, Double, LlmApiEntry>, ReconstructedCandidate>> { it.first.first }
+                .thenByDescending { it.first.second })
+            .map { it.first.third to it.second }
+            .take(3)
     }
 
     override suspend fun composeAacSentence(
@@ -390,12 +436,26 @@ class HybridInferenceEngine(
             system = """
                 你是輔助失語症患者溝通的語言助理。
                 請使用碎詞、逐字信心度、GPS 場景與相機物件，重組患者最可能想表達的句子。
-                不要過度腦補；低信心字可以依情境修正，但強烈意圖必須能從輸入或情境找到依據。
+
+                【最重要的原則：貼著碎詞走，不要腦補新內容】
+                句子裡每個實詞（名詞、動詞、形容詞）都必須能對應回碎詞本身，或明確對應到給定的
+                地點／物件情境標籤；你只能補上讓句子成立所需的「語法零件」——代名詞（我、你）、
+                助動詞（請、需要、想）、語助詞（了、嗎、呢）——不可以新增碎詞裡完全沒提到的
+                新事件、新時間、新對象或新問句。
+                例如碎詞「家人...快」只代表「家人動作要快」，應重組成「請家人快一點」這類貼近原意的句子；
+                不可以延伸成「我想知道家人什麼時候會到」——「什麼時候會到」是碎詞裡沒有的全新問句，屬於過度腦補。
+                低信心字可以依情境修正用字（例如同音異字），但不能藉機加戲、加細節。
+
+                若有提供「語音辨識其他候選」：那是同一段語音的其他可能聽法，不是病人講了很多句。
+                第一名（碎詞）不一定對——失語症口齒不清時常常聽錯。請比對這些候選與地點／物件情境，
+                挑出最合理的那個當依據；必要時可以混用不同候選裡明顯比較合理的字詞。
+                但仍然不可以加入任何候選裡都沒有出現的新內容。
+
                 輸入中的問句或疑問詞是硬約束，必須保留其語意；例如「什麼時候」、「在哪裡」、「可以嗎」、「要等多久」不可刪掉。
                 若碎詞同時包含需求與問句，請用一句自然中文同時表達，例如「我口渴了，請給我一杯水；我想知道什麼時候可以休息。」
 
                 重要：碎詞很短甚至只有一個字（例如「十」「水」「痛」）時，仍要給出「最可能的日常說法」，不要因為短就拒答或回空句。
-                以最常見的生活情境去補全，例如「十」→「我要十個」或「現在十點」（依情境擇一最合理的）、「水」→「我想喝水」、「痛」→「我這裡會痛」。
+                只補最貼近字面的語法零件即可，不要另外編情境：「十」→「我要十個」、「水」→「我想喝水」、「痛」→「我這裡會痛」。
                 confidence 是「你對這句重組的把握」，請照這個標準給分，不要一律保守：
                   80-100：碎詞語意清楚、重組幾乎確定
                   50-79 ：碎詞短或有歧義，但你給了合理的常見猜測（單字碎詞多半落在這裡）
@@ -405,6 +465,10 @@ class HybridInferenceEngine(
             user = buildString {
                 appendLine("碎詞：${vault.rawText}")
                 if (words.isNotBlank()) appendLine("逐字信心：$words")
+                if (vault.sttAlternatives.isNotEmpty()) {
+                    appendLine("語音辨識其他候選（同一段語音的其他聽法，擇最合理者）：")
+                    vault.sttAlternatives.forEach { appendLine("- $it") }
+                }
                 appendLine("地點：${vault.locationTag.ifBlank { "未指定" }}")
                 appendLine("周邊物件：${vault.visionTags.joinToString("、").ifBlank { "未偵測" }}")
                 val cands = com.example.data.AphasiaPractice.reconstructionCandidates(vault.rawText, vault.visionTags)
@@ -476,6 +540,11 @@ class HybridInferenceEngine(
     companion object {
         private const val TAG = "HybridInferenceEngine"
         private val JSON = "application/json; charset=utf-8".toMediaType()
+
+        // 語句重組自我一致性：平行取樣次數；溫度略高於單次呼叫的 0.1，才有足夠多樣性可供多數決，
+        // 但不宜太高——溫度越高，模型越容易編出碎詞裡沒有的新內容（腦補），0.3 是折衷值。
+        private const val RECONSTRUCT_SAMPLES = 3
+        private const val RECONSTRUCT_SAMPLE_TEMPERATURE = 0.3
 
         fun wrapIfNeeded(
             context: Context,

@@ -1886,6 +1886,17 @@ class App:
         sub = tk.Label(hdr, font=(FONT_UI, SZ_SMALL)); sub.pack(side="left", padx=(10, 0), pady=(6, 0))
         self.tr(sub, "header.sub"); self._track(sub, "muted")
 
+        # 帳號頭像（右上角，跟手機 App 一致）：平常只有一顆圓形圖示、不顯示 email；
+        # 點開才有帳號、登入／登出。原本那一整塊「雲端曲庫」登入狀態列＋按鈕留在進階頁，
+        # 但這裡讓使用者隨時看得到「有沒有登入」而不用切分頁。
+        self._acct_btn = tk.Label(
+            hdr, font=(FONT_UI, SZ_H1), cursor="hand2", padx=6
+        )
+        self._acct_btn.pack(side="right")
+        self._track(self._acct_btn, "fg")
+        self._acct_btn.bind("<Button-1>", lambda _e: self._show_account_menu())
+        self._sync_account_icon()
+
         # 服務卡片
         svc_frame = tk.Frame(parent); svc_frame.pack(fill="x", padx=20, pady=(0, 12))
         self._track(svc_frame, "bg")
@@ -3195,12 +3206,56 @@ class App:
         except Exception:
             pass
 
+    def _is_signed_in(self) -> bool:
+        try:
+            return bool(gdrive and gdrive.deps_ok() and gdrive.is_signed_in())
+        except Exception:
+            return False
+
+    def _sync_account_icon(self):
+        """右上角頭像：登入＝實心綠、未登入＝灰。只有圖示，不顯示 email。"""
+        try:
+            signed = self._is_signed_in()
+            self._acct_btn.config(
+                text="👤" if signed else "👤",
+                fg=(C_GREEN if signed else "#8E8E93"),
+            )
+        except Exception:
+            pass
+
+    def _show_account_menu(self):
+        """點頭像才展開：顯示帳號 + 登入／登出（跟手機 App 的下拉一致）。"""
+        import tkinter as _tk
+        try:
+            menu = _tk.Menu(self.root, tearoff=0)
+            if self._is_signed_in():
+                ident = {}
+                email = ""
+                try:
+                    ident = gdrive.firebase_identity() or {}
+                    email = ident.get("email") or gdrive.account_email() or ""
+                except Exception:
+                    pass
+                menu.add_command(label=email or "已登入 Google", state="disabled")
+                menu.add_separator()
+                menu.add_command(label=self.t("adv.gdLogout"),
+                                 command=self.adv_gdrive_logout)
+            else:
+                menu.add_command(label=self.t("adv.gdLogin"),
+                                 command=self.adv_gdrive_login)
+            x = self._acct_btn.winfo_rootx()
+            y = self._acct_btn.winfo_rooty() + self._acct_btn.winfo_height()
+            menu.tk_popup(x, y)
+        except Exception:
+            pass
+
     def _refresh_gd_status(self):
         try:
             self.gd_status.config(text=self._gdrive_status_text())
         except Exception:
             pass
         self._sync_gd_buttons()
+        self._sync_account_icon()   # 右上角頭像跟著一起更新
 
     def adv_gdrive_login(self):
         from tkinter import messagebox

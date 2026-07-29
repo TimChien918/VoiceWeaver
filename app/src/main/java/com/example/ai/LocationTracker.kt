@@ -67,8 +67,9 @@ class LocationTracker(
 
         try {
             val location = fetchLocation() ?: return@withContext null
-            val geo = reverseGeocode(location.latitude, location.longitude)
-            Log.i(TAG, "Location resolved: ${geo.address} (${location.latitude}, ${location.longitude})")
+            val accuracyM = if (location.hasAccuracy()) location.accuracy else Float.MAX_VALUE
+            val geo = reverseGeocode(location.latitude, location.longitude, accuracyM)
+            Log.i(TAG, "Location resolved: ${geo.address} (${location.latitude}, ${location.longitude}, ±${accuracyM}m)")
             geo
         } catch (e: Exception) {
             Log.e(TAG, "Location flow failed", e)
@@ -94,9 +95,12 @@ class LocationTracker(
         Log.d(TAG, "Cache stale/empty, requesting fresh location")
         return try {
             val cts = CancellationTokenSource()
+            // 高精度：病人講的是「我在哪裡」，講錯地點比多耗一點電嚴重得多。
+            // BALANCED 只到街區級（動輒上百公尺誤差），會把隔壁棟的店名講成現在位置。
             val req = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
-                .setMaxUpdateAgeMillis(600_000L)
+                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                .setMaxUpdateAgeMillis(FRESH_WINDOW_MS)
+                .setDurationMillis(LOCATION_TIMEOUT_MS)
                 .build()
             fusedLocationClient.getCurrentLocation(req, cts.token).awaitTask()
         } catch (e: Exception) {
@@ -112,9 +116,9 @@ class LocationTracker(
      * 不走 FusedLocationClient，照樣跑 Geocoder + classifyPoiTag()。
      */
     suspend fun simulateGeocode(lat: Double, lon: Double): LocationResult =
-        reverseGeocode(lat, lon)
+        reverseGeocode(lat, lon, accuracyM = 0f)
 
-    private suspend fun reverseGeocode(lat: Double, lon: Double): LocationResult =
+    private suspend fun reverseGeocode(lat: Double, lon: Double, accuracyM: Float): LocationResult =
         withContext(Dispatchers.IO) {
             val geocoder = Geocoder(context, preferredGeocoderLocale(lat, lon))
 
@@ -130,10 +134,15 @@ class LocationTracker(
                 geocoder.getFromLocation(lat, lon, 1) ?: emptyList()
             }
 
-            buildLocationResult(lat, lon, addresses.firstOrNull())
+            buildLocationResult(lat, lon, addresses.firstOrNull(), accuracyM)
         }
 
-    private suspend fun buildLocationResult(lat: Double, lon: Double, addr: Address?): LocationResult {
+    private suspend fun buildLocationResult(
+        lat: Double,
+        lon: Double,
+        addr: Address?,
+        accuracyM: Float
+    ): LocationResult {
         // ① 住家最優先：純距離判定，與 Geocoder / Overpass 都無關
         val home = homeProvider()
         val homeHit = home != null && distanceMeters(lat, lon, home.latitude, home.longitude) <= home.radiusMeters
@@ -142,6 +151,19 @@ class LocationTracker(
         val inUnitedStates = isUnitedStates(lat, lon, addr)
 
         if (homeHit) return LocationResult(lat, lon, fullAddress, "住家")
+
+        // 誤差太大時不報「某某店名」——POI 比對半徑只有 35 公尺，
+        // 定位誤差 100 公尺時挑出來的店家跟實際位置沒有關聯，等於瞎猜。
+        // 這種情況只回大範圍地址（區/路），讓句子講「我在信義路附近」而不是講錯店名。
+        if (accuracyM > POI_TRUSTWORTHY_ACCURACY_M) {
+            Log.w(TAG, "定位誤差 ±${accuracyM}m 過大，略過 POI 比對，只用概略地址")
+            val coarse = listOfNotNull(
+                addr?.subLocality?.takeIf { it.isNotBlank() },
+                addr?.locality?.takeIf { it.isNotBlank() },
+                addr?.thoroughfare?.takeIf { it.isNotBlank() }
+            ).firstOrNull()
+            return LocationResult(lat, lon, fullAddress, coarse?.let { "$it 附近" } ?: fullAddress)
+        }
 
         // ② **離線 POI**（首選）：bundled 在 APK，零網路、零 API key、無用量限制
         val offline = offlinePoi.findNearestPoi(
@@ -262,8 +284,14 @@ class LocationTracker(
         }
     }
 
+    /**
+     * 快取夠不夠新「而且」夠不夠準。原本只看時間、完全不看 [Location.accuracy]，
+     * 導致一個誤差 500 公尺的定位跟誤差 5 公尺的被當成一樣可信，
+     * 直接拿去比對 35 公尺半徑的 POI——那個比對結果基本上是隨機的。
+     */
     private fun isFresh(location: Location) =
-        System.currentTimeMillis() - location.time < 10 * 60 * 1000L
+        System.currentTimeMillis() - location.time < FRESH_WINDOW_MS &&
+            location.hasAccuracy() && location.accuracy <= GOOD_ACCURACY_M
 
     private fun hasLocationPermission() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -275,6 +303,15 @@ class LocationTracker(
         private const val TAG = "LocationTracker"
         private const val DEFAULT_OFFLINE_POI_RADIUS_M = 35.0
         private const val US_OFFLINE_POI_RADIUS_M = 90.0
+
+        /** 快取可用的時間窗。原本 10 分鐘——病人 10 分鐘內可能已經從病房走到大廳。 */
+        private const val FRESH_WINDOW_MS = 2 * 60 * 1000L
+        /** 單次定位最長等待，避免室內收不到訊號時一直卡住。 */
+        private const val LOCATION_TIMEOUT_MS = 10_000L
+        /** 快取要「夠準」才直接用，否則寧可重新定位。 */
+        private const val GOOD_ACCURACY_M = 50f
+        /** 誤差超過這個值就不再報具體店名／POI，只講概略地址。 */
+        private const val POI_TRUSTWORTHY_ACCURACY_M = 60f
 
         /**
          * POI 分類規則。順序很重要：**先具體後通用**（先匹配「7-11」這種品牌名，

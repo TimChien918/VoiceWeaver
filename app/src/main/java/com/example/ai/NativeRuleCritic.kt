@@ -41,7 +41,11 @@ object NativeRuleCritic {
 
         // 1. 統一轉為小寫簡潔化處理
         val normalizedReconstructed = reconstructedText.lowercase()
-        val normalizedRaw = vault.rawText.lowercase()
+        // rawText 只是語音辨識的第一名；其他 N-best 候選同樣是「病人真的可能講的話」，
+        // 必須一起算進比對母體。否則 LLM 正確地採用了第 2 名的字（例如第一名聽成「時」、
+        // 第二名才是「水」），這裡會誤判成幻覺，整句被換成「我不確定您的意思」。
+        val normalizedRaw = (listOf(vault.rawText) + vault.sttAlternatives)
+            .joinToString(" ").lowercase()
         val normalizedLocation = vault.locationTag.lowercase()
         val normalizedVision = vault.visionTags.joinToString(" ").lowercase()
 

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -171,39 +173,37 @@ private fun ImageApiRow(
     onDelete: () -> Unit,
     p: AppPalette
 ) {
+    // iOS 清單風：一列＝一個供應商。拿掉「供應商」「API」兩個標題字——
+    // 下拉選單長什麼樣就已經說明是供應商了，多餘的標籤只是把卡片撐胖。
+    // 金鑰欄只在該供應商真的需要金鑰時才出現。
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                1.dp,
-                if (isActive) p.neonGreen.copy(alpha = 0.55f) else p.textMuted.copy(alpha = 0.22f),
-                RoundedCornerShape(10.dp)
-            )
-            .padding(10.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
     ) {
-        // 供應商
-        Text(I18n.tr("供應商"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            ProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
-            IconButton(onClick = onUse, modifier = Modifier.size(34.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            IconButton(onClick = onUse, modifier = Modifier.size(30.dp)) {
                 Icon(
                     if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                     if (isActive) I18n.tr("使用中") else I18n.tr("設為使用中"),
-                    tint = if (isActive) p.neonGreen else p.textMuted, modifier = Modifier.size(20.dp)
+                    tint = if (isActive) Color(0xFF34C759) else p.textMuted.copy(alpha = 0.5f),
+                    modifier = Modifier.size(21.dp)
                 )
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.Delete, I18n.tr("刪除"), tint = p.dangerRose, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            ProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
+            IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.Delete, I18n.tr("刪除"),
+                    tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
             }
         }
-        // API
-        Text("API", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight,
-            modifier = Modifier.padding(top = 4.dp))
         if (entry.provider.needsKey) {
             KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
+            Spacer(Modifier.height(4.dp))
         } else {
-            Text(I18n.tr("此供應商免金鑰，直接可用"), fontSize = 11.sp, color = p.neonGreen)
+            Text(I18n.tr("免金鑰，直接可用"), fontSize = 13.sp, color = Color(0xFF34C759),
+                modifier = Modifier.padding(start = 42.dp, bottom = 6.dp))
         }
     }
 }
@@ -253,34 +253,31 @@ private fun LlmApiRow(
     onDelete: () -> Unit,
     p: AppPalette
 ) {
+    // 同 ImageApiRow：一列一個供應商，不要標籤字、不要外框。
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                1.dp,
-                if (isActive) p.neonGreen.copy(alpha = 0.55f) else p.textMuted.copy(alpha = 0.22f),
-                RoundedCornerShape(10.dp)
-            )
-            .padding(10.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
     ) {
-        Text(I18n.tr("供應商"), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            LlmProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
-            IconButton(onClick = onUse, modifier = Modifier.size(34.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            IconButton(onClick = onUse, modifier = Modifier.size(30.dp)) {
                 Icon(
                     if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                     if (isActive) I18n.tr("使用中") else I18n.tr("設為使用中"),
-                    tint = if (isActive) p.neonGreen else p.textMuted, modifier = Modifier.size(20.dp)
+                    tint = if (isActive) Color(0xFF34C759) else p.textMuted.copy(alpha = 0.5f),
+                    modifier = Modifier.size(21.dp)
                 )
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.Delete, I18n.tr("刪除"), tint = p.dangerRose, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            LlmProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
+            IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.Delete, I18n.tr("刪除"),
+                    tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
             }
         }
-        Text("API", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = p.textLight,
-            modifier = Modifier.padding(top = 4.dp))
         KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
+        Spacer(Modifier.height(4.dp))
     }
 }
 

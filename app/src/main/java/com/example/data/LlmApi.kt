@@ -19,15 +19,15 @@ enum class LlmProvider(
     val needsKey: Boolean,
     val keyHint: String
 ) {
-    GROQ("Groq", "https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", LlmApiStyle.OPENAI, true, "console.groq.com/keys（免費額度大）"),
-    OPENROUTER("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "qwen/qwen-2.5-7b-instruct", LlmApiStyle.OPENAI, true, "openrouter.ai/keys（一把通多家模型）"),
+    GROQ("Groq", "https://api.groq.com/openai/v1/chat/completions", "qwen/qwen3.6-27b", LlmApiStyle.OPENAI, true, "console.groq.com/keys（免費額度大）"),
+    OPENROUTER("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "qwen/qwen3-14b", LlmApiStyle.OPENAI, true, "openrouter.ai/keys（一把通多家模型）"),
     CEREBRAS("Cerebras", "https://api.cerebras.ai/v1/chat/completions", "llama-3.3-70b", LlmApiStyle.OPENAI, true, "cloud.cerebras.ai（超快）"),
     COHERE("Cohere", "https://api.cohere.com/v2/chat", "command-r7b-12-2024", LlmApiStyle.COHERE, true, "dashboard.cohere.com/api-keys"),
     OPENAI("OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-4o-mini", LlmApiStyle.OPENAI, true, "platform.openai.com（需付費）"),
     DEEPSEEK("DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-chat", LlmApiStyle.OPENAI, true, "platform.deepseek.com"),
     TOGETHER("Together AI", "https://api.together.xyz/v1/chat/completions", "meta-llama/Llama-3.3-70B-Instruct-Turbo", LlmApiStyle.OPENAI, true, "api.together.xyz"),
     MISTRAL("Mistral", "https://api.mistral.ai/v1/chat/completions", "mistral-small-latest", LlmApiStyle.OPENAI, true, "console.mistral.ai"),
-    GEMINI("Gemini", "https://generativelanguage.googleapis.com/v1beta/models", "gemini-2.0-flash", LlmApiStyle.GEMINI, true, "Google AI Studio");
+    GEMINI("Gemini", "https://generativelanguage.googleapis.com/v1beta/models", "gemini-3.5-flash", LlmApiStyle.GEMINI, true, "Google AI Studio");
 
     companion object {
         fun from(id: String?): LlmProvider = entries.firstOrNull { it.name == id } ?: GROQ
