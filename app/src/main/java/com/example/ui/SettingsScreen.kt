@@ -82,8 +82,6 @@ fun SettingsScreen(
         }
     }
     val modelDownloadState by viewModel.modelDownloadState.collectAsState()
-    val modelProbeState by viewModel.modelProbeState.collectAsState()
-    val metrics by viewModel.deviceMetrics.collectAsState()
     val sovitsSynthesisStatus by viewModel.sovitsSynthesisStatus.collectAsState()
     val p = LocalAppPalette.current
     val context = LocalContext.current
@@ -123,11 +121,6 @@ fun SettingsScreen(
     if (showApiKeys) {
         ApiKeysPanel(viewModel = viewModel, onDismiss = { showApiKeys = false })
     }
-    // AI 生圖浮動視窗
-    var showImageGen by remember { mutableStateOf(false) }
-    if (showImageGen) {
-        ImageGenPanel(viewModel = viewModel, onDismiss = { showImageGen = false })
-    }
     // 進階設定浮動視窗（緊急聯絡人 / 住家 / 清歷史 / 重置 / 匯入語料庫）
     var showExtended by remember { mutableStateOf(false) }
     if (showExtended) {
@@ -141,29 +134,12 @@ fun SettingsScreen(
             )
         }
     }
-    // 開發者模式（獨立子頁，iOS 風整頁）
-    var showDeveloper by remember { mutableStateOf(false) }
-    if (showDeveloper) {
-        val locationResult by viewModel.locationResult.collectAsState()
-        val offloadPlan by viewModel.offloadPlan.collectAsState()
-        LaunchedEffect(Unit) { viewModel.refreshOffloadPlan() }
-        FloatingPanel(title = I18n.tr("開發者模式"), icon = Icons.Default.DeveloperMode, onDismiss = { showDeveloper = false }) {
-            DeveloperModeSection(
+    // 角色語音與雲端曲庫（獨立子頁，iOS 風整頁）——不是開發者工具，是日常會用的真實功能
+    var showGptSovit by remember { mutableStateOf(false) }
+    if (showGptSovit) {
+        FloatingPanel(title = I18n.tr("🎙 角色語音與雲端曲庫"), icon = Icons.Default.GraphicEq, onDismiss = { showGptSovit = false }) {
+            GptSovitSection(
                 viewModel = viewModel,
-                enabled = settings.developerMode,
-                offloadPlan = offloadPlan,
-                onRefreshOffload = { viewModel.refreshOffloadPlan() },
-                onOpenImageGen = { showImageGen = true },
-                metrics = metrics,
-                hardware = viewModel.deviceHardware,
-                modelDownloadState = modelDownloadState,
-                modelProbeState = modelProbeState,
-                locationResult = locationResult,
-                onEnabledChange = { viewModel.setDeveloperMode(it) },
-                onTestUrl = { viewModel.testModelUrl(it) },
-                onDownload = { viewModel.startModelDownload(it) },
-                onCancel = { viewModel.cancelModelDownload() },
-                onSimulateLocation = { lat, lon -> viewModel.simulateLocation(lat, lon) },
                 settings = settings,
                 onGptSovitEnabled = { viewModel.setGptSovitEnabled(it) },
                 onGptSovitVoiceMode = { viewModel.setGptSovitVoiceMode(it) },
@@ -178,6 +154,7 @@ fun SettingsScreen(
                 onSovitsConsentAccepted = { viewModel.setSovitsConsentAccepted(true) },
                 onServerListChange = { viewModel.setGptSovitServerList(it) },
                 synthesisStatus = sovitsSynthesisStatus,
+                onClose = { showGptSovit = false },
                 p = p.iosReadable
             )
         }
@@ -260,22 +237,20 @@ fun SettingsScreen(
                 }
             }
 
-            // 中度/重度模式隱藏複雜設定（開發者模式開啟時仍顯示，照護者可用）
-            val showComplex = settings.severityMode == com.example.data.SeverityMode.Mild || settings.developerMode
+            // 中度/重度模式隱藏複雜設定，照護者可用「輕度」模式設定
+            val showComplex = settings.severityMode == com.example.data.SeverityMode.Mild
 
             // API 金鑰管理（浮動視窗）：集中管理所有 API 金鑰
             if (showComplex) item {
                 Section(title = I18n.tr("API 金鑰管理"), icon = Icons.Default.Api, p = p) {
                     AdvancedEntryRow(
-                        label = I18n.tr("管理所有 API 金鑰（LLM / 定位 / 通報；生圖在「AI 生圖」內）"),
+                        label = I18n.tr("管理所有 API 金鑰（LLM / 定位 / 通報）"),
                         onClick = { showApiKeys = true }, p = p
                     )
                 }
             }
 
-            // ngrok 雲端通道（Colab）已併入「開發者模式 → GPT-SoVITS」的連接電腦頁（與本機/有線同一處）。
-
-            // ※「AI 生圖」已移到「開發者模式」內（需要電腦/雲端的功能集中管理）。
+            // ngrok 雲端通道（Colab）已併入「角色語音與雲端曲庫」的連接電腦頁（與本機/有線同一處）。
 
             // 進階功能入口（資料治理）。
             // ※ 故事訓練模式已搬到「語音復健」分頁，僅在開發者模式打開時顯示入口。
@@ -541,10 +516,10 @@ fun SettingsScreen(
             }
 
             if (showComplex) item {
-                Section(title = I18n.tr("開發者"), icon = Icons.Default.DeveloperMode, p = p) {
+                Section(title = I18n.tr("角色語音"), icon = Icons.Default.GraphicEq, p = p) {
                     AdvancedEntryRow(
-                        label = I18n.tr("開發者模式（GPT-SoVITS / 硬體監控 / 模擬定位 / 模型下載）"),
-                        onClick = { showDeveloper = true }, p = p
+                        label = I18n.tr("🎙 角色語音與雲端曲庫（連接電腦／Colab、GPT-SoVITS 匯入）"),
+                        onClick = { showGptSovit = true }, p = p
                     )
                 }
             }
@@ -721,13 +696,13 @@ private fun GptSovitDeveloperPanel(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.ArrowBack, I18n.tr("返回開發者設定"), tint = p.textMuted, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.ArrowBack, I18n.tr("關閉"), tint = p.textMuted, modifier = Modifier.size(18.dp))
             }
             Icon(Icons.Default.GraphicEq, null, tint = p.neonCyan, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(I18n.tr("GPT-SoVITS 實驗語音"), fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
-                Text(I18n.tr("開發者模式專屬；可依句子自動切換中英文樣本。"), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+                Text(I18n.tr("可依句子自動切換中英文樣本。"), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
             }
             // 聲紋授權（醫師臨床建議）：未勾選知情同意前不可啟用語音克隆
             var showConsentDialog by remember { mutableStateOf(false) }
@@ -1748,89 +1723,8 @@ private fun languageScore(text: String, chinese: Boolean): Int {
 }
 
 @Composable
-private fun OffloadPlanCard(
-    plan: com.example.ai.OffloadManager.OffloadPlan,
-    onRefresh: () -> Unit,
-    p: com.example.ui.theme.AppPalette
-) {
-    val tierColor = when (plan.tier) {
-        com.example.ai.OffloadManager.OffloadTier.FULL,
-        com.example.ai.OffloadManager.OffloadTier.HEAVY -> p.neonCyan
-        com.example.ai.OffloadManager.OffloadTier.LIGHT -> p.dangerRose
-        com.example.ai.OffloadManager.OffloadTier.OFFLINE -> p.textMuted
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(p.darkBg.copy(alpha = 0.35f))
-            .border(1.dp, tierColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-            .padding(12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Computer, null, tint = tierColor, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Column(Modifier.weight(1f)) {
-                Text(I18n.tr("電腦接手計畫：%s").format(plan.tier.title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-                Text(plan.tier.blurb, fontSize = 10.sp, color = p.textMuted, lineHeight = 13.sp)
-            }
-            IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Refresh, I18n.tr("重新量測"), tint = p.textMuted, modifier = Modifier.size(16.dp))
-            }
-        }
-        if (plan.metrics.reachable) {
-            Spacer(Modifier.height(6.dp))
-            val kindTxt = if (plan.metrics.kind == com.example.ai.OffloadManager.LinkKind.Wired) I18n.tr("有線 USB") else I18n.tr("無線 Wi-Fi")
-            val rttTxt = if (plan.metrics.rttMs >= 0) I18n.tr("、延遲 %dms").format(plan.metrics.rttMs) else ""
-            Text(I18n.tr("連線：%s（%s%s）").format(plan.metrics.speedLabel, kindTxt, rttTxt), fontSize = 11.sp, color = p.textMuted)
-        } else {
-            Spacer(Modifier.height(6.dp))
-            Text(I18n.tr("未連接電腦：全部運算由手機本機處理"), fontSize = 11.sp, color = p.textMuted)
-        }
-        Spacer(Modifier.height(8.dp))
-        OffloadTaskRow(I18n.tr("🔊 語音合成"), plan.voice, p)
-        OffloadTaskRow(I18n.tr("🖼 生圖"), plan.image, p)
-        OffloadTaskRow(I18n.tr("💬 文字重組"), plan.text, p)
-    }
-}
-
-@Composable
-private fun OffloadTaskRow(
-    label: String,
-    target: com.example.ai.OffloadManager.Target,
-    p: com.example.ui.theme.AppPalette
-) {
-    val color = when (target) {
-        com.example.ai.OffloadManager.Target.Computer -> p.neonCyan
-        com.example.ai.OffloadManager.Target.Cloud -> p.neonCyan.copy(alpha = 0.75f)
-        com.example.ai.OffloadManager.Target.Phone -> p.textMuted
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, fontSize = 12.sp, color = p.textLight)
-        Text(I18n.tr("由 %s 處理").format(target.label), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
-    }
-}
-
-@Composable
-private fun DeveloperModeSection(
+private fun GptSovitSection(
     viewModel: VoiceWeaverViewModel,
-    enabled: Boolean,
-    offloadPlan: com.example.ai.OffloadManager.OffloadPlan,
-    onRefreshOffload: () -> Unit,
-    onOpenImageGen: () -> Unit,
-    metrics: List<DeviceMetricSample>,
-    hardware: com.example.ai.DeviceHardwareInfo,
-    modelDownloadState: ModelDownloadState,
-    modelProbeState: ModelProbeState,
-    locationResult: com.example.ai.LocationResult?,
-    onEnabledChange: (Boolean) -> Unit,
-    onTestUrl: (String) -> Unit,
-    onDownload: (String) -> Unit,
-    onCancel: () -> Unit,
-    onSimulateLocation: (Double, Double) -> Unit,
     settings: AppSettings,
     onGptSovitEnabled: (Boolean) -> Unit,
     onGptSovitVoiceMode: (GptSovitVoiceMode) -> Unit,
@@ -1845,10 +1739,9 @@ private fun DeveloperModeSection(
     onSovitsConsentAccepted: () -> Unit,
     onServerListChange: (String) -> Unit,
     synthesisStatus: String?,
+    onClose: () -> Unit,
     p: com.example.ui.theme.AppPalette
 ) {
-    var hfUrl by remember { mutableStateOf("") }
-    var showGptSovitPanel by remember { mutableStateOf(true) }
     var autoImportStatus by remember { mutableStateOf<String?>(null) }
     var importDialog by remember { mutableStateOf<GptSovitImportDialogState?>(null) }
     val context = LocalContext.current
@@ -1914,7 +1807,7 @@ private fun DeveloperModeSection(
         }
     }
 
-    Section(title = I18n.tr("開發者模式"), icon = Icons.Default.DeveloperMode, p = p) {
+    Section(title = I18n.tr("🎙 角色語音與雲端曲庫"), icon = Icons.Default.GraphicEq, p = p) {
         importDialog?.let { state ->
             GptSovitImportDialog(
                 state = state,
@@ -1923,287 +1816,141 @@ private fun DeveloperModeSection(
             )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(I18n.tr("效能監控與 Hugging Face 模型管理"), fontSize = 13.sp, color = p.textLight, fontWeight = FontWeight.Bold)
-                Text(I18n.tr("關閉時不取樣，避免額外耗電。"), fontSize = 10.sp, color = p.textMuted)
-            }
-            Switch(checked = enabled, onCheckedChange = onEnabledChange)
-        }
-
-        if (enabled) {
-            Spacer(Modifier.height(12.dp))
-
-            // 電腦接手計畫：依實測連線速度顯示語音/生圖/文字各由誰處理
-            OffloadPlanCard(plan = offloadPlan, onRefresh = onRefreshOffload, p = p)
-            Spacer(Modifier.height(12.dp))
-
-            // AI 生圖（需要電腦/雲端）：移到開發者模式集中管理
-            AdvancedEntryRow(
-                label = I18n.tr("🖼 AI 生圖（輸入描述生成圖片、可設背景；本機電腦或雲端）"),
-                onClick = onOpenImageGen, p = p
-            )
-            Spacer(Modifier.height(12.dp))
-
-            if (showGptSovitPanel) {
-                GptSovitDeveloperPanel(
-                    viewModel = viewModel,
-                    settings = settings,
-                    enabled = settings.gptSovitEnabled,
-                    mode = settings.gptSovitVoiceMode,
-                    chineseVoiceUri = settings.gptSovitChineseVoiceUri,
-                    englishVoiceUri = settings.gptSovitEnglishVoiceUri,
-                    modelDirUri = settings.gptSovitModelDirUri,
-                    chineseModelDirUri = settings.gptSovitChineseModelDirUri,
-                    englishModelDirUri = settings.gptSovitEnglishModelDirUri,
-                    autoImportRootUri = settings.gptSovitAutoImportRootUri,
-                    autoImportStatus = autoImportStatus,
-                    apiBaseUrl = settings.gptSovitApiBaseUrl,
-                    serverList = settings.gptSovitServerList,
-                    synthesisStatus = synthesisStatus,
-                    consentAccepted = settings.sovitsConsentAccepted,
-                    onConsentAccepted = onSovitsConsentAccepted,
-                    onServerListChange = onServerListChange,
-                    onEnabledChange = onGptSovitEnabled,
-                    onModeChange = onGptSovitVoiceMode,
-                    onApiBaseUrlChange = onApiBaseUrl,
-                    onPickChinese = {
-                        importDialog = GptSovitImportDialogState(
-                            title = "匯入中文參考音檔",
-                            message = "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。",
-                            openSystemPicker = { chineseVoicePicker.launch(arrayOf("audio/*")) }
-                        )
-                    },
-                    onPickEnglish = {
-                        importDialog = GptSovitImportDialogState(
-                            title = "匯入英文參考音檔",
-                            message = "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。",
-                            openSystemPicker = { englishVoicePicker.launch(arrayOf("audio/*")) }
-                        )
-                    },
-                    onPickModelDir = {
-                        importDialog = GptSovitImportDialogState(
-                            title = "選擇舊版模型資料夾",
-                            message = "建議改用中文/英文模型資料夾。系統檔案頁若沒有關閉鈕，請用手機返回鍵離開。",
-                            openSystemPicker = { modelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) }
-                        )
-                    },
-                    onPickChineseModelDir = {
-                        importDialog = GptSovitImportDialogState(
-                            title = "匯入中文模型資料夾",
-                            message = "選包含 SoVITS_weights / GPT_weights 的中文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。",
-                            openSystemPicker = { chineseModelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) },
-                            useDefaultFolder = {
-                                val detected = detectGptSovitBundleFromDefaultFolder(context)
-                                detected.chineseDirUri?.let(onChineseModelDirUri)
-                                autoImportStatus = detected.message
-                            }
-                        )
-                    },
-                    onPickEnglishModelDir = {
-                        importDialog = GptSovitImportDialogState(
-                            title = "匯入英文模型資料夾",
-                            message = "選包含 SoVITS_weights / GPT_weights 的英文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。",
-                            openSystemPicker = { englishModelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) },
-                            useDefaultFolder = {
-                                val detected = detectGptSovitBundleFromDefaultFolder(context)
-                                detected.englishDirUri?.let(onEnglishModelDirUri)
-                                autoImportStatus = detected.message
-                            }
-                        )
-                    },
-                    onAutoImport = {
-                        importDialog = GptSovitImportDialogState(
-                            title = "自動匯入整包資料夾",
-                            message = "你可以開系統檔案頁選最外層資料夾，也可以把整包放到預設資料夾後直接掃描。預設資料夾：${defaultGptSovitDir(context).absolutePath}",
-                            openSystemPicker = { autoImportPicker.launch(defaultGptSovitInitialTreeUri(context)) },
-                            useDefaultFolder = {
-                                val detected = detectGptSovitBundleFromDefaultFolder(context)
-                                detected.chineseDirUri?.let(onChineseModelDirUri)
-                                detected.englishDirUri?.let(onEnglishModelDirUri)
-                                onAutoImportRootUri(defaultGptSovitDir(context).toURI().toString())
-                                autoImportStatus = detected.message
-                            }
-                        )
-                    },
-                    onClearImportWaste = {
-                        autoImportStatus = clearDefaultGptSovitDir(context)
-                        onChineseVoiceUri("")
-                        onEnglishVoiceUri("")
-                        onModelDirUri("")
-                        onChineseModelDirUri("")
-                        onEnglishModelDirUri("")
-                        onAutoImportRootUri("")
-                    },
-                    onTestLang = onTestLang,
-                    onClearChinese = { onChineseVoiceUri("") },
-                    onClearEnglish = { onEnglishVoiceUri("") },
-                    onClearModelDir = { onModelDirUri("") },
-                    onClearChineseModelDir = { onChineseModelDirUri("") },
-                    onClearEnglishModelDir = { onEnglishModelDirUri("") },
-                    onClearAutoImport = {
-                        onAutoImportRootUri("")
-                        autoImportStatus = null
-                    },
-                    onBack = { showGptSovitPanel = false },
-                    appLangTag = settings.language.tag,
-                    p = p.iosReadable
+        GptSovitDeveloperPanel(
+            viewModel = viewModel,
+            settings = settings,
+            enabled = settings.gptSovitEnabled,
+            mode = settings.gptSovitVoiceMode,
+            chineseVoiceUri = settings.gptSovitChineseVoiceUri,
+            englishVoiceUri = settings.gptSovitEnglishVoiceUri,
+            modelDirUri = settings.gptSovitModelDirUri,
+            chineseModelDirUri = settings.gptSovitChineseModelDirUri,
+            englishModelDirUri = settings.gptSovitEnglishModelDirUri,
+            autoImportRootUri = settings.gptSovitAutoImportRootUri,
+            autoImportStatus = autoImportStatus,
+            apiBaseUrl = settings.gptSovitApiBaseUrl,
+            serverList = settings.gptSovitServerList,
+            synthesisStatus = synthesisStatus,
+            consentAccepted = settings.sovitsConsentAccepted,
+            onConsentAccepted = onSovitsConsentAccepted,
+            onServerListChange = onServerListChange,
+            onEnabledChange = onGptSovitEnabled,
+            onModeChange = onGptSovitVoiceMode,
+            onApiBaseUrlChange = onApiBaseUrl,
+            onPickChinese = {
+                importDialog = GptSovitImportDialogState(
+                    title = "匯入中文參考音檔",
+                    message = "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。",
+                    openSystemPicker = { chineseVoicePicker.launch(arrayOf("audio/*")) }
                 )
-            } else {
-                OutlinedButton(
-                    onClick = { showGptSovitPanel = true },
-                    border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.55f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.GraphicEq, null, tint = p.neonCyan, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(I18n.tr("開啟 GPT-SoVITS 匯入與中英語音切換"), fontSize = 12.sp, color = p.neonCyan)
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            // ── 硬體規格列（一次性，不會動）──
-            HardwareHeaderStrip(hardware = hardware, p = p)
-            Spacer(Modifier.height(10.dp))
-
-            // ── 即時指標 4×2：把 sandbox 拿得到的全部誠實列出，**不放假的「系統 CPU」**。
-            //   - 系統 CPU 在 untrusted_app sandbox 永遠讀不到（SELinux 全擋 /proc/stat），
-            //     舊版顯示「0%」騙人，這版直接拿掉；要看真實系統 CPU 請用 Android Studio Profiler。
-            //   - App CPU / App RAM 來自 `top -n 1 -b` parse 我們自己這個 PID 的列，誤差 < 5%。
-            val last = metrics.lastOrNull()
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CompactMetricTile("App CPU", "%.1f%%".format(last?.appCpuPercent ?: 0f), p.dangerRose, Modifier.weight(1f), p)
-                    CompactMetricTile("App RAM",
-                        last?.appRssMb?.takeIf { it > 0 }?.let { if (it >= 1024) "%.1fG".format(it/1024) else "%.0fM".format(it) } ?: "—",
-                        p.neonCyan, Modifier.weight(1f), p)
-                    CompactMetricTile("GPU", last?.gpuUsagePercent?.let { "%.0f%%".format(it) } ?: "—",
-                        p.auraAmber, Modifier.weight(1f), p)
-                    CompactMetricTile("FPS", "%.0f".format(last?.frameRateHz ?: 0f), p.neonGreen, Modifier.weight(1f), p)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CompactMetricTile(I18n.tr("系統 RAM"), "%.0f%%".format(last?.ramUsedPercent ?: 0f), p.neonCyan, Modifier.weight(1f), p)
-                    CompactMetricTile(I18n.tr("電量"), "%.0f%%".format(last?.batteryPercent ?: 0f), p.neonGreen, Modifier.weight(1f), p)
-                    CompactMetricTile(I18n.tr("電池溫"), "%.1f°".format(last?.batteryTempC ?: 0f), p.auraAmber, Modifier.weight(1f), p)
-                    CompactMetricTile(I18n.tr("網路"),
-                        last?.let { it.networkEstimatedKbps.takeIf { v -> v > 0 } ?: it.networkDownKbps }
-                            ?.let { if (it >= 1000) "%.0fM".format(it / 1000) else "%.0fK".format(it) } ?: "—",
-                        p.neonCyan, Modifier.weight(1f), p)
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-
-            // ── 模擬定位測試（dev only）：用預設經緯度驗證 POI 分類規則 ──
-            SimulateLocationPanel(
-                locationResult = locationResult,
-                onSimulate = onSimulateLocation,
-                p = p
-            )
-            Spacer(Modifier.height(10.dp))
-
-            // ── 趨勢圖：本 App CPU + 網路 ──
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricChart(I18n.tr("本 App CPU 趨勢"),
-                    "%.1f%%".format(last?.appCpuPercent ?: 0f),
-                    metrics, { it.appCpuPercent }, p.dangerRose, p)
-                MetricChart(I18n.tr("網路下載速度"),
-                    networkLabel(last),
-                    metrics, { maxOf(it.networkDownKbps, it.networkEstimatedKbps) },
-                    p.neonCyan, p)
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Text(I18n.tr("Hugging Face 公開模型下載"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = hfUrl,
-                onValueChange = { hfUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                minLines = 2,
-                label = { Text("貼上公開 .task 模型 URL") },
-                placeholder = { Text("https://huggingface.co/.../resolve/main/model.task") },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = p.textLight,
-                    unfocusedTextColor = p.textLight,
-                    focusedBorderColor = p.neonCyan,
-                    unfocusedBorderColor = p.textMuted.copy(alpha = 0.35f),
-                    focusedContainerColor = p.darkBg.copy(alpha = 0.35f),
-                    unfocusedContainerColor = p.darkBg.copy(alpha = 0.25f)
+            },
+            onPickEnglish = {
+                importDialog = GptSovitImportDialogState(
+                    title = "匯入英文參考音檔",
+                    message = "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。",
+                    openSystemPicker = { englishVoicePicker.launch(arrayOf("audio/*")) }
                 )
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                I18n.tr("不需要帳號或 API key；只有公開直連 URL 可下載。MediaPipe 推理目前會啟用 .task 格式。"),
-                fontSize = 10.sp,
-                color = p.textMuted,
-                lineHeight = 14.sp
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { onTestUrl(hfUrl) },
-                    enabled = hfUrl.isNotBlank() && modelProbeState !is ModelProbeState.Testing,
-                    border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.55f)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (modelProbeState is ModelProbeState.Testing) I18n.tr("測試中") else I18n.tr("測試連線"), fontSize = 12.sp, color = p.neonCyan)
-                }
-                Button(
-                    onClick = { onDownload(hfUrl) },
-                    enabled = hfUrl.isNotBlank() && modelDownloadState !is ModelDownloadState.Downloading,
-                    colors = ButtonDefaults.buttonColors(containerColor = p.neonCyan),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(I18n.tr("下載 URL"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                OutlinedButton(
-                    onClick = onCancel,
-                    enabled = modelDownloadState is ModelDownloadState.Downloading,
-                    border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(I18n.tr("取消"), fontSize = 12.sp, color = p.dangerRose)
-                }
-            }
-            ProbeStatus(modelProbeState, p)
-            Spacer(Modifier.height(8.dp))
-            ModelStatusBlock(modelDownloadState, onDownloadDefault = { onDownload("") }, onCancel = onCancel, p = p)
-        }
+            },
+            onPickModelDir = {
+                importDialog = GptSovitImportDialogState(
+                    title = "選擇舊版模型資料夾",
+                    message = "建議改用中文/英文模型資料夾。系統檔案頁若沒有關閉鈕，請用手機返回鍵離開。",
+                    openSystemPicker = { modelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) }
+                )
+            },
+            onPickChineseModelDir = {
+                importDialog = GptSovitImportDialogState(
+                    title = "匯入中文模型資料夾",
+                    message = "選包含 SoVITS_weights / GPT_weights 的中文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。",
+                    openSystemPicker = { chineseModelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) },
+                    useDefaultFolder = {
+                        val detected = detectGptSovitBundleFromDefaultFolder(context)
+                        detected.chineseDirUri?.let(onChineseModelDirUri)
+                        autoImportStatus = detected.message
+                    }
+                )
+            },
+            onPickEnglishModelDir = {
+                importDialog = GptSovitImportDialogState(
+                    title = "匯入英文模型資料夾",
+                    message = "選包含 SoVITS_weights / GPT_weights 的英文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。",
+                    openSystemPicker = { englishModelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) },
+                    useDefaultFolder = {
+                        val detected = detectGptSovitBundleFromDefaultFolder(context)
+                        detected.englishDirUri?.let(onEnglishModelDirUri)
+                        autoImportStatus = detected.message
+                    }
+                )
+            },
+            onAutoImport = {
+                importDialog = GptSovitImportDialogState(
+                    title = "自動匯入整包資料夾",
+                    message = "你可以開系統檔案頁選最外層資料夾，也可以把整包放到預設資料夾後直接掃描。預設資料夾：${defaultGptSovitDir(context).absolutePath}",
+                    openSystemPicker = { autoImportPicker.launch(defaultGptSovitInitialTreeUri(context)) },
+                    useDefaultFolder = {
+                        val detected = detectGptSovitBundleFromDefaultFolder(context)
+                        detected.chineseDirUri?.let(onChineseModelDirUri)
+                        detected.englishDirUri?.let(onEnglishModelDirUri)
+                        onAutoImportRootUri(defaultGptSovitDir(context).toURI().toString())
+                        autoImportStatus = detected.message
+                    }
+                )
+            },
+            onClearImportWaste = {
+                autoImportStatus = clearDefaultGptSovitDir(context)
+                onChineseVoiceUri("")
+                onEnglishVoiceUri("")
+                onModelDirUri("")
+                onChineseModelDirUri("")
+                onEnglishModelDirUri("")
+                onAutoImportRootUri("")
+            },
+            onTestLang = onTestLang,
+            onClearChinese = { onChineseVoiceUri("") },
+            onClearEnglish = { onEnglishVoiceUri("") },
+            onClearModelDir = { onModelDirUri("") },
+            onClearChineseModelDir = { onChineseModelDirUri("") },
+            onClearEnglishModelDir = { onEnglishModelDirUri("") },
+            onClearAutoImport = {
+                onAutoImportRootUri("")
+                autoImportStatus = null
+            },
+            onBack = onClose,
+            appLangTag = settings.language.tag,
+            p = p.iosReadable
+        )
     }
 }
 
 @Composable
-private fun ProbeStatus(state: ModelProbeState, p: com.example.ui.theme.AppPalette) {
-    val (text, color, icon) = when (state) {
-        ModelProbeState.Idle -> return
-        ModelProbeState.Testing -> Triple("正在測試公開 URL...", p.auraAmber, Icons.Default.NetworkCheck)
-        is ModelProbeState.Success -> Triple(state.message, p.neonGreen, Icons.Default.CheckCircle)
-        is ModelProbeState.Error -> Triple(state.message, p.dangerRose, Icons.Default.ErrorOutline)
-    }
-    Spacer(Modifier.height(8.dp))
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(color.copy(alpha = 0.08f))
-            .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
-            .padding(10.dp)
+private fun TierBadge(tier: DeviceTier, p: com.example.ui.theme.AppPalette) {
+    val color = tierColor(tier, p)
+    Box(
+        modifier = Modifier.clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.12f))
+            .border(1.dp, color.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(text, fontSize = 10.sp, color = color, lineHeight = 14.sp)
+        Text(tier.name, color = color, fontSize = 11.sp, fontWeight = FontWeight.Black)
     }
 }
 
-private fun networkLabel(sample: DeviceMetricSample?): String {
-    val effective = maxOf(sample?.networkDownKbps ?: 0f, sample?.networkEstimatedKbps ?: 0f)
-    return when {
-        effective >= 1000f -> "%.1f Mbps".format(effective / 1000f)
-        effective > 0f -> "%.0f Kbps".format(effective)
-        else -> I18n.tr("未知")
+@Composable
+private fun StatusRow(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    p: com.example.ui.theme.AppPalette
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 12.dp, vertical = 9.dp)
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontSize = 13.sp, color = color)
     }
 }
 
@@ -2283,76 +2030,6 @@ private fun ModelStatusBlock(
             }
         }
         ModelDownloadState.Idle -> StatusRow(I18n.tr("尚未啟動模型載入"), Icons.Default.Info, p.textMuted, p)
-    }
-}
-
-@Composable
-private fun MetricChart(
-    title: String,
-    value: String,
-    samples: List<DeviceMetricSample>,
-    selector: (DeviceMetricSample) -> Float,
-    color: Color,
-    p: com.example.ui.theme.AppPalette
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-            .background(p.darkBg.copy(alpha = 0.28f))
-            .border(1.dp, p.textMuted.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
-            .padding(10.dp)
-    ) {
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Text(title, fontSize = 11.sp, color = p.textLight, fontWeight = FontWeight.Bold)
-            Text(value, fontSize = 11.sp, color = color, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(6.dp))
-        Canvas(modifier = Modifier.fillMaxWidth().height(58.dp)) {
-            val values = samples.takeLast(40).map(selector)
-            val max = (values.maxOrNull() ?: 100f).coerceAtLeast(1f)
-            val min = (values.minOrNull() ?: 0f).coerceAtMost(max - 0.1f)
-            val range = (max - min).coerceAtLeast(1f)
-            drawLine(p.textMuted.copy(alpha = 0.16f), Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
-            if (values.size < 2) return@Canvas
-            val path = Path()
-            values.forEachIndexed { index, v ->
-                val x = index.toFloat() / (values.lastIndex).coerceAtLeast(1).toFloat() * size.width
-                val y = size.height - ((v - min) / range).coerceIn(0f, 1f) * size.height
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(path, color = color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-        }
-    }
-}
-
-@Composable
-private fun TierBadge(tier: DeviceTier, p: com.example.ui.theme.AppPalette) {
-    val color = tierColor(tier, p)
-    Box(
-        modifier = Modifier.clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(tier.name, color = color, fontSize = 11.sp, fontWeight = FontWeight.Black)
-    }
-}
-
-@Composable
-private fun StatusRow(
-    text: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    p: com.example.ui.theme.AppPalette
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-            .background(color.copy(alpha = 0.15f))
-            .padding(horizontal = 12.dp, vertical = 9.dp)
-    ) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 13.sp, color = color)
     }
 }
 
@@ -2529,209 +2206,3 @@ private fun IosToggleRow(
     }
 }
 
-@Composable
-private fun HardwareHeaderStrip(
-    hardware: com.example.ai.DeviceHardwareInfo,
-    p: com.example.ui.theme.AppPalette
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, p.neonCyan.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-    ) {
-        Icon(Icons.Default.Memory, null, tint = p.neonCyan, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(hardware.socFriendlyName, color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "${hardware.gpuName}  ·  ${hardware.cpuCoreCount} cores",
-                color = p.textMuted, fontSize = 10.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun CompactMetricTile(
-    label: String,
-    value: String,
-    accent: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier,
-    p: com.example.ui.theme.AppPalette
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(p.surface)
-            .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 8.dp, vertical = 8.dp)
-    ) {
-        Text(label, color = p.textMuted, fontSize = 10.sp)
-        Spacer(Modifier.height(2.dp))
-        Text(value, color = accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-/**
- * 模擬定位測試面板。預設 6 個台灣常見 POI，按一下就直接走 Geocoder + POI 規則，
- * 不需要實體 GPS。下方顯示分類結果，方便驗證 [com.example.ai.LocationTracker]
- * 的 keyword 表能否打中（缺哪一類就在 POI_RULES 補關鍵字）。
- */
-@Composable
-private fun SimulateLocationPanel(
-    locationResult: com.example.ai.LocationResult?,
-    onSimulate: (Double, Double) -> Unit,
-    p: com.example.ui.theme.AppPalette
-) {
-    // 經緯度全部對 `assets/poi/taiwan_pois.tsv` 校準到實際 OSM POI 中心點（誤差 < 30 m），
-    // 這樣離線索引能 100% 命中。要新增測試點，先 grep 資料檔確認該座標有資料再加。
-    // 覆蓋全台四區（北中南東），驗證離線 POI 索引在每個地方都查得到。
-    // 座標都對過 OSM 確認周圍有 POI 資料。
-    val presets = remember {
-        listOf(
-            Triple("🏥 台大醫院",     25.0411, 121.5165),       // 北 · 台北
-            Triple("🚆 台北車站",     25.0478, 121.5170),       // 北 · 台北
-            Triple("🍔 麥當勞-西門", 25.04484, 121.50527),     // 北 · 台北
-            Triple("🏯 台中車站",     24.13748, 120.68200),     // 中 · 台中
-            Triple("🌃 六合夜市",     22.63565, 120.30203),     // 南 · 高雄
-            Triple("🌊 花蓮車站",     23.99114, 121.60330)      // 東 · 花蓮
-        )
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, p.auraAmber.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-            .padding(10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.LocationOn, null, tint = p.auraAmber, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("🧪 模擬定位（dev 測試）", color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(6.dp))
-        // 兩欄按鈕網格
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            presets.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { (name, lat, lon) ->
-                        OutlinedButton(
-                            onClick = { onSimulate(lat, lon) },
-                            border = BorderStroke(1.dp, p.auraAmber.copy(alpha = 0.55f)),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(name, fontSize = 11.sp, color = p.textLight)
-                        }
-                    }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        // ── 自由輸入：使用者可以從 Google Maps 複製座標來測 ──
-        Text("自訂座標", color = p.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(4.dp))
-        var coordInput by remember { mutableStateOf("") }
-        var parseError by remember { mutableStateOf<String?>(null) }
-        val ctx = androidx.compose.ui.platform.LocalContext.current
-        OutlinedTextField(
-            value = coordInput,
-            onValueChange = { coordInput = it; parseError = null },
-            placeholder = { Text("貼上「25.0411, 121.5165」格式", fontSize = 11.sp, color = p.textMuted) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = p.textLight,
-                unfocusedTextColor = p.textLight,
-                focusedBorderColor = p.auraAmber,
-                unfocusedBorderColor = p.auraAmber.copy(alpha = 0.4f)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-        parseError?.let {
-            Text(it, color = p.dangerRose, fontSize = 10.sp)
-        }
-        Spacer(Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Button(
-                onClick = {
-                    when (val r = parseLatLon(coordInput)) {
-                        null -> parseError = "格式不對。應為「lat, lon」，例：25.0411, 121.5165"
-                        else -> { parseError = null; onSimulate(r.first, r.second) }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = p.auraAmber, contentColor = androidx.compose.ui.graphics.Color.White
-                ),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                Text("測這個座標", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-            // 「從 Google Maps 選」：開系統 Geo Intent，user 在 Maps 長按拿座標複製回來
-            OutlinedButton(
-                onClick = {
-                    val center = locationResult?.let { "${it.latitude},${it.longitude}" } ?: "23.97,120.97"
-                    val uri = "geo:$center?z=15&q=$center"
-                    runCatching {
-                        ctx.startActivity(android.content.Intent(
-                            android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri)
-                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                    }
-                },
-                border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.55f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = p.neonCyan),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                Text("📍 開 Maps", fontSize = 11.sp)
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        // ── 結果顯示 ──
-        if (locationResult != null) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(p.surface)
-                    .padding(8.dp)
-            ) {
-                Text("分類: ${locationResult.shortTag.ifBlank { "（未命中規則）" }}",
-                     color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("座標: %.5f, %.5f".format(locationResult.latitude, locationResult.longitude),
-                     color = p.textMuted, fontSize = 10.sp)
-                Text("地址: ${locationResult.address}",
-                     color = p.textLight, fontSize = 10.sp, lineHeight = 13.sp)
-                // 即時 AAC 情境推薦預覽
-                val hint = com.example.ai.AacContextSuggester.suggest(locationResult.shortTag)
-                if (hint != null) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("→ AAC 推薦：${hint.suggestedItems.take(4).joinToString("、") { "${it.emoji}${it.label}" }}",
-                         color = p.neonCyan, fontSize = 10.sp, lineHeight = 13.sp)
-                }
-            }
-        } else {
-            Text("點上方按鈕或輸入座標做測試 →", color = p.textMuted, fontSize = 10.sp)
-        }
-    }
-}
-
-/**
- * 解析「lat, lon」、「lat,lon」、「lat lon」等格式。
- * 不做 DMS 解析（複雜度太高），Google Maps 的「複製座標」就是十進位 lat,lon 格式。
- */
-private fun parseLatLon(input: String): Pair<Double, Double>? {
-    val cleaned = input.trim().replace(Regex("[°NSEW,\\s]+"), " ").trim()
-    val parts = cleaned.split(Regex("\\s+"))
-    if (parts.size != 2) return null
-    val lat = parts[0].toDoubleOrNull() ?: return null
-    val lon = parts[1].toDoubleOrNull() ?: return null
-    if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
-    return lat to lon
-}

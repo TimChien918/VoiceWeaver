@@ -794,7 +794,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 com.example.ai.HomeAnchor(s.homeLatitude, s.homeLongitude, s.homeRadiusMeters)
             } else null
             ttsModule.configureGptSovit(
-                enabled = s.gptSovitEnabled && s.developerMode,
+                // 角色語音已搬出「開發者模式」變成一般設定，不再需要 developerMode 開關才能用
+                enabled = s.gptSovitEnabled,
                 mode = s.gptSovitVoiceMode,
                 chineseVoiceUri = s.gptSovitChineseVoiceUri,
                 englishVoiceUri = s.gptSovitEnglishVoiceUri,
