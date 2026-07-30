@@ -153,6 +153,25 @@ interface InferenceEngine {
     suspend fun reconstructSentence(vault: GlobalTagsVault): Result<ReconstructedData>
 
     /**
+     * 【音訊原生理解】直接把錄音餵給模型，中間不經任何語音轉文字。
+     *
+     * 為什麼需要這條路：STT 是拿正常語音訓練的，失語症患者的構音障礙、語音錯誤
+     * （paraphasia）、停頓與語調，經過 STT 之後只剩一串壞掉的文字，真正的線索
+     * 全丟了。讓模型直接聽，才有機會從「聽起來像什麼」推回本意。
+     *
+     * 預設不支援（回 failure）；只有具備音訊輸入能力的引擎會覆寫。
+     * @param audioFile 錄音檔（AAC/ADTS，16kHz 單聲道）
+     * @param vault     同一時刻的地點／物件情境，一起交給模型判斷
+     */
+    suspend fun reconstructFromAudio(
+        audioFile: java.io.File,
+        vault: GlobalTagsVault
+    ): Result<ReconstructedData> = Result.failure(UnsupportedOperationException("此引擎不支援音訊理解"))
+
+    /** 這個引擎現在是否真的能做音訊理解（要有音訊能力的供應商且已設好金鑰）。 */
+    fun supportsAudioUnderstanding(): Boolean = false
+
+    /**
      * 依患者狀況產生 3 句適合「跟讀練習」的繁體中文句子。
      * 預設規則 fallback（無 LLM 時用）；MediaPipe Qwen 引擎會覆寫為真正 AI 生成。
      *
@@ -1302,6 +1321,69 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 is SttState.Processing -> {}   // 辨識結算中，忽略
                 is SttState.Preparing -> {}    // 模型準備中，忽略
                 else -> sttManager.startListening()
+            }
+        }
+    }
+
+    // ─── 音訊原生理解（直接聽，不經語音轉文字）────────────────────────────
+    // 一般 STT 是拿正常語音訓練的，把失語症患者的構音壓成文字時會丟掉語調、
+    // 停頓、語音錯誤這些帶意義的線索。這條路把錄音整段交給模型自己聽。
+
+    private val audioRecorder = AudioRecorderManager(application)
+
+    /** 是否正在錄「給 AI 直接聽」的音訊。 */
+    private val _isListeningDirect = MutableStateFlow(false)
+    val isListeningDirect: StateFlow<Boolean> = _isListeningDirect.asStateFlow()
+
+    /** 目前設定下能不能走音訊理解（需要有音訊能力的供應商＋金鑰）。 */
+    fun canUnderstandAudio(): Boolean =
+        ::activeEngine.isInitialized && activeEngine.supportsAudioUnderstanding()
+
+    /**
+     * 按一下開始錄、再按一下停止並直接送模型理解。
+     * 失敗（沒金鑰／網路／模型不支援）時自動退回原本的 Vosk STT 流程，不讓使用者卡住。
+     */
+    fun toggleDirectAudioUnderstanding() {
+        viewModelScope.launch {
+            if (_isListeningDirect.value) {
+                _isListeningDirect.value = false
+                val path = audioRecorder.stopRecording()
+                if (path == null) {
+                    _reconstructionState.value = ReconstructionUiState.Error(com.example.ui.I18n.tr("錄音失敗，請再試一次"))
+                    return@launch
+                }
+                _reconstructionState.value = ReconstructionUiState.Loading
+                val file = java.io.File(path)
+                val result = activeEngine.reconstructFromAudio(file, _globalTagsVault.value)
+                runCatching { file.delete() }   // 語音是敏感資料，理解完立刻刪掉，不留在裝置上
+
+                result.onSuccess { data ->
+                    _reconstructionState.value = ReconstructionUiState.Success(data)
+                    if (settings.value.aacIntentImageEnabled) generateIntentImage(data.reconstructedText)
+                    else clearIntentImage()
+                    val rec = SpeechRecord(
+                        originalInput     = com.example.ui.I18n.tr("（語音直接理解）"),
+                        reconstructedText = data.reconstructedText,
+                        confidence        = "${"%.0f".format(data.confidence * 100)}%",
+                        locationTag       = _globalTagsVault.value.locationTag,
+                        visionTag         = _globalTagsVault.value.visionTags.joinToString("、"),
+                        timestamp         = data.timestamp
+                    )
+                    repository.insert(rec)
+                    CloudSync.pushHistory(rec.originalInput, rec.reconstructedText, rec.timestamp)
+                }.onFailure { e ->
+                    // 音訊路徑不通就回到 STT，不是死路
+                    Log.w("VoiceWeaverViewModel", "音訊理解失敗，改用語音轉文字：${e.message}")
+                    _reconstructionState.value = ReconstructionUiState.Idle
+                    sttManager.startListening()
+                }
+            } else {
+                val started = audioRecorder.startRecording()
+                if (started == null) {
+                    _reconstructionState.value = ReconstructionUiState.Error(com.example.ui.I18n.tr("無法開始錄音，請確認麥克風權限"))
+                    return@launch
+                }
+                _isListeningDirect.value = true
             }
         }
     }

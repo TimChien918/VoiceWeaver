@@ -114,6 +114,127 @@ class HybridInferenceEngine(
         }
     }
 
+    // ─── 音訊原生理解（不經 STT）─────────────────────────────────────────
+    // 只有 Gemini 風格的供應商吃 inlineData 音訊；沒有這種供應商時回報不支援，
+    // 由呼叫端退回原本的 Vosk STT → 文字重組流程（離線也還能用）。
+
+    /** 有音訊能力又有金鑰的供應商（目前＝Gemini 風格）。 */
+    private fun audioCapableCandidates(): List<LlmApiEntry> =
+        cloudCandidates().filter { it.provider.style == LlmApiStyle.GEMINI }
+
+    override fun supportsAudioUnderstanding(): Boolean =
+        provider != CloudProvider.LocalOnly && audioCapableCandidates().isNotEmpty()
+
+    override suspend fun reconstructFromAudio(
+        audioFile: java.io.File,
+        vault: GlobalTagsVault
+    ): Result<ReconstructedData> {
+        if (provider == CloudProvider.LocalOnly) {
+            return Result.failure(IllegalStateException("已設為只用本機，音訊理解需要雲端模型"))
+        }
+        val candidates = audioCapableCandidates()
+        if (candidates.isEmpty()) {
+            return Result.failure(IllegalStateException("沒有具備音訊理解能力的供應商（需要 Gemini 金鑰）"))
+        }
+        if (!audioFile.exists() || audioFile.length() == 0L) {
+            return Result.failure(IllegalStateException("錄音檔是空的"))
+        }
+        // Gemini inline 上限 20MB；16kHz/32kbps 大約 4KB/秒，正常一句話遠低於上限。
+        if (audioFile.length() > MAX_INLINE_AUDIO_BYTES) {
+            return Result.failure(IllegalStateException("錄音太長（${audioFile.length() / 1024} KB），請講短一點"))
+        }
+
+        val start = System.currentTimeMillis()
+        return try {
+            val b64 = withContext(Dispatchers.IO) {
+                android.util.Base64.encodeToString(audioFile.readBytes(), android.util.Base64.NO_WRAP)
+            }
+            val prompt = buildAudioReconstructPrompt(vault, b64)
+
+            // 跟文字路徑一樣做自我一致性：平行取樣多次、多數決，抗單次誤聽。
+            val samples = coroutineScope {
+                (1..RECONSTRUCT_SAMPLES).map {
+                    async {
+                        runCatching {
+                            tryCloudWithFailover(prompt, timeoutMs = AUDIO_TIMEOUT_MS) { raw ->
+                                val parsed = parseCoT(raw)
+                                if (parsed.reconstructed.isBlank()) error("模型回傳空句子")
+                                parsed
+                            }
+                        }.getOrNull()
+                    }
+                }.awaitAll()
+            }.filterNotNull()
+
+            if (samples.isEmpty()) error("音訊理解多次取樣皆失敗")
+
+            val ranked = rankBySelfConsistency(samples)
+            val (selected, top) = ranked.first()
+            Result.success(
+                ReconstructedData(
+                    // 音訊路徑沒有「碎詞原文」——本來就沒經過 STT。
+                    // 留空讓 UI 不要顯示「唸原始輸入」那顆按鈕（沒有原始文字可唸）。
+                    originalText = "",
+                    reconstructedText = top.text,
+                    confidence = top.confidence,
+                    engineUsed = "${selected.label}·直接聽音訊（${samples.size} 取樣，未經語音轉文字）",
+                    inferenceTimeMs = System.currentTimeMillis() - start,
+                    alternatives = ranked.map { it.second }
+                )
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Audio understanding failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 音訊理解的提示詞。與文字版共用「不要腦補」的核心約束，但改成
+     * 針對「聽」的任務：允許模型依發音相近去推測，因為失語症患者
+     * 常出現語音錯誤（想說「水」卻發成「揮」）——這正是走音訊的價值。
+     */
+    private fun buildAudioReconstructPrompt(vault: GlobalTagsVault, audioB64: String) = CloudPrompt(
+        system = """
+            你是輔助失語症患者溝通的語言助理。附上的音訊是患者本人說的話。
+            請直接聽這段音訊，判斷他最可能想表達什麼，並重組成一句自然的繁體中文。
+
+            這位患者有失語症／構音障礙，所以：
+            - 發音可能不標準、字詞可能拉長或含糊、句子可能不完整、可能重複同一個字。
+            - 可能出現語音錯誤：想講的字被講成發音相近的另一個字（例如想說「水」講成「揮」）。
+              請以「發音相近且在當下情境合理」為準去推測他真正想說的詞。
+            - 語調與停頓有意義：語尾上揚多半是問句，急促或音量大多半是急迫需求。
+
+            【但仍然不可以腦補】
+            句子裡每個實詞都必須來自你真的在音訊裡聽到的內容，或明確對應到下方的地點／物件情境。
+            你只能補讓句子成立所需的語法零件（我、請、想、了、嗎）。
+            不可以加入你沒聽到、情境也沒有的新事件、新時間、新對象或新問句。
+            如果音訊裡有明確的疑問詞，必須保留其語意。
+
+            若整段音訊聽不出任何有意義的內容（只有雜音、咳嗽、沉默），
+            confidence 給 1-20 並在 reconstructed 給你最接近的猜測，不要硬掰一句完整的話。
+
+            confidence 是你對這句重組的把握（0-100）：
+              80-100：聽得很清楚、幾乎確定
+              50-79 ：聽得出大概、給了合理推測（含糊發音多半落在這裡）
+              1-49  ：幾乎聽不出來
+            只輸出 JSON：{"heard":"你實際聽到的音節或字（可含不確定處）","reconstructed":"完整繁體中文句子","confidence":0到100整數}
+        """.trimIndent(),
+        user = buildString {
+            appendLine("請聽附上的音訊。")
+            appendLine("地點：${vault.locationTag.ifBlank { "未指定" }}")
+            appendLine("周邊物件：${vault.visionTags.joinToString("、").ifBlank { "未偵測" }}")
+            val cands = com.example.data.AphasiaPractice.reconstructionCandidates("", vault.visionTags)
+            if (cands.isNotEmpty()) {
+                appendLine("常用表達參考（聽起來接近其中之一時可優先採用其自然說法，但不可硬套）：")
+                cands.take(8).forEach { appendLine("- $it") }
+            }
+        },
+        temperature = RECONSTRUCT_SAMPLE_TEMPERATURE,
+        maxTokens = 512,
+        audioBase64 = audioB64,
+        audioMime = "audio/aac"
+    )
+
     /**
      * 多數決排名：把 N 次取樣依「正規化後的重組文字」分組去重，依票數（多數決）、
      * 平手再比組內平均信心度排序，最多回傳 3 個候選給「換一個」UI 循環——
@@ -267,9 +388,20 @@ class HybridInferenceEngine(
     private fun callGemini(endpoint: String, apiKey: String, model: String, prompt: CloudPrompt): String {
         if (apiKey.isBlank()) error("API key 未設定")
         val url = "${endpoint.trimEnd('/')}/$model:generateContent?key=$apiKey"
+        // 音訊原生：parts 同時放文字指令與 inlineData 音訊，模型直接「聽」，
+        // 中間不經任何 STT，語調／停頓／含糊發音都保留給模型判斷。
+        val parts = JSONArray().put(JSONObject().put("text", prompt.user))
+        if (prompt.audioBase64 != null) {
+            parts.put(
+                JSONObject().put(
+                    "inlineData",
+                    JSONObject().put("mimeType", prompt.audioMime).put("data", prompt.audioBase64)
+                )
+            )
+        }
         val body = JSONObject()
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt.system))))
-            .put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt.user)))))
+            .put("contents", JSONArray().put(JSONObject().put("parts", parts)))
             .put("generationConfig", JSONObject().put("temperature", prompt.temperature).put("maxOutputTokens", prompt.maxTokens))
             .toString().toRequestBody(JSON)
         val req = Request.Builder().url(url).header("Content-Type", "application/json").post(body).build()
@@ -532,7 +664,10 @@ class HybridInferenceEngine(
         val system: String,
         val user: String,
         val temperature: Double,
-        val maxTokens: Int
+        val maxTokens: Int,
+        /** 直接餵音訊給模型時的 base64 內容（目前只有 Gemini 風格支援）。null＝純文字。 */
+        val audioBase64: String? = null,
+        val audioMime: String = "audio/aac"
     )
 
     private data class CoTParsed(val reconstructed: String, val confidence: Double)
@@ -544,6 +679,10 @@ class HybridInferenceEngine(
         // 語句重組自我一致性：平行取樣次數；溫度略高於單次呼叫的 0.1，才有足夠多樣性可供多數決，
         // 但不宜太高——溫度越高，模型越容易編出碎詞裡沒有的新內容（腦補），0.3 是折衷值。
         private const val RECONSTRUCT_SAMPLES = 3
+        /** 音訊上傳＋理解比純文字慢，逾時放寬。 */
+        private const val AUDIO_TIMEOUT_MS = 45_000L
+        /** Gemini inline 音訊上限 20MB，保守留 18MB。 */
+        private const val MAX_INLINE_AUDIO_BYTES = 18L * 1024 * 1024
         private const val RECONSTRUCT_SAMPLE_TEMPERATURE = 0.3
 
         fun wrapIfNeeded(

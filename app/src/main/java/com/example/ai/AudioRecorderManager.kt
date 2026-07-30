@@ -13,9 +13,16 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Task 2.3: AudioRecorderManager (單純錄音管線)
- * 進行高保真 (MPEG_4 / AAC) 錄製，並將檔案放置於暫存資料夾供 Whisper 模型分析。
- * 運作於 Dispatchers.IO，確保不阻礙 Compose Main UI Thread。
+ * 錄音管線：產出可直接餵給「音訊原生 LLM」的檔案。
+ *
+ * 為什麼要有這條路：失語症患者的構音常常不標準，STT（Vosk/Whisper）是拿正常語音
+ * 訓練的，會把病人的話壓成一段錯誤的文字，語調、停頓、語音錯誤（paraphasia）
+ * 這些真正帶著意義的線索全被丟掉——後面的 LLM 只能對著壞掉的文字硬猜。
+ * 讓模型直接「聽」原始音訊可以保留這些資訊。
+ *
+ * 格式選擇：AAC_ADTS（裸 AAC 串流，mimeType audio/aac）＋16kHz 單聲道。
+ * 不用 MPEG_4 容器，因為那是 audio/mp4，不在 Gemini 接受的音訊格式清單內；
+ * 16kHz 單聲道對語音足夠，檔案也小（Gemini inline 上限 20MB）。
  */
 class AudioRecorderManager(private val context: Context) {
 
@@ -40,7 +47,7 @@ class AudioRecorderManager(private val context: Context) {
 
         try {
             // 建立高安全性之 cache 緩存暫存檔
-            val fileName = "aphasia_whisper_input_${System.currentTimeMillis()}.m4a"
+            val fileName = "aphasia_voice_${System.currentTimeMillis()}.aac"
             val tempFile = File(context.cacheDir, fileName)
             currentOutputFile = tempFile
 
@@ -53,11 +60,14 @@ class AudioRecorderManager(private val context: Context) {
             }
 
             recorder.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                // VOICE_RECOGNITION：套用系統的語音前處理（降噪／AGC），
+                // 比 MIC 更適合近距離人聲，對含糊的發音幫助明顯。
+                setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+                setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(128000)
-                setAudioSamplingRate(44100)
+                setAudioChannels(1)
+                setAudioEncodingBitRate(32000)
+                setAudioSamplingRate(16000)
                 setOutputFile(tempFile.absolutePath)
                 prepare()
                 start()

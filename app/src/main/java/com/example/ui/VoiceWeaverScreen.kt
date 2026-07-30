@@ -75,6 +75,7 @@ fun VoiceWeaverScreen(
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     val sttState by viewModel.sttState.collectAsState()
+    val isListeningDirect by viewModel.isListeningDirect.collectAsState()
     val ttsInitialized by viewModel.ttsInitialized.collectAsState()
 
     // Colors 從 LocalAppPalette 取（隨設定主題切換立即重組）
@@ -766,6 +767,47 @@ fun VoiceWeaverScreen(
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
+                            }
+                            // ── 音訊原生理解：不轉文字，直接讓 AI 聽 ──
+                            // STT 會把構音障礙的語音壓成錯誤文字，語調／停頓／語音錯誤全丟掉；
+                            // 這條路把錄音整段交給模型自己聽，準確度對失語症患者明顯更好。
+                            // 只有設定了具音訊能力的供應商（Gemini）時才顯示。
+                            // 綁到會變動的設定欄位：使用者新增 Gemini 金鑰後才會重新評估，
+                            // 直接呼叫函式的話 Compose 不知道要重組，按鈕會一直不出現。
+                            val canHearAudio = remember(
+                                settings.llmApis, settings.llmApiSelectedId, settings.cloudProvider
+                            ) { viewModel.canUnderstandAudio() }
+                            if (canHearAudio) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { viewModel.toggleDirectAudioUnderstanding() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isListeningDirect) dangerRose else neonGreen,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
+                                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                                ) {
+                                    Icon(
+                                        if (isListeningDirect) Icons.Default.StopCircle else Icons.Default.Hearing,
+                                        null, modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (isListeningDirect) I18n.tr("說完了，請 AI 聽")
+                                        else I18n.tr("直接說給 AI 聽（不轉文字）"),
+                                        fontSize = 15.sp, fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    if (isListeningDirect)
+                                        I18n.tr("正在錄音…說完按上面的按鈕。")
+                                    else
+                                        I18n.tr("咬字不清楚也沒關係，AI 會直接聽你的聲音判斷意思。"),
+                                    fontSize = 12.sp, color = textMuted, lineHeight = 16.sp,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
                             }
                         } else {
                             OutlinedButton(
