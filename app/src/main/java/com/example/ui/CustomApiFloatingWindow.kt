@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -81,21 +82,23 @@ fun ApiKeysPanel(
 
         // ── AI 生圖（自訂 API）：供應商下拉 + API 欄位；可多筆 ──
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text(I18n.tr("🖼 AI 生圖（自訂 API）"), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                color = p.neonCyan, modifier = Modifier.weight(1f))
+            Text(I18n.tr("AI 生圖"), fontSize = 13.sp, color = p.textMuted,
+                modifier = Modifier.weight(1f))
             OutlinedButton(
                 onClick = { viewModel.addImageApi(ImageProvider.GEMINI) },
-                border = BorderStroke(1.dp, p.neonGreen.copy(alpha = 0.55f)),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF007AFF).copy(alpha = 0.5f)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.heightIn(min = 34.dp)
             ) {
-                Icon(Icons.Default.Add, null, tint = p.neonGreen, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Add, null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(I18n.tr("加入"), color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("加入"), color = Color(0xFF007AFF), fontSize = 14.sp)
             }
         }
         Text(
             I18n.tr("選供應商、填 API 金鑰即可。同一供應商可加多筆（多把金鑰），生圖時自動備援；勾選 ✓＝目前使用中。"),
-            fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
+            fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
         )
         val selectedId = settings.imageApiSelectedId.ifBlank { imageApis.firstOrNull()?.id ?: "" }
         imageApis.forEach { entry ->
@@ -114,21 +117,23 @@ fun ApiKeysPanel(
 
         // ── 文字 LLM（重組雲端備援）：供應商下拉 + 金鑰；可多筆，自動備援（像 agent 多供應商）──
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text(I18n.tr("💬 文字 LLM（多供應商）"), fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                color = p.neonCyan, modifier = Modifier.weight(1f))
+            Text(I18n.tr("文字 LLM"), fontSize = 13.sp, color = p.textMuted,
+                modifier = Modifier.weight(1f))
             OutlinedButton(
                 onClick = { viewModel.addLlmApi(LlmProvider.GROQ) },
-                border = BorderStroke(1.dp, p.neonGreen.copy(alpha = 0.55f)),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF007AFF).copy(alpha = 0.5f)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.heightIn(min = 34.dp)
             ) {
-                Icon(Icons.Default.Add, null, tint = p.neonGreen, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Add, null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text(I18n.tr("加入"), color = p.neonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(I18n.tr("加入"), color = Color(0xFF007AFF), fontSize = 14.sp)
             }
         }
         Text(
             I18n.tr("選供應商、填金鑰即可。可加多筆（含同供應商多把金鑰），重組句子時用 ✓ 那筆，失敗自動換下一筆；全部失敗才用手機本機 AI。"),
-            fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
+            fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
         )
         val llmSelId = settings.llmApiSelectedId.ifBlank { llmApis.firstOrNull()?.id ?: "" }
         llmApis.forEach { entry ->
@@ -154,7 +159,7 @@ fun ApiKeysPanel(
 
         Text(
             I18n.tr("🔒 所有金鑰僅存在這支手機（DataStore），不會上傳、也不會被打包進原始碼。\n首次啟動已從本機 .env 自動帶入；留空則用內建預設。改完即時生效。"),
-            fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp
+            fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
         )
     }
 }
@@ -220,17 +225,29 @@ private fun ProviderDropdown(
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = { open = true },
-            border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.5f)),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, p.textMuted.copy(alpha = 0.35f)),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
-            Text(current.displayName, color = p.textLight, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(current.displayName, color = p.textLight, fontSize = 15.sp, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             ImageProvider.entries.forEach { prov ->
                 DropdownMenuItem(
-                    text = { Text("${prov.displayName}${if (!prov.needsKey) I18n.tr("（免金鑰）") else ""}") },
-                    onClick = { onSelect(prov); open = false }
+                    text = {
+                        Text(
+                            "${prov.displayName}${if (!prov.needsKey) I18n.tr("（免金鑰）") else ""}",
+                            fontSize = 15.sp, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = p.textLight
+                        )
+                    },
+                    onClick = { onSelect(prov); open = false },
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
         }
@@ -239,7 +256,7 @@ private fun ProviderDropdown(
 
 @Composable
 private fun SectionTitle(text: String, p: AppPalette) {
-    Text(text, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.neonCyan)
+    Text(text, fontSize = 13.sp, color = p.textMuted)
 }
 
 /** 一筆文字 LLM：上「供應商」標籤＋下拉（✓使用中、🗑刪除），下「API」標籤＋金鑰欄位。 */
@@ -293,15 +310,30 @@ private fun LlmProviderDropdown(
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = { open = true },
-            border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.5f)),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, p.textMuted.copy(alpha = 0.35f)),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
-            Text(current.displayName, color = p.textLight, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(current.displayName, color = p.textLight, fontSize = 15.sp, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             LlmProvider.entries.forEach { prov ->
-                DropdownMenuItem(text = { Text(prov.displayName) }, onClick = { onSelect(prov); open = false })
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            prov.displayName,
+                            fontSize = 15.sp, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = p.textLight
+                        )
+                    },
+                    onClick = { onSelect(prov); open = false },
+                    modifier = Modifier.heightIn(min = 44.dp)
+                )
             }
         }
     }

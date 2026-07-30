@@ -69,9 +69,14 @@ enum class LlmProvider(
     FIREWORKS("Fireworks", "https://api.fireworks.ai/inference/v1/chat/completions", "accounts/fireworks/models/qwen3-30b-a3b", LlmApiStyle.OPENAI, true, "fireworks.ai"),
     SILICONFLOW("SiliconFlow", "https://api.siliconflow.cn/v1/chat/completions", "Qwen/Qwen3-14B", LlmApiStyle.OPENAI, true, "siliconflow.cn（中國區，中文佳）"),
     NEBIUS("Nebius", "https://api.studio.nebius.com/v1/chat/completions", "Qwen/Qwen3-14B", LlmApiStyle.OPENAI, true, "studio.nebius.com"),
-    // 本機自架（Ollama / LM Studio）：不需要金鑰，區網直連，完全離線可用
-    OLLAMA("Ollama（本機自架）", "http://127.0.0.1:11434/v1/chat/completions", "qwen3:14b", LlmApiStyle.OPENAI, false, "電腦跑 ollama serve；手機填電腦 IP"),
-    LMSTUDIO("LM Studio（本機自架）", "http://127.0.0.1:1234/v1/chat/completions", "local-model", LlmApiStyle.OPENAI, false, "LM Studio 開 Local Server"),
+    // 「你的電腦」＝模型跑在使用者自己的 Mac/PC 上，手機透過區網 HTTP 連過去，
+    // 跟現有的「用 Mac 跑 GPT-SoVITS」同一個模式。手機本身裝不了這些程式，
+    // 所以名稱一定要寫「你的電腦」——寫「本機」會被誤讀成手機本機。
+    // 不需要金鑰、資料不出區網，適合在意隱私或想完全離線的使用者。
+    OLLAMA("Ollama（跑在你的電腦）", "http://127.0.0.1:11434/v1/chat/completions", "qwen3:14b", LlmApiStyle.OPENAI, false,
+        "在電腦執行 ollama serve，再把位址改成電腦的區網 IP（例 http://192.168.1.5:11434/v1/chat/completions）"),
+    LMSTUDIO("LM Studio（跑在你的電腦）", "http://127.0.0.1:1234/v1/chat/completions", "local-model", LlmApiStyle.OPENAI, false,
+        "在電腦開 LM Studio 的 Local Server，再把位址改成電腦的區網 IP（例 http://192.168.1.5:1234/v1/chat/completions）"),
 
     // ── 各自獨立格式 ──
     COHERE("Cohere", "https://api.cohere.com/v2/chat", "command-r7b-12-2024", LlmApiStyle.COHERE, true, "dashboard.cohere.com/api-keys"),
