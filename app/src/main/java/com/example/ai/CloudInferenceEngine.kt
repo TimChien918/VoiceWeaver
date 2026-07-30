@@ -118,12 +118,24 @@ class HybridInferenceEngine(
     // 只有 Gemini 風格的供應商吃 inlineData 音訊；沒有這種供應商時回報不支援，
     // 由呼叫端退回原本的 Vosk STT → 文字重組流程（離線也還能用）。
 
-    /** 有音訊能力又有金鑰的供應商（目前＝Gemini 風格）。 */
-    private fun audioCapableCandidates(): List<LlmApiEntry> =
-        cloudCandidates().filter { it.provider.style == LlmApiStyle.GEMINI }
+    /**
+     * 有「原生音訊理解」能力的供應商：模型直接聽音訊，不經轉文字。
+     * 依各家宣告的 audioStyle 判斷，不再寫死某一家。
+     */
+    private fun nativeAudioCandidates(): List<LlmApiEntry> = cloudCandidates().filter {
+        it.provider.audioStyle == com.example.data.LlmAudioStyle.GEMINI_INLINE ||
+            it.provider.audioStyle == com.example.data.LlmAudioStyle.OPENAI_INPUT_AUDIO
+    }
+
+    /** 只有 Whisper 轉寫能力的供應商（中間路線：雲端 STT，比裝置端 Vosk 準）。 */
+    private fun transcribeCandidates(): List<LlmApiEntry> = cloudCandidates().filter {
+        it.provider.audioStyle == com.example.data.LlmAudioStyle.WHISPER_TRANSCRIBE &&
+            it.provider.transcribeEndpoint.isNotBlank()
+    }
 
     override fun supportsAudioUnderstanding(): Boolean =
-        provider != CloudProvider.LocalOnly && audioCapableCandidates().isNotEmpty()
+        provider != CloudProvider.LocalOnly &&
+            (nativeAudioCandidates().isNotEmpty() || transcribeCandidates().isNotEmpty())
 
     override suspend fun reconstructFromAudio(
         audioFile: java.io.File,
@@ -132,9 +144,10 @@ class HybridInferenceEngine(
         if (provider == CloudProvider.LocalOnly) {
             return Result.failure(IllegalStateException("已設為只用本機，音訊理解需要雲端模型"))
         }
-        val candidates = audioCapableCandidates()
-        if (candidates.isEmpty()) {
-            return Result.failure(IllegalStateException("沒有具備音訊理解能力的供應商（需要 Gemini 金鑰）"))
+        val native = nativeAudioCandidates()
+        val transcribe = transcribeCandidates()
+        if (native.isEmpty() && transcribe.isEmpty()) {
+            return Result.failure(IllegalStateException("沒有具備音訊能力的供應商（Gemini／OpenAI gpt-audio／Mistral Voxtral／Groq Whisper 任一）"))
         }
         if (!audioFile.exists() || audioFile.length() == 0L) {
             return Result.failure(IllegalStateException("錄音檔是空的"))
@@ -149,6 +162,16 @@ class HybridInferenceEngine(
             val b64 = withContext(Dispatchers.IO) {
                 android.util.Base64.encodeToString(audioFile.readBytes(), android.util.Base64.NO_WRAP)
             }
+            // 沒有原生音訊供應商時不要白跑取樣，直接走 Whisper 轉寫
+            if (native.isEmpty() && transcribe.isNotEmpty()) {
+                val heard = transcribeWithWhisper(audioFile, transcribe, vault)
+                    ?: return Result.failure(IllegalStateException("雲端語音轉寫失敗"))
+                Log.i(TAG, "雲端 Whisper 轉寫結果：$heard")
+                return reconstructSentence(vault.copy(rawText = heard)).map { data ->
+                    data.copy(engineUsed = "${data.engineUsed}｜雲端 Whisper 轉寫")
+                }
+            }
+
             val prompt = buildAudioReconstructPrompt(vault, b64)
 
             // 跟文字路徑一樣做自我一致性：平行取樣多次、多數決，抗單次誤聽。
@@ -166,7 +189,21 @@ class HybridInferenceEngine(
                 }.awaitAll()
             }.filterNotNull()
 
-            if (samples.isEmpty()) error("音訊理解多次取樣皆失敗")
+            if (samples.isEmpty()) {
+                // 原生音訊全失敗（或本來就沒有原生音訊供應商）→ 走 Whisper 轉寫中間路線：
+                // 雲端 Whisper 通常比裝置端 Vosk 準；轉出文字後再交給文字重組流程。
+                if (transcribe.isNotEmpty()) {
+                    val heard = transcribeWithWhisper(audioFile, transcribe, vault)
+                    if (!heard.isNullOrBlank()) {
+                        Log.i(TAG, "原生音訊不可用，改用雲端 Whisper 轉寫：$heard")
+                        val textVault = vault.copy(rawText = heard)
+                        return reconstructSentence(textVault).map { data ->
+                            data.copy(engineUsed = "${data.engineUsed}｜雲端 Whisper 轉寫")
+                        }
+                    }
+                }
+                error("音訊理解多次取樣皆失敗")
+            }
 
             val ranked = rankBySelfConsistency(samples)
             val (selected, top) = ranked.first()
@@ -186,6 +223,50 @@ class HybridInferenceEngine(
             Log.w(TAG, "Audio understanding failed: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    /**
+     * 雲端 Whisper 轉寫（multipart，跟對話 API 完全不同的端點）。
+     * 會把地點與看到的物品當成 prompt 偏置詞彙餵進去——Whisper 支援用 prompt
+     * 提示詞彙，對失語症場景的同音誤判有幫助（例如提示「醫院、吃藥」）。
+     */
+    private suspend fun transcribeWithWhisper(
+        audioFile: java.io.File,
+        candidates: List<LlmApiEntry>,
+        vault: GlobalTagsVault
+    ): String? = withContext(Dispatchers.IO) {
+        val bytes = runCatching { audioFile.readBytes() }.getOrNull() ?: return@withContext null
+        val hint = buildString {
+            append("失語症患者日常溝通。")
+            if (vault.locationTag.isNotBlank()) append("地點：${vault.locationTag}。")
+            if (vault.visionTags.isNotEmpty()) append("周邊：${vault.visionTags.joinToString("、")}。")
+        }
+        for (entry in candidates) {
+            val p = entry.provider
+            val req = runCatching {
+                WhisperTranscribeAdapter.buildRequest(
+                    endpoint = p.transcribeEndpoint,
+                    apiKey = entry.key,
+                    model = p.transcribeModel,
+                    audioBytes = bytes,
+                    audioFormat = audioFile.extension.ifBlank { "aac" },
+                    languageHint = "zh",
+                    promptHint = hint
+                )
+            }.getOrNull() ?: continue
+            val text = runCatching {
+                client.newCall(req).execute().use { res ->
+                    val body = res.body?.string().orEmpty()
+                    if (!res.isSuccessful) error("HTTP ${res.code}: ${body.take(120)}")
+                    WhisperTranscribeAdapter.parseResponse(body)
+                }
+            }.getOrElse {
+                Log.w(TAG, "Whisper 轉寫失敗（${p.displayName}）：${it.message}")
+                null
+            }
+            if (!text.isNullOrBlank()) return@withContext text
+        }
+        null
     }
 
     /**
@@ -376,118 +457,34 @@ class HybridInferenceEngine(
             ApiKeyOverrides.resolve(ApiKeyOverrides.cohere, BuildConfig.COHERE_API_KEY)),
     )
 
+    /**
+     * 送出請求。格式全部交給 [LlmAdapter] 的各家實作處理——
+     * 這裡只管「要什麼」，不管「怎麼組 JSON」，新增廠商不必改這支。
+     */
     private suspend fun callCloud(entry: LlmApiEntry, prompt: CloudPrompt): String =
         withContext(Dispatchers.IO) {
-            when (entry.provider.style) {
-                LlmApiStyle.OPENAI -> callOpenAiCompatible(entry.effectiveEndpoint, entry.key.trim(), entry.effectiveModel, prompt)
-                LlmApiStyle.COHERE -> callCohere(entry.effectiveEndpoint, entry.key.trim(), entry.effectiveModel, prompt)
-                LlmApiStyle.GEMINI -> callGemini(entry.effectiveEndpoint, entry.key.trim(), entry.effectiveModel, prompt)
+            val adapter = LlmAdapter.of(entry)
+            // 走音訊時，若該供應商需要換成專用的音訊模型（如 gpt-audio / voxtral），這裡替換
+            val effective = if (prompt.audioBase64 != null && entry.provider.audioModel.isNotBlank()) {
+                entry.copy(model = entry.provider.audioModel)
+            } else entry
+            val spec = LlmRequestSpec(
+                system = prompt.system,
+                user = prompt.user,
+                temperature = prompt.temperature,
+                maxTokens = prompt.maxTokens,
+                audioBase64 = prompt.audioBase64,
+                audioFormat = prompt.audioMime.substringAfterLast('/').let {
+                    if (it == "mpeg") "mp3" else it
+                }
+            )
+            client.newCall(adapter.buildRequest(effective, spec)).execute().use { res ->
+                val text = res.body?.string().orEmpty()
+                if (!res.isSuccessful) error("HTTP ${res.code}: ${text.take(160)}")
+                adapter.parseResponse(text)
             }
         }
 
-    private fun callGemini(endpoint: String, apiKey: String, model: String, prompt: CloudPrompt): String {
-        if (apiKey.isBlank()) error("API key 未設定")
-        val url = "${endpoint.trimEnd('/')}/$model:generateContent?key=$apiKey"
-        // 音訊原生：parts 同時放文字指令與 inlineData 音訊，模型直接「聽」，
-        // 中間不經任何 STT，語調／停頓／含糊發音都保留給模型判斷。
-        val parts = JSONArray().put(JSONObject().put("text", prompt.user))
-        if (prompt.audioBase64 != null) {
-            parts.put(
-                JSONObject().put(
-                    "inlineData",
-                    JSONObject().put("mimeType", prompt.audioMime).put("data", prompt.audioBase64)
-                )
-            )
-        }
-        val body = JSONObject()
-            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt.system))))
-            .put("contents", JSONArray().put(JSONObject().put("parts", parts)))
-            .put("generationConfig", JSONObject().put("temperature", prompt.temperature).put("maxOutputTokens", prompt.maxTokens))
-            .toString().toRequestBody(JSON)
-        val req = Request.Builder().url(url).header("Content-Type", "application/json").post(body).build()
-        client.newCall(req).execute().use { res ->
-            val text = res.body?.string().orEmpty()
-            if (!res.isSuccessful) error("HTTP ${res.code}: ${text.take(160)}")
-            return JSONObject(text).getJSONArray("candidates").getJSONObject(0)
-                .getJSONObject("content").getJSONArray("parts").getJSONObject(0)
-                .optString("text").trim()
-        }
-    }
-
-    private fun callOpenAiCompatible(
-        endpoint: String,
-        apiKey: String,
-        model: String,
-        prompt: CloudPrompt
-    ): String {
-        if (apiKey.isBlank()) error("API key 未設定")
-        val body = JSONObject()
-            .put("model", model)
-            .put("temperature", prompt.temperature)
-            .put("max_tokens", prompt.maxTokens)
-            .put(
-                "messages",
-                JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", prompt.system))
-                    .put(JSONObject().put("role", "user").put("content", prompt.user))
-            )
-            .toString()
-            .toRequestBody(JSON)
-
-        val req = Request.Builder()
-            .url(endpoint)
-            .header("Authorization", "Bearer $apiKey")
-            .header("Content-Type", "application/json")
-            .header("HTTP-Referer", "https://voiceweaver.local")
-            .header("X-Title", "VoiceWeaver")
-            .post(body)
-            .build()
-
-        client.newCall(req).execute().use { res ->
-            val text = res.body?.string().orEmpty()
-            if (!res.isSuccessful) error("HTTP ${res.code}: ${text.take(160)}")
-            return JSONObject(text)
-                .getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .optString("content")
-                .trim()
-        }
-    }
-
-    private fun callCohere(endpoint: String, apiKey: String, model: String, prompt: CloudPrompt): String {
-        if (apiKey.isBlank()) error("API key 未設定")
-        val body = JSONObject()
-            .put("model", model)
-            .put("temperature", prompt.temperature)
-            .put("max_tokens", prompt.maxTokens)
-            .put(
-                "messages",
-                JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", prompt.system))
-                    .put(JSONObject().put("role", "user").put("content", prompt.user))
-            )
-            .toString()
-            .toRequestBody(JSON)
-
-        val req = Request.Builder()
-            .url(endpoint)
-            .header("Authorization", "Bearer $apiKey")
-            .header("Content-Type", "application/json")
-            .post(body)
-            .build()
-
-        client.newCall(req).execute().use { res ->
-            val text = res.body?.string().orEmpty()
-            if (!res.isSuccessful) error("HTTP ${res.code}: ${text.take(160)}")
-            val content = JSONObject(text).getJSONObject("message").getJSONArray("content")
-            return buildString {
-                for (i in 0 until content.length()) {
-                    append(content.getJSONObject(i).optString("text"))
-                }
-            }.trim()
-        }
-    }
 
     /**
      * 語音復健 AI 評分：語意完整性 + 流暢性 + 語氣，不用字元差異。
