@@ -489,6 +489,11 @@ C_GREEN  = "#00c96e"
 C_RED    = "#ff4757"
 C_BLUE   = "#6c63ff"
 C_AMBER  = "#ffa502"
+# 選取中的卡片底色是紫色，一般的綠/琥珀在上面會糊掉；這兩個是提亮版，
+# 專門給「選取狀態」用。重點是**不能把燈號改成白色**——燈號的唯一工作
+# 就是講「下載了沒」，選起來變白等於在使用者正要操作的那一張上把資訊拿掉。
+C_GREEN_SEL = "#7bffc0"
+C_AMBER_SEL = "#ffd166"
 C_WHITE  = "#ffffff"
 C_DIMMED = "#555577"
 
@@ -1845,6 +1850,7 @@ class App:
             except Exception:
                 pass
         self._refresh_card_visuals()
+        self._sync_account_icon()   # 頭像是自己畫的，換主題要重畫才會跟著變色
         self._sync_ui_lang_btns()
         try: self._restyle_tabs()
         except Exception: pass
@@ -1889,11 +1895,10 @@ class App:
         # 帳號頭像（右上角，跟手機 App 一致）：平常只有一顆圓形圖示、不顯示 email；
         # 點開才有帳號、登入／登出。原本那一整塊「雲端曲庫」登入狀態列＋按鈕留在進階頁，
         # 但這裡讓使用者隨時看得到「有沒有登入」而不用切分頁。
-        self._acct_btn = tk.Label(
-            hdr, font=(FONT_UI, SZ_H1), cursor="hand2", padx=6
-        )
+        self._acct_btn = tk.Canvas(hdr, width=34, height=34, highlightthickness=0,
+                                   cursor="hand2", bd=0)
         self._acct_btn.pack(side="right")
-        self._track(self._acct_btn, "fg")
+        self._track(self._acct_btn, "bg")
         self._acct_btn.bind("<Button-1>", lambda _e: self._show_account_menu())
         self._sync_account_icon()
 
@@ -2068,15 +2073,13 @@ class App:
         _section("adv.secCloudLib")
         gd_hint = tk.Label(parent, font=(FONT_UI, SZ_SMALL), wraplength=580, justify="left", anchor="w")
         gd_hint.pack(fill="x", padx=20, pady=(6, 2)); self.tr(gd_hint, "adv.gdHint"); self._track(gd_hint, "muted")
+        # 登入／登出只留在右上角的頭像選單裡（跟 Chrome、跟手機 App 一致）。
+        # 這裡原本還有一整條「已登入 Google：xxx@gmail.com」＋一顆大大的「登出」，
+        # 等於同一件事講兩次，而且把帳號 email 攤在畫面上給旁人看。
+        # 這裡只留一行狀態，要切帳號就點右上角。
         self.gd_status = tk.Label(parent, text=self._gdrive_status_text(),
                                   font=(FONT_UI, SZ_SMALL), anchor="w")
-        self.gd_status.pack(fill="x", padx=20, pady=(0, 4)); self._track(self.gd_status, "muted")
-        # 已登入就只留「登出」；沒登入就只留「登入」（不要兩顆同時擺著）
-        self._row_gd = tk.Frame(parent); self._row_gd.pack(fill="x", padx=20, pady=(0, 4))
-        self._track(self._row_gd, "bg")
-        self._gd_login_btn = self._btn(self._row_gd, self.t("adv.gdLogin"), self.adv_gdrive_login, C_GREEN)
-        self._gd_logout_btn = self._neutral_btn(self._row_gd, self.t("adv.gdLogout"), self.adv_gdrive_logout)
-        self._sync_gd_buttons()
+        self.gd_status.pack(fill="x", padx=20, pady=(0, 8)); self._track(self.gd_status, "muted")
 
         _section("adv.secTest")
         tr = tk.Frame(parent); tr.pack(fill="x", padx=20, pady=(4, 4)); self._track(tr, "bg")
@@ -2356,7 +2359,7 @@ class App:
             status_row = tk.Frame(inner, bg=card_bg, cursor="hand2")
             status_row.pack(fill="x", pady=(2, 0))
             dot_lbl = tk.Label(status_row, text="●", font=(FONT_UI, SZ_SMALL), bg=card_bg,
-                               fg=(C_WHITE if is_sel else (C_GREEN if dl else C_AMBER)), cursor="hand2")
+                               fg=self._dot_color(dl, is_sel), cursor="hand2")
             dot_lbl.pack(side="left")
             info_lbl = tk.Label(status_row, text=info_text, font=(FONT_UI, SZ_SMALL),
                                 bg=card_bg, fg=muted_fg, anchor="w", cursor="hand2")
@@ -2393,6 +2396,17 @@ class App:
             return filename
         return f"{lang}_{filename}"
 
+    @staticmethod
+    def _dot_color(downloaded: bool, selected: bool) -> str:
+        """曲庫卡片的燈號顏色：綠＝已下載、琥珀＝還沒下載。
+
+        選取中只換成提亮版（紫色底上看得清楚），**不會變白**——
+        選起來就看不出下載狀態的話，這顆燈在最需要它的時候正好失效。
+        """
+        if downloaded:
+            return C_GREEN_SEL if selected else C_GREEN
+        return C_AMBER_SEL if selected else C_AMBER
+
     def _select_card(self, idx: int):
         self._selected_card_idx = idx
         self._refresh_card_visuals()
@@ -2406,7 +2420,7 @@ class App:
             card_bg   = t["listsel"] if is_sel else t["card"]
             name_fg   = C_WHITE if is_sel else t["fg"]
             muted_fg  = C_WHITE if is_sel else t["muted"]
-            dot_fg = C_WHITE if is_sel else (C_GREEN if item.get("dl") else C_AMBER)
+            dot_fg = self._dot_color(bool(item.get("dl")), is_sel)
             try:
                 item["outer"].configure(bg=border_bg)
                 item["inner"].configure(bg=card_bg)
@@ -3194,32 +3208,39 @@ class App:
             return True, "基礎語音模型下載完成，語音服務啟動中…"
         self._run_bg(task)
 
-    def _sync_gd_buttons(self):
-        """已登入只顯示「登出」，未登入只顯示「登入」。"""
-        try:
-            signed = bool(gdrive and gdrive.deps_ok() and gdrive.is_signed_in())
-            self._gd_login_btn.pack_forget(); self._gd_logout_btn.pack_forget()
-            if signed:
-                self._gd_logout_btn.pack(side="left", expand=True, fill="x")
-            else:
-                self._gd_login_btn.pack(side="left", expand=True, fill="x")
-        except Exception:
-            pass
-
     def _is_signed_in(self) -> bool:
         try:
             return bool(gdrive and gdrive.deps_ok() and gdrive.is_signed_in())
         except Exception:
             return False
 
-    def _sync_account_icon(self):
-        """右上角頭像：登入＝實心綠、未登入＝灰。只有圖示，不顯示 email。"""
+    def _acct_initial(self) -> str:
+        """頭像裡的字：帳號 email 的第一個字母。拿不到就用通用人形。"""
         try:
+            email = (gdrive.firebase_identity() or {}).get("email") or gdrive.account_email() or ""
+        except Exception:
+            email = ""
+        return email.strip()[:1].upper() if email.strip() else "?"
+
+    def _sync_account_icon(self):
+        """右上角頭像：跟 Chrome 一樣只有一顆圓形圖示，不顯示 email，點開才有選單。
+
+        用 Canvas 自己畫圓＋首字母，而不是塞一個 emoji——emoji 在不同系統
+        字型下大小不一，也做不出「已登入＝有顏色的頭像」那種一眼可辨的差別。
+        （Google 大頭照要解 JPEG，Tk 內建的 PhotoImage 只吃 PNG/GIF，
+        不想為了頭像多拉一個 Pillow 相依，所以用首字母。）
+        """
+        try:
+            c = self._acct_btn
+            t = self.theme()
             signed = self._is_signed_in()
-            self._acct_btn.config(
-                text="👤" if signed else "👤",
-                fg=(C_GREEN if signed else "#8E8E93"),
-            )
+            c.delete("all")
+            c.configure(bg=t["bg"])
+            fill = C_BLUE if signed else t["border"]
+            c.create_oval(2, 2, 32, 32, fill=fill, outline="")
+            c.create_text(17, 17, text=(self._acct_initial() if signed else "\u2022\u2022\u2022"),
+                          fill=(C_WHITE if signed else t["muted"]),
+                          font=(FONT_UI, SZ_BODY, "bold"))
         except Exception:
             pass
 
@@ -3254,7 +3275,6 @@ class App:
             self.gd_status.config(text=self._gdrive_status_text())
         except Exception:
             pass
-        self._sync_gd_buttons()
         self._sync_account_icon()   # 右上角頭像跟著一起更新
 
     def adv_gdrive_login(self):
