@@ -1063,6 +1063,9 @@ class App:
         self._bridge_lock = threading.Lock()                       # 網頁橋接合成序列化
         self._bridge_voice = None                                  # 網頁橋接：目前載入的語音 {name,lang,ref,prompt}
         self.ui_lang = load_ui_lang()                              # 介面語言（可在標題列獨立切換、會記住）
+        self._acct_photo = None            # 右上角頭像用的 Google 大頭照（PhotoImage，要留參照防 GC）
+        self._acct_photo_key = ("", "")    # (照片網址, 底色)——底色變了要重新合成，不然圓形邊緣會有色圈
+        self._acct_photo_busy = False      # 正在背景抓照片；沒有這個旗標每次重畫都會再開一條執行緒
         self._i18n: list[tuple] = []                               # 已註冊待翻譯的 widget [(widget, key)]
         self._help_txt = None                                      # 說明分頁 Text，retranslate 用
         self._net = {"lan": "", "ts": ""}                          # 網路位址快取（背景執行緒更新）
@@ -3244,13 +3247,81 @@ class App:
             email = ""
         return email.strip()[:1].upper() if email.strip() else "?"
 
+    def _fetch_account_photo(self):
+        """背景抓 Google 大頭照，做成圓形 PNG 快取起來，好了再重畫頭像。
+
+        為什麼要自己合成而不是直接餵 Tk：Google 回的是 JPEG，Tk 內建的
+        PhotoImage 只吃 PNG/GIF，所以用 PIL 解碼→套圓形遮罩→轉 PNG→base64
+        丟給 PhotoImage（這樣就不必額外依賴 ImageTk）。遮罩是直接跟底色合成
+        而不是留 alpha，避免不同 Tk 版本對半透明的處理不一致。
+
+        整段都在背景執行緒：抓網路不能卡住 UI。抓不到就維持首字母版本。
+        """
+        if self._acct_photo_busy:
+            return
+        self._acct_photo_busy = True
+        try:
+            self._fetch_account_photo_inner()
+        finally:
+            self._acct_photo_busy = False
+
+    def _fetch_account_photo_inner(self):
+        # 第一次呼叫常常會失敗——憑證過期時 get_credentials 那一趟是在做 refresh，
+        # 回來才是可用的。所以拿不到就再試一次，不要直接放棄（放棄的話使用者會
+        # 一直看到首字母版本，除非剛好有別的事件觸發重畫）。
+        url = ""
+        for _ in range(2):
+            try:
+                url = gdrive.account_photo()
+            except Exception:
+                url = ""
+            if url:
+                break
+            time.sleep(1.0)
+        if not url:
+            return
+        bg_hex = self.theme()["bg"]
+        if self._acct_photo_key == (url, bg_hex):
+            return
+        try:
+            import io as _io, base64 as _b64, urllib.request as _req, ssl as _ssl
+            from PIL import Image, ImageDraw
+            # 這個 conda env 的 Python 沒有系統 CA，直接 urlopen 會
+            # CERTIFICATE_VERIFY_FAILED（Drive API 沒事是因為 google 那套自己帶
+            # certifi）。這裡明講要用 certifi 的 CA bundle。
+            try:
+                import certifi as _certifi
+                ctx = _ssl.create_default_context(cafile=_certifi.where())
+            except Exception:
+                ctx = None
+            raw = _req.urlopen(url, timeout=8, context=ctx).read()
+            S = 34
+            hi = S * 2                                   # 先在 2 倍尺寸做，縮下來邊緣才不會鋸齒
+            im = Image.open(_io.BytesIO(raw)).convert("RGB").resize((hi, hi), Image.LANCZOS)
+            rgb = tuple(int(bg_hex.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+            plate = Image.new("RGB", (hi, hi), rgb)
+            mask = Image.new("L", (hi, hi), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, hi - 1, hi - 1), fill=255)
+            out = Image.composite(im, plate, mask).resize((S, S), Image.LANCZOS)
+            buf = _io.BytesIO(); out.save(buf, "PNG")
+            data = _b64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            return
+        def _apply():
+            try:
+                self._acct_photo = tk.PhotoImage(data=data)   # 要留參照，否則會被 GC 掉變空白
+                self._acct_photo_key = (url, bg_hex)
+                self._sync_account_icon()
+            except Exception:
+                pass
+        self.root.after(0, _apply)
+
     def _sync_account_icon(self):
         """右上角頭像：跟 Chrome 一樣只有一顆圓形圖示，不顯示 email，點開才有選單。
 
-        用 Canvas 自己畫圓＋首字母，而不是塞一個 emoji——emoji 在不同系統
-        字型下大小不一，也做不出「已登入＝有顏色的頭像」那種一眼可辨的差別。
-        （Google 大頭照要解 JPEG，Tk 內建的 PhotoImage 只吃 PNG/GIF，
-        不想為了頭像多拉一個 Pillow 相依，所以用首字母。）
+        三層退路：Google 大頭照 → 帳號首字母 → 未登入的灰底「•••」。
+        照片是背景抓的，第一次畫一定是首字母，抓回來後自動換掉；
+        用 emoji 做不到「已登入＝有顏色」這種一眼可辨的差別，所以自己畫。
         """
         try:
             c = self._acct_btn
@@ -3258,11 +3329,17 @@ class App:
             signed = self._is_signed_in()
             c.delete("all")
             c.configure(bg=t["bg"])
+            photo = self._acct_photo if signed else None
+            if photo is not None and self._acct_photo_key[1] == t["bg"]:
+                c.create_image(17, 17, image=photo)
+                return
             fill = C_BLUE if signed else t["border"]
             c.create_oval(2, 2, 32, 32, fill=fill, outline="")
             c.create_text(17, 17, text=(self._acct_initial() if signed else "\u2022\u2022\u2022"),
                           fill=(C_WHITE if signed else t["muted"]),
                           font=(FONT_UI, SZ_BODY, "bold"))
+            if signed:
+                threading.Thread(target=self._fetch_account_photo, daemon=True).start()
         except Exception:
             pass
 
@@ -3324,6 +3401,9 @@ class App:
     def adv_gdrive_logout(self):
         if gdrive is not None:
             gdrive.sign_out()
+        # 登出就把大頭照丟掉——不清的話換帳號登入會先看到上一個人的臉
+        self._acct_photo = None
+        self._acct_photo_key = ("", "")
         self._refresh_gd_status()
         self.set_adv_status(self.t("已登出 Google"))
 

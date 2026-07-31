@@ -228,6 +228,25 @@ def firebase_identity():
         return {}
 
 
+def account_photo(creds=None) -> str:
+    """回登入帳號的大頭照網址（拿不到回 ""）。
+
+    Firebase 的 beacon token 裡沒有存 photoUrl，所以走 Drive 的
+    about().user.photoLink——反正要用 Drive 就一定有這組憑證。
+    `=s64` 是 Google 的尺寸參數，直接跟它要小圖，免得抓一張大的回來再縮。
+    """
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            return ""
+        from googleapiclient.discovery import build
+        svc = build("drive", "v3", credentials=creds, cache_discovery=False)
+        about = svc.about().get(fields="user(photoLink)").execute()
+        return about.get("user", {}).get("photoLink", "")
+    except Exception:
+        return ""
+
+
 def account_email(creds=None):
     """回登入帳號 email（拿不到回 ""）。"""
     try:
