@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.School
@@ -73,6 +74,7 @@ class MainActivity : ComponentActivity() {
                         if (!eyeSettings.eyeControlEnabled) return@LaunchedEffect
                         val tabs = listOf(
                             I18n.tr("重組") to "main",
+                            I18n.tr("圖卡") to "aac",
                             I18n.tr("語音復健") to "rehab",
                             I18n.tr("報告") to "report",
                             I18n.tr("歷史") to "history",
@@ -123,6 +125,16 @@ class MainActivity : ComponentActivity() {
                                     label = { Text(labelRehab) },
                                     selected = currentRoute == "rehab",
                                     onClick = { navController.go("rehab") },
+                                    colors = navColors
+                                )
+                                // 圖卡（AAC）獨立成一級分頁：對很多患者這才是最常用的輸入方式，
+                                // 藏在重組畫面的按鈕後面等於多一步才能講話
+                                val labelAac = I18n.tr("圖卡")
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.GridView, contentDescription = labelAac) },
+                                    label = { Text(labelAac) },
+                                    selected = currentRoute == "aac",
+                                    onClick = { navController.go("aac") },
                                     colors = navColors
                                 )
                                 val labelReport = stringResource(R.string.nav_report)

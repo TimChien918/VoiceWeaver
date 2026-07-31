@@ -44,7 +44,10 @@ object NativeRuleCritic {
         // rawText 只是語音辨識的第一名；其他 N-best 候選同樣是「病人真的可能講的話」，
         // 必須一起算進比對母體。否則 LLM 正確地採用了第 2 名的字（例如第一名聽成「時」、
         // 第二名才是「水」），這裡會誤判成幻覺，整句被換成「我不確定您的意思」。
-        val normalizedRaw = (listOf(vault.rawText) + vault.sttAlternatives)
+        // recentUtterances（對話前文）也算合法來源：prompt 現在明確允許模型用前文
+        // 消歧義（「還要一杯」→接前文的咖啡），不算進來的話，凡是靠前文補出的字
+        // 都會被這裡誤判成幻覺——跟當初漏算 N-best 是一模一樣的坑。
+        val normalizedRaw = (listOf(vault.rawText) + vault.sttAlternatives + vault.recentUtterances)
             .joinToString(" ").lowercase()
         val normalizedLocation = vault.locationTag.lowercase()
         val normalizedVision = vault.visionTags.joinToString(" ").lowercase()

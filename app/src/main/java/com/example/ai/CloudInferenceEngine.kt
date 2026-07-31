@@ -304,6 +304,14 @@ class HybridInferenceEngine(
             appendLine("請聽附上的音訊。")
             appendLine("地點：${vault.locationTag.ifBlank { "未指定" }}")
             appendLine("周邊物件：${vault.visionTags.joinToString("、").ifBlank { "未偵測" }}")
+            if (vault.recentUtterances.isNotEmpty()) {
+                appendLine("病人剛講過的話（同場對話前文，供消歧義；不可重複其內容）：")
+                vault.recentUtterances.forEach { appendLine("- $it") }
+            }
+            val personal = AacUsageRanker.topLabels(com.example.data.DefaultAacItems)
+            if (personal.isNotEmpty()) {
+                appendLine("病人常用詞（發音含糊、同音多選一時優先往這些詞猜）：${personal.joinToString("、")}")
+            }
             val cands = com.example.data.AphasiaPractice.reconstructionCandidates("", vault.visionTags)
             if (cands.isNotEmpty()) {
                 appendLine("常用表達參考（聽起來接近其中之一時可優先採用其自然說法，但不可硬套）：")
@@ -588,6 +596,20 @@ class HybridInferenceEngine(
                 輸入中的問句或疑問詞是硬約束，必須保留其語意；例如「什麼時候」、「在哪裡」、「可以嗎」、「要等多久」不可刪掉。
                 若碎詞同時包含需求與問句，請用一句自然中文同時表達，例如「我口渴了，請給我一杯水；我想知道什麼時候可以休息。」
 
+                【範例】（示範「貼著碎詞」與「同音修正」的界線；照這個力道做）：
+                碎詞「藥...頭...痛」＋地點=藥局 → {"reconstructed":"我頭痛，需要買藥"}（只補語法零件）
+                碎詞「穿蕉」＋物件=水果 → {"reconstructed":"我想吃香蕉"}（低信心同音修正：穿蕉→香蕉）
+                碎詞「等...車...久」 → {"reconstructed":"車要等很久嗎？"}（保留原意，不編目的地）
+                碎詞「水」＋前文「我剛吃完藥」 → {"reconstructed":"我要喝水"}（用前文消歧，不是要澆水）
+
+                若有提供「病人剛講過的話」：那是同一場對話的前文。代名詞、省略主詞、
+                「還要」「也要」「再一個」這類接續語，都要靠前文才能還原——例如前文
+                「我要一杯咖啡」之後碎詞「還...一」應重組成「我還要一杯咖啡」。
+                前文只拿來消歧義，不可以把前文的內容重複講一次。
+
+                若有提供「病人常用詞」：這位病人平常最常表達的詞彙。碎詞模糊或同音
+                多選一時，優先往這些詞的方向猜（個人化詞彙偏好）；碎詞明確時忽略此清單。
+
                 重要：碎詞很短甚至只有一個字（例如「十」「水」「痛」）時，仍要給出「最可能的日常說法」，不要因為短就拒答或回空句。
                 只補最貼近字面的語法零件即可，不要另外編情境：「十」→「我要十個」、「水」→「我想喝水」、「痛」→「我這裡會痛」。
                 confidence 是「你對這句重組的把握」，請照這個標準給分，不要一律保守：
@@ -605,6 +627,14 @@ class HybridInferenceEngine(
                 }
                 appendLine("地點：${vault.locationTag.ifBlank { "未指定" }}")
                 appendLine("周邊物件：${vault.visionTags.joinToString("、").ifBlank { "未偵測" }}")
+                if (vault.recentUtterances.isNotEmpty()) {
+                    appendLine("病人剛講過的話（同場對話前文，供消歧義）：")
+                    vault.recentUtterances.forEach { appendLine("- $it") }
+                }
+                val personal = AacUsageRanker.topLabels(com.example.data.DefaultAacItems)
+                if (personal.isNotEmpty()) {
+                    appendLine("病人常用詞（個人詞彙偏好）：${personal.joinToString("、")}")
+                }
                 val cands = com.example.data.AphasiaPractice.reconstructionCandidates(vault.rawText, vault.visionTags)
                 if (cands.isNotEmpty()) {
                     appendLine("常用表達參考（碎詞語意接近其中之一時，優先採用其自然說法；但不可硬套、不可改變問句語意）：")

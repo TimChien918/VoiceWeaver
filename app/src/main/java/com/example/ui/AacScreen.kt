@@ -128,6 +128,19 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                 )
             }
 
+            // ── 常用（For You）：社群式動態牆——依「最近使用×時段×地點」排出患者
+            //    此刻最可能要講的卡。冷啟動（沒按過任何卡）整列自動隱藏。
+            //    key 帶 sentence.size：每按一張卡就重算，剛按的內容立即反映。
+            run {
+                val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
+                val feed = remember(state.sentence.size, customItems) {
+                    com.example.ai.AacUsageRanker.feed(customItems + DefaultAacItems)
+                }
+                if (feed.isNotEmpty() && state.selectedCategory == null && searchQuery.isBlank()) {
+                    FrequentFeedRow(items = feed, onPick = { viewModel.aacAppendItem(it) }, p = p)
+                }
+            }
+
             AacSearchAndCategoryBar(
                 selectedCategory = state.selectedCategory,
                 query = searchQuery,
@@ -447,7 +460,7 @@ private fun AacSearchAndCategoryBar(
 
 private fun filterAacItems(category: AacCategory?, query: String, extra: List<AacItem> = emptyList()): List<AacItem> {
     val normalizedQuery = query.trim()
-    return (extra + DefaultAacItems)
+    val filtered = (extra + DefaultAacItems)
         .asSequence()
         .filter { category == null || it.category == category }
         .filter { item ->
@@ -457,6 +470,9 @@ private fun filterAacItems(category: AacCategory?, query: String, extra: List<Aa
                 item.category.key.contains(normalizedQuery, ignoreCase = true)
         }
         .toList()
+    // 類別內：常用的排前面（穩定排序，沒按過的維持原本相對位置——版面不大風吹）。
+    // 有搜尋字時不重排，搜尋結果照原順序比較好對照。
+    return if (normalizedQuery.isBlank()) com.example.ai.AacUsageRanker.rankWithin(filtered) else filtered
 }
 
 /** 解析使用者自訂 AAC 圖卡（JSON 陣列 [{label,emoji,category?}]）。category 預設 Needs。 */
@@ -1144,6 +1160,49 @@ private fun CustomAmountDialog(
  * 情境推薦列：在「便利商店·全家」就推「結冰水/香菸/多少錢」，
  * 在「醫院」就推「不舒服/找家人」。點一下圖卡直接加進句子。
  */
+@Composable
+private fun FrequentFeedRow(
+    items: List<AacItem>,
+    onPick: (AacItem) -> Unit,
+    p: com.example.ui.theme.AppPalette
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.neonCyan.copy(alpha = 0.08f))
+            .border(1.dp, p.neonCyan.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Star, null, tint = p.neonCyan, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(I18n.tr("常用"), color = p.textLight, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            items.forEach { item ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(p.surface)
+                        .border(1.dp, p.neonCyan.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                        .clickable { onPick(item) }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Text(item.emoji, fontSize = 16.sp)
+                    Spacer(Modifier.width(4.dp))
+                    Text(item.label, color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ContextHintRow(
     hint: com.example.ai.AacContextSuggester.ContextHint,

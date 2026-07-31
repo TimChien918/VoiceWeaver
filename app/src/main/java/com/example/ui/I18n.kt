@@ -409,6 +409,8 @@ object I18n {
         "請貼上公開 HTTPS 模型下載 URL" to arrayOf("Please paste a public HTTPS model download URL", "公開 HTTPS モデル DL URL を貼付してください", "공개 HTTPS 모델 다운로드 URL을 붙여넣으세요"),
         "請貼上 HTTPS 模型 URL" to arrayOf("Please paste an HTTPS model URL", "HTTPS モデル URL を貼付してください", "HTTPS 모델 URL을 붙여넣으세요"),
         "重組" to arrayOf("Compose", "再構成", "재구성"),
+        "圖卡" to arrayOf("Cards", "カード", "카드"),
+        "常用" to arrayOf("For you", "よく使う", "자주 사용"),
         "語音復健" to arrayOf("Rehab", "発話リハビリ", "언어 재활"),
         "報告" to arrayOf("Report", "レポート", "리포트"),
         "歷史" to arrayOf("History", "履歴", "기록"),

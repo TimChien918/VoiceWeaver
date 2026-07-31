@@ -68,7 +68,13 @@ data class GlobalTagsVault(
      * 但正確答案往往落在第 2、3 名——把整批候選一起餵給重組 AI，讓它用情境挑，
      * 比只拿第一名硬猜準得多。rawText 是第一名；這裡放其餘候選。
      */
-    val sttAlternatives: List<String> = emptyList()
+    val sttAlternatives: List<String> = emptyList(),
+    /**
+     * 最近幾句「患者實際採用」的輸出（對話脈絡記憶）。研究（SLM 失語症解讀、
+     * Langchain 記憶）顯示帶上前文能明顯提升重組準確度——代名詞、話題延續
+     * 都要靠它（「還要一杯」沒有前文根本不知道是一杯什麼）。
+     */
+    val recentUtterances: List<String> = emptyList()
 )
 
 /** 單字（或詞）的辨識信心度 */
@@ -379,6 +385,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     init {
         // 讀回上次學到的供應商實測統計（成功率／延遲），冷啟動不必重新踩雷
         SmartApiRouter.init(application)
+        AacUsageRanker.init(application)
     }
 
     private val assessor = HardwareAssessor(application)
@@ -834,7 +841,21 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      */
     fun chooseCandidate(index: Int, text: String) {
         viewModelScope.launch { settingsRepo.recordCandidateChoice(index == 0) }
+        rememberUtterance(text)
         requestSpeak(text, useTakes = index == 0)
+    }
+
+    /**
+     * 記住患者「實際講出去」的句子（最多 3 句），下一次重組時當對話脈絡餵給 AI。
+     * 只記採用的——被換掉、被拒絕的候選不算，那些是 AI 猜錯的。
+     */
+    private fun rememberUtterance(text: String) {
+        val clean = text.trim()
+        if (clean.isBlank()) return
+        val v = _globalTagsVault.value
+        _globalTagsVault.value = v.copy(
+            recentUtterances = (v.recentUtterances + clean).takeLast(3)
+        )
     }
 
     /**
@@ -2349,6 +2370,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 點條目 → 累加進句子 */
     fun aacAppendItem(item: AacItem) {
         val s = _aacState.value
+        // 餵給「常用」動態牆：每按一次＝社群的一次互動（含時段與地點情境）
+        AacUsageRanker.recordUse(item.id, _globalTagsVault.value.locationTag)
         // 強烈意圖防護：若是緊急類，立刻過風險閘門發聲 + 標記
         if (item.isStrongIntent) requestSpeak(item.label)
         appendRawToken(item.label)
@@ -2435,6 +2458,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         clearIntentImage()
         viewModelScope.launch {
             settingsRepo.recordCandidateChoice(firstHit = s.regenCount == 0)
+            rememberUtterance(natural)   // 圖卡組出的句子也是對話脈絡
             requestSpeak(natural)
             val logId = aacComboLogRepo.log(
                 finalSentence = natural,
