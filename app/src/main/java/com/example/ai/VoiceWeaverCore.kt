@@ -374,6 +374,11 @@ object InferenceEngineFactory {
  */
 class VoiceWeaverViewModel(application: Application) : AndroidViewModel(application) {
 
+    init {
+        // 讀回上次學到的供應商實測統計（成功率／延遲），冷啟動不必重新踩雷
+        SmartApiRouter.init(application)
+    }
+
     private val assessor = HardwareAssessor(application)
     private val downloader = ModelDownloader(application)
     private var downloadJob: Job? = null

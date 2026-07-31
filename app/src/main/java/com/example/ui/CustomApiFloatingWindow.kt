@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -132,7 +133,7 @@ fun ApiKeysPanel(
             }
         }
         Text(
-            I18n.tr("選供應商、填金鑰即可。可加多筆（含同供應商多把金鑰），重組句子時用 ✓ 那筆，失敗自動換下一筆；全部失敗才用手機本機 AI。"),
+            I18n.tr("填好金鑰就好，不用選要用哪家——系統會依實測成功率與速度自動挑，失敗自動換下一家，免費的優先用。想固定用某一家再點左邊圖釘。"),
             fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
         )
         val llmSelId = settings.llmApiSelectedId.ifBlank { llmApis.firstOrNull()?.id ?: "" }
@@ -278,12 +279,13 @@ private fun LlmApiRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
+            // 圖釘＝人工覆寫「固定優先用這家」；沒釘就交給 SmartApiRouter 自動排序。
             IconButton(onClick = onUse, modifier = Modifier.size(30.dp)) {
                 Icon(
-                    if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    if (isActive) I18n.tr("使用中") else I18n.tr("設為使用中"),
-                    tint = if (isActive) Color(0xFF34C759) else p.textMuted.copy(alpha = 0.5f),
-                    modifier = Modifier.size(21.dp)
+                    if (isActive) Icons.Default.PushPin else Icons.Default.PushPin,
+                    if (isActive) I18n.tr("已釘選（固定優先）") else I18n.tr("釘選以固定優先使用"),
+                    tint = if (isActive) Color(0xFF007AFF) else p.textMuted.copy(alpha = 0.35f),
+                    modifier = Modifier.size(19.dp)
                 )
             }
             Spacer(Modifier.width(6.dp))
@@ -294,7 +296,13 @@ private fun LlmApiRow(
             }
         }
         KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
-        Spacer(Modifier.height(4.dp))
+        // 實測狀態：讓使用者看得到「系統為什麼這樣排」，而不是黑箱
+        Text(
+            com.example.ai.SmartApiRouter.statusLabel(entry.id) +
+                if (isActive) I18n.tr("・已釘選") else "",
+            fontSize = 12.sp, color = p.textMuted,
+            modifier = Modifier.padding(start = 42.dp, top = 2.dp, bottom = 6.dp)
+        )
     }
 }
 

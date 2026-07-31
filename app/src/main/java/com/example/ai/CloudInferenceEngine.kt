@@ -122,16 +122,12 @@ class HybridInferenceEngine(
      * 有「原生音訊理解」能力的供應商：模型直接聽音訊，不經轉文字。
      * 依各家宣告的 audioStyle 判斷，不再寫死某一家。
      */
-    private fun nativeAudioCandidates(): List<LlmApiEntry> = cloudCandidates().filter {
-        it.provider.audioStyle == com.example.data.LlmAudioStyle.GEMINI_INLINE ||
-            it.provider.audioStyle == com.example.data.LlmAudioStyle.OPENAI_INPUT_AUDIO
-    }
+    private fun nativeAudioCandidates(): List<LlmApiEntry> =
+        cloudCandidates(SmartApiRouter.Need.NATIVE_AUDIO)
 
     /** 只有 Whisper 轉寫能力的供應商（中間路線：雲端 STT，比裝置端 Vosk 準）。 */
-    private fun transcribeCandidates(): List<LlmApiEntry> = cloudCandidates().filter {
-        it.provider.audioStyle == com.example.data.LlmAudioStyle.WHISPER_TRANSCRIBE &&
-            it.provider.transcribeEndpoint.isNotBlank()
-    }
+    private fun transcribeCandidates(): List<LlmApiEntry> =
+        cloudCandidates(SmartApiRouter.Need.TRANSCRIBE)
 
     override fun supportsAudioUnderstanding(): Boolean =
         provider != CloudProvider.LocalOnly &&
@@ -179,7 +175,11 @@ class HybridInferenceEngine(
                 (1..RECONSTRUCT_SAMPLES).map {
                     async {
                         runCatching {
-                            tryCloudWithFailover(prompt, timeoutMs = AUDIO_TIMEOUT_MS) { raw ->
+                            tryCloudWithFailover(
+                                prompt,
+                                timeoutMs = AUDIO_TIMEOUT_MS,
+                                candidates = native   // 只送給真的支援音訊的供應商
+                            ) { raw ->
                                 val parsed = parseCoT(raw)
                                 if (parsed.reconstructed.isBlank()) error("模型回傳空句子")
                                 parsed
@@ -397,24 +397,30 @@ class HybridInferenceEngine(
         }
     }
 
+    /**
+     * @param candidates 明確指定要試哪些供應商。**音訊請求一定要傳**——
+     *   不傳會退回全部（文字）候選，把音訊送給不支援音訊的供應商，
+     *   實測時就是這樣被 OpenRouter/Groq 各回 404/400。
+     */
     private suspend fun <T> tryCloudWithFailover(
         prompt: CloudPrompt,
         timeoutMs: Long,
+        candidates: List<LlmApiEntry>? = null,
         parseAndValidate: (String) -> T
     ): Pair<LlmApiEntry, T> {
-        val candidates = cloudCandidates()
-        if (candidates.isEmpty()) error("沒有已設定金鑰的文字 LLM 供應商")
+        val pool = candidates ?: cloudCandidates()
+        if (pool.isEmpty()) error("沒有可用的 LLM 供應商（此請求所需能力）")
 
         var lastError: Throwable? = null
-        for (candidate in candidates) {
+        for (candidate in pool) {
             val start = System.currentTimeMillis()
             try {
                 val raw = withTimeout(timeoutMs) { callCloud(candidate, prompt) }
                 val parsed = parseAndValidate(raw)
-                CloudHealth.recordSuccess(candidate.id, System.currentTimeMillis() - start)
+                SmartApiRouter.recordSuccess(candidate.id, System.currentTimeMillis() - start)
                 return candidate to parsed
             } catch (e: Throwable) {
-                CloudHealth.recordFailure(candidate.id)
+                SmartApiRouter.recordFailure(candidate.id)
                 lastError = e
                 Log.w(TAG, "LLM ${candidate.label} failed, trying next: ${e.message}")
             }
@@ -426,19 +432,18 @@ class HybridInferenceEngine(
      * 候選清單：使用者在「API 金鑰管理 → 文字 LLM」設定的多供應商清單，
      * 使用中那筆排第一、其餘自動備援；清單為空則退回舊版 Groq/OpenRouter/Cohere 設定（向後相容）。
      */
-    private fun cloudCandidates(): List<LlmApiEntry> {
-        val all = ApiKeyOverrides.llmApis.ifEmpty { legacyEntries() }.filter { it.usable }
+    /**
+     * 這次請求的供應商順序，由 [SmartApiRouter] 依**實測表現**自動決定
+     * （成功率 → 延遲 → 免費優先 → 冷卻懲罰），不再靠使用者手動勾「使用中」。
+     *
+     * ApiKeyOverrides.llmSelectedId 現在的語意是「釘選」：使用者主動釘某一家時
+     * 強制排第一（人工覆寫），沒釘就完全自動。
+     */
+    private fun cloudCandidates(need: SmartApiRouter.Need = SmartApiRouter.Need.TEXT): List<LlmApiEntry> {
+        val all = ApiKeyOverrides.llmApis.ifEmpty { legacyEntries() }
         if (all.isEmpty()) return emptyList()
-        // 自動輪詢：使用中那筆所屬供應商的多把金鑰每次請求輪流換一把；再跨供應商備援。
-        val selId = ApiKeyOverrides.llmSelectedId
-        val selProvider = (all.firstOrNull { it.id == selId } ?: all.first()).provider
-        val sel = all.filter { it.provider == selProvider }
-        val other = all.filter { it.provider != selProvider }
-        val off = CloudHealth.nextOffset(Int.MAX_VALUE)
-        fun rot(l: List<LlmApiEntry>) = if (l.size <= 1) l else { val o = Math.floorMod(off, l.size); l.drop(o) + l.take(o) }
-        val ordered = rot(sel) + rot(other)
-        val healthy = ordered.filter { CloudHealth.isAvailable(it.id) }
-        return healthy.ifEmpty { ordered }
+        val pinned = ApiKeyOverrides.llmSelectedId.takeIf { it.isNotBlank() }
+        return SmartApiRouter.rank(all, need, pinned)
     }
 
     /** 舊版相容：把 BuildConfig/.env 與舊端點欄位組成三筆候選。 */
@@ -692,31 +697,4 @@ class HybridInferenceEngine(
     }
 }
 
-private object CloudHealth {
-    private const val FAILURE_COOLDOWN_MS = 60_000L
-    private val cursor = AtomicInteger(0)
-    private val failuresUntil = mutableMapOf<String, Long>()
-    private val latencyMs = mutableMapOf<String, Long>()
 
-    @Synchronized
-    fun isAvailable(id: String): Boolean =
-        (failuresUntil[id] ?: 0L) <= System.currentTimeMillis()
-
-    @Synchronized
-    fun latencyPenalty(id: String): Long =
-        latencyMs[id] ?: Long.MAX_VALUE / 4
-
-    @Synchronized
-    fun recordSuccess(id: String, latency: Long) {
-        failuresUntil.remove(id)
-        latencyMs[id] = latency
-    }
-
-    @Synchronized
-    fun recordFailure(id: String) {
-        failuresUntil[id] = System.currentTimeMillis() + FAILURE_COOLDOWN_MS
-    }
-
-    fun nextOffset(size: Int): Int =
-        Math.floorMod(cursor.getAndIncrement(), size)
-}
