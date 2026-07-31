@@ -1082,6 +1082,16 @@ class App:
 
         # ── 標題列：介面語言獨立切換（固定寬度＋只換色不變粗體 → 切換時不會位移）──
         topbar = tk.Frame(root, pady=6); topbar.pack(fill="x", padx=12, pady=(8, 0)); self._track(topbar, "bg")
+
+        # 帳號頭像放這裡而不是「控制台」分頁裡面——登入／登出已經只剩這一個入口，
+        # 放在分頁裡的話切到「模型／進階」就整個消失，等於沒有地方可以登入。
+        # 這條 topbar 在分頁列之上，是全域的。先 pack 才會排在最右邊。
+        self._acct_btn = tk.Canvas(topbar, width=34, height=34, highlightthickness=0,
+                                   cursor="hand2", bd=0)
+        self._acct_btn.pack(side="right", padx=(8, 0))
+        self._track(self._acct_btn, "bg")
+        self._acct_btn.bind("<Button-1>", lambda _e: self._show_account_menu())
+
         self._ui_lang_btns = {}
         for code, label in reversed(UI_LANGS):
             b = tk.Label(topbar, text=label, cursor="hand2", padx=8, pady=2, width=7,
@@ -1121,6 +1131,7 @@ class App:
         self._build_help(self.tab_help)
 
         self.apply_theme()
+        self._sync_account_icon()
         self._sync_ui_lang_btns()
         self.select_tab("main")
 
@@ -1892,16 +1903,6 @@ class App:
         sub = tk.Label(hdr, font=(FONT_UI, SZ_SMALL)); sub.pack(side="left", padx=(10, 0), pady=(6, 0))
         self.tr(sub, "header.sub"); self._track(sub, "muted")
 
-        # 帳號頭像（右上角，跟手機 App 一致）：平常只有一顆圓形圖示、不顯示 email；
-        # 點開才有帳號、登入／登出。原本那一整塊「雲端曲庫」登入狀態列＋按鈕留在進階頁，
-        # 但這裡讓使用者隨時看得到「有沒有登入」而不用切分頁。
-        self._acct_btn = tk.Canvas(hdr, width=34, height=34, highlightthickness=0,
-                                   cursor="hand2", bd=0)
-        self._acct_btn.pack(side="right")
-        self._track(self._acct_btn, "bg")
-        self._acct_btn.bind("<Button-1>", lambda _e: self._show_account_menu())
-        self._sync_account_icon()
-
         # 服務卡片
         svc_frame = tk.Frame(parent); svc_frame.pack(fill="x", padx=20, pady=(0, 12))
         self._track(svc_frame, "bg")
@@ -2289,13 +2290,34 @@ class App:
         def upd():
             try:
                 ver, gpt, sov = cc.get_current_config()
-                gpt_name = os.path.basename(gpt) if gpt else "—"
+                gpt_name = self._pretty_weight_name(gpt)
                 online = self.t("adv.online") if port_up(9880) else self.t("adv.offline")
                 txt = self.t("adv.curFmt", ver=(ver or "—"), gpt=gpt_name, online=online)
             except Exception:
                 txt = self.t("adv.curFail")
             self.root.after(0, lambda: self.adv_api.config(text=txt))
         threading.Thread(target=upd, daemon=True).start()
+
+    @staticmethod
+    def _pretty_weight_name(path: str) -> str:
+        """權重路徑 → 給人看的檔名。
+
+        設定檔裡的中文路徑有時是被跳脫過才寫進去的（例如
+        `GPT_weights\u4E09\u6708\u4E03_e15.ckpt`），直接顯示就會變成一串
+        `\u4E09\u6708\u4E03` 的亂碼——標題列上就是這樣。這裡先把跳脫還原，
+        再處理 Windows 風格的反斜線（os.path.basename 在 macOS 不會切反斜線，
+        會把整條路徑當成檔名）。
+        """
+        if not path:
+            return "—"
+        name = str(path)
+        if "\\u" in name:
+            try:
+                name = name.encode("latin-1", "backslashreplace").decode("unicode_escape")
+            except Exception:
+                pass
+        name = name.replace("\\", "/")
+        return os.path.basename(name.rstrip("/")) or "—"
 
     def _selected_model(self):
         if self._selected_card_idx is None or self._selected_card_idx >= len(self.adv_filtered):
