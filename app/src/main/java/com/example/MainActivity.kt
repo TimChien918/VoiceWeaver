@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -67,6 +68,16 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
+
+                    // 自動化測試側門：只在 debug 版接上。BuildConfig.DEBUG 是編譯期常數，
+                    // release 建置時整段會被 R8 判定不可達而移除；接收廣播的 receiver
+                    // 本來就只宣告在 src/debug/AndroidManifest.xml，正式版沒有入口。
+                    if (BuildConfig.DEBUG) {
+                        LaunchedEffect(navController) {
+                            com.example.testing.TestHooks.navigator = { route -> navController.go(route) }
+                            com.example.testing.TestHooks.attach(this@MainActivity, viewModel.testBridge)
+                        }
+                    }
 
                     // 眨眼掃描：路由改變時更新全域 scan targets
                     val eyeSettings by viewModel.settings.collectAsState()
@@ -115,14 +126,14 @@ class MainActivity : ComponentActivity() {
                                 val labelSettings = stringResource(R.string.nav_settings)
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.Home, contentDescription = labelMain) },
-                                    label = { Text(labelMain) },
+                                    label = { Text(labelMain, fontSize = 11.sp) },  // 問題4：統一字體大小
                                     selected = currentRoute == "main",
                                     onClick = { navController.go("main") },
                                     colors = navColors
                                 )
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.School, contentDescription = labelRehab) },
-                                    label = { Text(labelRehab) },
+                                    label = { Text(labelRehab, fontSize = 11.sp) },  // 問題4：統一字體大小
                                     selected = currentRoute == "rehab",
                                     onClick = { navController.go("rehab") },
                                     colors = navColors
@@ -132,7 +143,7 @@ class MainActivity : ComponentActivity() {
                                 val labelAac = I18n.tr("圖卡")
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.GridView, contentDescription = labelAac) },
-                                    label = { Text(labelAac) },
+                                    label = { Text(labelAac, fontSize = 11.sp) },  // 問題4：統一字體大小
                                     selected = currentRoute == "aac",
                                     onClick = { navController.go("aac") },
                                     colors = navColors
@@ -140,21 +151,21 @@ class MainActivity : ComponentActivity() {
                                 val labelReport = stringResource(R.string.nav_report)
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.BarChart, contentDescription = labelReport) },
-                                    label = { Text(labelReport) },
+                                    label = { Text(labelReport, fontSize = 11.sp) },  // 問題4：統一字體大小
                                     selected = currentRoute == "report",
                                     onClick = { navController.go("report") },
                                     colors = navColors
                                 )
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.History, contentDescription = labelHistory) },
-                                    label = { Text(labelHistory) },
+                                    label = { Text(labelHistory, fontSize = 11.sp) },  // 問題4：統一字體大小
                                     selected = currentRoute == "history",
                                     onClick = { navController.go("history") },
                                     colors = navColors
                                 )
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.Settings, contentDescription = labelSettings) },
-                                    label = { Text(labelSettings) },
+                                    label = { Text(labelSettings, fontSize = 11.sp) },  // 問題4：統一字體大小
                                     selected = currentRoute == "settings",
                                     onClick = { navController.go("settings") },
                                     colors = navColors

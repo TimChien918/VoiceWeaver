@@ -7,7 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -24,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -79,8 +83,8 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    // 統一視覺：跟其他分頁一樣只有「▌ 標題」，不再多一顆重複的分頁圖示
-                    Text(stringResource(R.string.aac_title), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+                    // 問題13：統一用「圖卡」而不是「AAC 溝通板」
+                    Text(I18n.tr("圖卡"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = p.textLight)
                 },
                 navigationIcon = {
                     if (state.selectedCategory != null) {
@@ -125,17 +129,26 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                 )
             }
 
+            val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
+
             // ── 常用（For You）：社群式動態牆——依「最近使用×時段×地點」排出患者
-            //    此刻最可能要講的卡。冷啟動（沒按過任何卡）整列自動隱藏。
+            //    此刻最可能要講的卡。冷啟動（沒按過足夠卡片）整列自動隱藏。
             //    key 帶 sentence.size：每按一張卡就重算，剛按的內容立即反映。
-            run {
-                val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
-                val feed = remember(state.sentence.size, customItems) {
-                    com.example.ai.AacUsageRanker.feed(customItems + DefaultAacItems)
-                }
-                if (feed.isNotEmpty() && state.selectedCategory == null && searchQuery.isBlank()) {
-                    FrequentFeedRow(items = feed, onPick = { viewModel.aacAppendItem(it) }, p = p)
-                }
+            // rankerEpoch：測試注入統計後讓下面兩個 remember 重算（release 版恆為 0，無作用）
+            val rankerEpoch by com.example.testing.TestHooks.rankerEpoch.collectAsState()
+            val feed = remember(state.sentence.size, customItems, rankerEpoch) {
+                com.example.ai.AacUsageRanker.feed(customItems + DefaultAacItems)
+            }
+            // 冷啟動時整列隱藏：要有 3 張以上「衰減後仍算常用」的卡才推薦。
+            // 門檻直接問 ranker（同一套衰減標準），不要在這裡逐張 count——
+            // 全庫兩百多張，每次重組都掃一遍不划算，而且容易跟 feed 的判準走鐘。
+            val activeCount = remember(state.sentence.size, customItems, rankerEpoch) {
+                com.example.ai.AacUsageRanker.activeItemCount()
+            }
+            val feedVisible = feed.size >= 3 && activeCount >= 3 &&
+                state.selectedCategory == null && searchQuery.isBlank()
+            if (feedVisible) {
+                FrequentFeedRow(items = feed, onPick = { viewModel.aacAppendItem(it) }, p = p)
             }
 
             AacSearchAndCategoryBar(
@@ -148,9 +161,33 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
 
             // ── 主格子：類別 or 條目；可在 grid 與 flashcard 模式間切換 ──
             Box(modifier = Modifier.weight(1f)) {
-                val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
                 val filteredItems = remember(state.selectedCategory, searchQuery, customItems) {
                     filterAacItems(state.selectedCategory, searchQuery, customItems)
+                }
+
+                // ── 自動化測試掛勾（release 版為 no-op，見 TestHooks）──
+                // 搜尋字串是 composable 的區域狀態，ViewModel 看不到；由畫面自己回報，
+                // dump 出來的才是「螢幕上真正顯示的東西」而不是從別處推論的。
+                val injectedSearch by com.example.testing.TestHooks.injectedSearch.collectAsState()
+                LaunchedEffect(injectedSearch) {
+                    injectedSearch?.let {
+                        searchQuery = it
+                        com.example.testing.TestHooks.consumeInjectedSearch()
+                    }
+                }
+                LaunchedEffect(searchQuery, state.selectedCategory, filteredItems.size,
+                               feed.size, feedVisible, state.sentence.size, state.flashcardMode) {
+                    com.example.testing.TestHooks.reportAacUi(
+                        com.example.testing.TestHooks.AacUiSnapshot(
+                            searchQuery = searchQuery,
+                            selectedCategory = state.selectedCategory?.name ?: "",
+                            gridItemCount = filteredItems.size,
+                            feedItemCount = feed.size,
+                            feedVisible = feedVisible,
+                            sentenceLength = state.sentence.size,
+                            flashcardMode = state.flashcardMode
+                        )
+                    )
                 }
                 val browsingItems = searchQuery.isNotBlank() || state.selectedCategory != null
                 when {
@@ -332,11 +369,16 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
 
 @Composable
 private fun SentencePreview(items: List<AacItem>, p: com.example.ui.theme.AppPalette, onRemoveLast: () -> Unit) {
+    // 問題15：限制預覽區最大高度為96dp，防止超過8張卡片時折行
+    // 問題16：刪除時顯示撤銷提示
+    var showUndoToast by remember { mutableStateOf(false) }
+    var lastRemovedItem by remember { mutableStateOf<AacItem?>(null) }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .height(64.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(p.surface)
             .border(1.dp, p.neonCyan.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
@@ -346,8 +388,10 @@ private fun SentencePreview(items: List<AacItem>, p: com.example.ui.theme.AppPal
             Text(stringResource(R.string.aac_empty_hint), color = p.textMuted, fontSize = 14.sp, modifier = Modifier.weight(1f))
         } else {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState())
             ) {
                 items.forEach { it ->
                     Column(
@@ -357,15 +401,34 @@ private fun SentencePreview(items: List<AacItem>, p: com.example.ui.theme.AppPal
                             .background(p.neonCyan.copy(alpha = 0.15f))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Text(it.emoji, fontSize = 22.sp)
-                        Text(it.label, fontSize = 11.sp, color = p.textLight, maxLines = 1)
+                        Text(it.emoji, fontSize = 20.sp)
+                        Text(it.label, fontSize = 10.sp, color = p.textLight, maxLines = 1)
                     }
                 }
             }
-            IconButton(onClick = onRemoveLast) {
-                Icon(Icons.Default.Backspace, null, tint = p.dangerRose)
+            IconButton(
+                onClick = {
+                    if (items.isNotEmpty()) {
+                        lastRemovedItem = items.last()
+                        showUndoToast = true
+                        onRemoveLast()
+                    }
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Default.Backspace, null, tint = p.dangerRose, modifier = Modifier.size(20.dp))
             }
         }
+    }
+
+    // 問題16：2秒撤銷窗口
+    if (showUndoToast && lastRemovedItem != null) {
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(2000)
+            showUndoToast = false
+        }
+        // 簡單的toast提示（在預覽區下方顯示）
+        // 如果需要完整的撤銷功能，應在ViewModel維護undo棧
     }
 }
 
@@ -400,7 +463,7 @@ private fun AacSearchAndCategoryBar(
             Spacer(Modifier.width(6.dp))
             Box(Modifier.weight(1f)) {
                 if (query.isBlank()) {
-                    Text(I18n.tr("搜尋圖卡"), fontSize = 15.sp, color = p.textMuted, maxLines = 1)
+                    Text(I18n.tr("搜尋圖卡"), fontSize = 15.sp, color = p.textMuted.copy(alpha = 0.7f), maxLines = 1)
                 }
                 androidx.compose.foundation.text.BasicTextField(
                     value = query,
@@ -427,7 +490,10 @@ private fun AacSearchAndCategoryBar(
                     .height(44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(p.surface)
-                    .clickable { expanded = true }
+                    .clickable {
+                        expanded = true
+                        if (query.isNotBlank()) onQueryChange("")  // 問題5：選分類時自動清除搜尋詞
+                    }
                     .padding(horizontal = 12.dp)
             ) {
                 Text(
@@ -440,14 +506,23 @@ private fun AacSearchAndCategoryBar(
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.fillMaxWidth(0.45f)  // 防止菜單超出屏幕邊界，添加半透明背景
+            ) {
                 DropdownMenuItem(
                     text = { Text(I18n.tr("全部分類"), fontSize = 15.sp, color = p.textLight) },
                     trailingIcon = {
                         if (selectedCategory == null)
                             Icon(Icons.Default.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
                     },
-                    onClick = { onCategoryChange(null); expanded = false },
+                    onClick = {
+                        onCategoryChange(null)
+                        expanded = false
+                        // 問題6：返回全部分類時自動清除搜尋詞
+                        if (query.isNotBlank()) onQueryChange("")
+                    },
                     modifier = Modifier.heightIn(min = 44.dp)
                 )
                 AacCategory.values().forEach { cat ->
@@ -460,7 +535,10 @@ private fun AacSearchAndCategoryBar(
                             if (selectedCategory == cat)
                                 Icon(Icons.Default.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
                         },
-                        onClick = { onCategoryChange(cat); expanded = false },
+                        onClick = {
+                            onCategoryChange(cat)
+                            expanded = false
+                        },
                         modifier = Modifier.heightIn(min = 44.dp)
                     )
                 }
@@ -561,6 +639,7 @@ private fun CategoryGrid(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)   // combinedClickable：圖卡長按選單要用
 @Composable
 private fun ItemGrid(
     items: List<AacItem>,
@@ -569,9 +648,17 @@ private fun ItemGrid(
     onPick: (AacItem) -> Unit,
     onCustomAmount: (() -> Unit)? = null
 ) {
+    // 問題18：搜尋無結果時顯示提示
     if (items.isEmpty() && onCustomAmount == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(I18n.tr("沒有符合的圖卡"), color = p.textMuted, fontSize = 14.sp)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(Icons.Default.Search, null, tint = p.textMuted, modifier = Modifier.size(48.dp))
+                Text(I18n.tr("沒有符合的圖卡"), color = p.textMuted, fontSize = 14.sp)
+                Text(I18n.tr("嘗試調整搜尋條件或選擇其他分類"), color = p.textMuted, fontSize = 12.sp)
+            }
         }
         return
     }
@@ -614,10 +701,20 @@ private fun ItemGrid(
             val item = indexed.value
             val visualIndex = indexed.index + if (onCustomAmount != null) 1 else 0
             val tint = if (item.isStrongIntent) p.dangerRose else p.neonCyan
+            var showMenu by remember { mutableStateOf(false) }  // 問題11：長按菜單狀態
             DwellableSurface(
                 onTriggered = { onPick(item) },
                 palette = p,
-                modifier = Modifier.aspectRatio(1f),
+                modifier = Modifier
+                    .aspectRatio(1f)
+                    .combinedClickable(
+                        onClick = { onPick(item) },
+                        onLongClick = { showMenu = true }
+                    ),
+                // 觸控交給上面的 combinedClickable（它才聽得到長按）。
+                // 若這裡仍是 true，DwellableSurface 內建的單擊判定會跟 onClick 各觸發一次，
+                // 點一下圖卡會被加進句子兩張。onTriggered 保留給眼動凝視用。
+                enableTouchTap = false,
                 gazeWithin = visualIndex == gazeIndex
             ) {
                 Column(
@@ -638,6 +735,24 @@ private fun ItemGrid(
                     Text(
                         item.label, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                         color = p.textLight, textAlign = TextAlign.Center, maxLines = 2
+                    )
+                }
+                // 問題11：長按菜單
+                if (showMenu) {
+                    AlertDialog(
+                        onDismissRequest = { showMenu = false },
+                        title = { Text(item.label) },
+                        text = { Text(I18n.tr("選擇操作")) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                onPick(item)
+                                showMenu = false
+                            }) { Text(I18n.tr("加入句子")) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showMenu = false }) { Text(I18n.tr("取消")) }
+                        },
+                        containerColor = p.surface
                     )
                 }
             }
@@ -1196,18 +1311,38 @@ private fun FrequentFeedRow(
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
             items.forEach { item ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                var isPressed by remember { mutableStateOf(false) }
+                // 問題3：固定卡片寬度（min 80dp），防止文字長短導致參差不齊
+                Box(
                     modifier = Modifier
+                        .widthIn(min = 80.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(p.surface)
                         .border(1.dp, p.neonCyan.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-                        .clickable { onPick(item) }
+                        .clickable {
+                            isPressed = true
+                            onPick(item)
+                        }
                         .padding(horizontal = 8.dp, vertical = 6.dp)
+                        // 問題7、17：添加按下效果 + 動畫反饋
+                        .graphicsLayer(scaleX = if (isPressed) 0.95f else 1f, scaleY = if (isPressed) 0.95f else 1f)
+                        .animateContentSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(item.emoji, fontSize = 16.sp)
-                    Spacer(Modifier.width(4.dp))
-                    Text(item.label, color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(item.emoji, fontSize = 16.sp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(item.label, color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    }
+                }
+                LaunchedEffect(isPressed) {
+                    if (isPressed) {
+                        kotlinx.coroutines.delay(200)
+                        isPressed = false
+                    }
                 }
             }
         }

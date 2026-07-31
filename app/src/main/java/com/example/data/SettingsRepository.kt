@@ -217,7 +217,9 @@ data class AppSettings(
     val homeLatitude: Double = Double.NaN,
     val homeLongitude: Double = Double.NaN,
     /** 命中半徑（公尺）。預設 150 m 適合公寓 / 巷弄；獨棟可調小。 */
-    val homeRadiusMeters: Float = 150f
+    val homeRadiusMeters: Float = 150f,
+    /** 問題10：保存當前選定的地點，分頁切換時保留。 */
+    val currentLocationTag: String = ""
 ) {
     val hasHome: Boolean get() =
         !homeLatitude.isNaN() && !homeLongitude.isNaN()
@@ -319,6 +321,7 @@ class SettingsRepository(private val context: Context) {
         val DailyReminderHour   = androidx.datastore.preferences.core.intPreferencesKey("daily_reminder_hour")
         val ReportPushFrequency = stringPreferencesKey("report_push_frequency")
         val LinkedComputerId    = stringPreferencesKey("linked_computer_id")
+        val CurrentLocationTag  = stringPreferencesKey("current_location_tag")  // 問題10：保存地點狀態
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p -> p.toSettings() }
@@ -393,7 +396,8 @@ class SettingsRepository(private val context: Context) {
         dailyReminderEnabled = this[Keys.DailyReminderEnabled] ?: false,
         dailyReminderHour  = this[Keys.DailyReminderHour] ?: 19,
         reportPushFrequency = this[Keys.ReportPushFrequency] ?: "none",
-        linkedComputerId    = this[Keys.LinkedComputerId] ?: ""
+        linkedComputerId    = this[Keys.LinkedComputerId] ?: "",
+        currentLocationTag  = this[Keys.CurrentLocationTag] ?: ""  // 問題10：讀取保存的地點
     )
 
     suspend fun setTheme(theme: AppTheme)            = update { it[Keys.Theme] = theme.name }
@@ -493,6 +497,7 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setReportPushFrequency(freq: String) = update { it[Keys.ReportPushFrequency] = freq }
     suspend fun setLinkedComputerId(id: String) = update { it[Keys.LinkedComputerId] = id.trim() }
+    suspend fun setCurrentLocationTag(tag: String) = update { it[Keys.CurrentLocationTag] = tag }  // 問題10：保存地點
 
     // ─── 行為數據彙總（康復追蹤指標）───────────────────────────────────────────
 

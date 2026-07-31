@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.aphasiaassist.pkztuv"
     minSdk = 24
     targetSdk = 36
-    versionCode = 137
-    versionName = "1.3.7"
+    versionCode = 138
+    versionName = "1.3.8"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

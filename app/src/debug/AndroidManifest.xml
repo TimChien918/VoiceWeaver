@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest：Gradle 只在 debug 建置時把這份合併進主 manifest。
+  Release APK 裡不會有下面這個 <receiver>，測試側門在正式版是「物理上不存在」，
+  不是靠執行期判斷擋掉的。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          exported="true" 是必要的：adb 以 shell UID 送廣播，進不了未匯出的接收端。
+          實際把關是 TestHooks 的每次啟動隨機權杖（只出現在 logcat，其他 App 讀不到）。
+        -->
+        <receiver
+            android:name="com.example.testing.TestCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.TEST_COMMAND" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

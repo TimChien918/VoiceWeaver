@@ -283,7 +283,9 @@ fun VoiceWeaverScreen(
 
                         // GPS 按鈕 — 未授權時原地顯示授權按鈕，不改變版面
                         val locPerm = rememberPermissionState(AppPermissions.LOCATION)
-                        if (locPerm.status.isGranted) {
+                        // 見 MICROPHONE 處的說明：release 版此 Map 恆空，等同讀系統真實狀態。
+                        val forcedLocPerms by com.example.testing.TestHooks.forcedPermissions.collectAsState()
+                        if (forcedLocPerms["LOCATION"] ?: locPerm.status.isGranted) {
                             Button(
                                 onClick = { viewModel.startSensingLocation() },
                                 colors = ButtonDefaults.buttonColors(
@@ -510,7 +512,9 @@ fun VoiceWeaverScreen(
 
                         // Camera button guarded by camera permission
                         val camPerm = rememberPermissionState(AppPermissions.CAMERA)
-                        if (camPerm.status.isGranted) {
+                        // 見 MICROPHONE 處的說明：release 版此 Map 恆空，等同讀系統真實狀態。
+                        val forcedCamPerms by com.example.testing.TestHooks.forcedPermissions.collectAsState()
+                        if (forcedCamPerms["CAMERA"] ?: camPerm.status.isGranted) {
                             var showCameraPreview by remember { mutableStateOf(false) }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 CameraLensChip(
@@ -663,7 +667,12 @@ fun VoiceWeaverScreen(
 
                         // STT section guarded by microphone permission
                         val micPerm = rememberPermissionState(AppPermissions.MICROPHONE)
-                        if (micPerm.status.isGranted) {
+                        var showMicPermAlert by remember { mutableStateOf(false) }  // 問題8：權限提示
+                        // 測試側門可在不重啟 App 的情況下模擬「授權被撤銷」；release 版這個
+                        // Map 永遠是空的，等同直接讀系統的真實授權狀態。
+                        val forcedPerms by com.example.testing.TestHooks.forcedPermissions.collectAsState()
+                        val micGranted = forcedPerms["MICROPHONE"] ?: micPerm.status.isGranted
+                        if (micGranted) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -811,15 +820,36 @@ fun VoiceWeaverScreen(
                                 )
                             }
                         } else {
+                            // 問題8：未授權時顯示權限請求提示
                             OutlinedButton(
-                                onClick = { micPerm.launchPermissionRequest() },
+                                onClick = {
+                                    micPerm.launchPermissionRequest()
+                                    showMicPermAlert = true
+                                },
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
                                 Icon(Icons.Default.Lock, null, tint = neonCyan, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.main_perm_microphone), fontSize = 11.sp, color = neonCyan)
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.main_perm_microphone), fontSize = 12.sp, color = neonCyan)
+                            }
+                            if (showMicPermAlert) {
+                                AlertDialog(
+                                    onDismissRequest = { showMicPermAlert = false },
+                                    title = { Text(I18n.tr("需要麥克風權限")) },
+                                    text = { Text(I18n.tr("請允許麥克風權限以使用語音輸入功能。")) },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            micPerm.launchPermissionRequest()
+                                            showMicPermAlert = false
+                                        }) { Text(I18n.tr("前往設定")) }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showMicPermAlert = false }) { Text(I18n.tr("取消")) }
+                                    },
+                                    containerColor = p.surface
+                                )
                             }
                         }
 

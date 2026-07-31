@@ -898,6 +898,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             currentHomeAnchor = if (s.hasHome) {
                 com.example.ai.HomeAnchor(s.homeLatitude, s.homeLongitude, s.homeRadiusMeters)
             } else null
+            // 問題10：從 settings 讀入已保存的地點標籤，分頁切換時保留
+            if (s.currentLocationTag.isNotBlank()) {
+                _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = s.currentLocationTag)
+            }
             ttsModule.configureGptSovit(
                 // 角色語音已搬出「開發者模式」變成一般設定，不再需要 developerMode 開關才能用
                 enabled = s.gptSovitEnabled,
@@ -1256,7 +1260,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 val result = locationTracker.getCurrentLocation()
                 if (result != null) {
                     _locationResult.value = result
-                    _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = result.shortTag)
+                    // 走 onLocationChanged 而不是直接改 vault：真實定位一樣要寫進 DataStore，
+                    // 否則只有手動選的地點會在切分頁後留著，GPS 定出來的一換頁就沒了。
+                    onLocationChanged(result.shortTag)
                 }
             } catch (e: Exception) {
                 Log.e("VoiceWeaverViewModel", "Error sensing location", e)
@@ -1317,7 +1323,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val result = locationTracker.simulateGeocode(lat, lon)
                 _locationResult.value = result
-                _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = result.shortTag)
+                onLocationChanged(result.shortTag)
                 Log.i("VoiceWeaverViewModel",
                     "[SimulateLocation] ($lat,$lon) → shortTag='${result.shortTag}', address='${result.address}'")
             } catch (e: Exception) {
@@ -2171,6 +2177,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun onLocationChanged(location: String) {
         _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = location)
+        // 問題10：保存地點狀態，分頁切換時保留
+        viewModelScope.launch {
+            settingsRepo.setCurrentLocationTag(location)
+        }
     }
 
     fun onVisionTagsChanged(tags: List<String>) {
@@ -2561,6 +2571,82 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         _aacState.value = _aacState.value.copy(alertTriggered = false, rejectCount = 0)
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 自動化測試橋接（只有 debug 版接得到指令，見 TestHooks 的安全說明）
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * 提供給 [com.example.testing.TestHooks] 的操作面。
+     *
+     * 之所以走介面而不是讓 TestHooks 直接抓 ViewModel：TestHooks 放在 testing 套件，
+     * 讓它反向依賴 ai 模組會把測試碼綁進正式的相依圖；用介面的話 release 版
+     * 連這段實作都會因為沒有任何呼叫端而被 R8 判定不可達。
+     */
+    val testBridge: com.example.testing.TestHooks.Bridge = object : com.example.testing.TestHooks.Bridge {
+
+        // 畫面的重算是靠 TestHooks.rankerEpoch 觸發的（見該處說明：改單例不會動到
+        // 任何 StateFlow，而重發相同內容的 aacState 會被 StateFlow 的 equals 去重）。
+        override fun injectAacUsage(itemId: String, score: Double, ageDays: Double, locationTag: String) =
+            AacUsageRanker.injectStatForTesting(itemId, score, ageDays, locationTag)
+
+        override fun clearAacUsage() = AacUsageRanker.clearStatsForTesting()
+
+        override fun injectLocation(lat: Double, lon: Double) = simulateLocation(lat, lon)
+
+        override fun injectLocationTag(tag: String) = onLocationChanged(tag)
+
+        override fun setFontScale(scale: Float) {
+            viewModelScope.launch { settingsRepo.setFontScale(scale) }
+        }
+
+        override fun setTheme(name: String, highContrast: Boolean) {
+            viewModelScope.launch {
+                runCatching { AppTheme.valueOf(name) }.getOrNull()?.let { settingsRepo.setTheme(it) }
+                settingsRepo.setHighContrast(highContrast)
+            }
+        }
+
+        override fun resetAllData() {
+            viewModelScope.launch {
+                clearAllHistory()
+                AacUsageRanker.clearStatsForTesting()
+                _aacState.value = AacUiState()
+                _globalTagsVault.value = GlobalTagsVault()
+                settingsRepo.setCurrentLocationTag("")
+            }
+        }
+
+        override fun snapshot(): org.json.JSONObject {
+            val s = _aacState.value
+            val vault = _globalTagsVault.value
+            val settings = settings.value
+            return org.json.JSONObject()
+                .put("aac_state", org.json.JSONObject()
+                    .put("selected_category", s.selectedCategory?.name ?: "")
+                    .put("sentence", org.json.JSONArray().apply { s.sentence.forEach { put(it.label) } })
+                    .put("composing", s.composing)
+                    .put("pending_confirm_text", s.pendingConfirmText)
+                    .put("flashcard_mode", s.flashcardMode)
+                    .put("reject_count", s.rejectCount))
+                .put("context", org.json.JSONObject()
+                    .put("location_tag", vault.locationTag)
+                    .put("persisted_location_tag", settings.currentLocationTag)
+                    .put("raw_text", vault.rawText)
+                    .put("vision_tags", vault.visionTags.joinToString("、")))
+                .put("settings", org.json.JSONObject()
+                    .put("theme", settings.theme.name)
+                    .put("language", settings.language.name)
+                    .put("font_scale", settings.fontScale)
+                    .put("high_contrast", settings.highContrast)
+                    .put("severity_mode", settings.severityMode.name)
+                    .put("developer_mode", settings.developerMode))
+                .put("ranker", AacUsageRanker.debugSnapshot())
+                .put("device", org.json.JSONObject()
+                    .put("tier", _deviceTier.value.name)
+                    .put("ram_gb", _deviceRam.value))
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         downloadJob?.cancel()
@@ -2568,6 +2654,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         eyeScanJob?.cancel(); eyeScanJob = null
         ttsModule.shutdown()
         sttManager.destroy()
+        com.example.testing.TestHooks.detach()
     }
 }
 
