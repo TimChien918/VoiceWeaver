@@ -24,6 +24,17 @@ import org.json.JSONObject
  *    類別結構本身不動——失語症患者靠位置記憶找卡，整個版面跟著演算法
  *    大風吹反而是災難。這是跟社群 feed 唯一該不一樣的地方。
  *
+ * **EdgeRank 式推薦指數**（Facebook 動態牆的骨架：affinity × weight × decay）：
+ * 一張卡的最終分數不只看「自己被按多少次」，還會從**相關的卡**吸收分數——
+ *  - **協同關聯（學來的 affinity）**：同一句話裡一起出現過的卡互相拉抬，
+ *    像 FB 的「你跟這個人互動多→他的貼文浮上來」。患者常把「喝水」和「杯子」
+ *    組在同一句 → 之後按「喝水」，「杯子」的推薦指數就跟著升。
+ *  - **語意相似（內建的 content similarity）**：概念詞群（水／食／藥／錢…）
+ *    先天把「喝水」「杯子」「口渴」連在一起，解決協同關聯的冷啟動——
+ *    第一次按「喝水」時「杯子」就已經有加成，不用等患者真的組過那一句。
+ * 傳播只做一層（i ← j 的分數 × 關聯強度 × 0.5），跟 FB 一樣防止分數在圖上
+ * 迴圈放大；而且只從「有分數的卡」出發，全庫 200+ 張也只算個位數來源。
+ *
  * 資料存 SharedPreferences（跟 SmartApiRouter 同模式）：量小（每卡一筆統計）、
  * 跨重啟持續學習、壞掉就重新開始學，不影響主功能。
  */
@@ -61,6 +72,20 @@ object AacUsageRanker {
     }
 
     private val stats = HashMap<String, Stat>()
+
+    /**
+     * 協同關聯（學來的 affinity）：pairKey("a|b"，字典序) → 衰減後的共現分。
+     * 跟使用分同一個半衰期——上個月常組的句型不該永遠綁著推薦。
+     */
+    private class Edge(var score: Double = 0.0, var updatedAt: Long = 0L) {
+        fun decayed(now: Long): Double {
+            if (score <= 0.0 || updatedAt <= 0L) return 0.0
+            return score * Math.pow(2.0, -(now - updatedAt).coerceAtLeast(0L) / HALF_LIFE_MS)
+        }
+    }
+    private val edges = HashMap<String, Edge>()
+    private fun pairKey(a: String, b: String) = if (a < b) "$a|$b" else "$b|$a"
+
     private var prefs: android.content.SharedPreferences? = null
     private var loaded = false
 
@@ -72,6 +97,7 @@ object AacUsageRanker {
             val raw = prefs?.getString(KEY_STATS, null) ?: return@runCatching
             val o = JSONObject(raw)
             for (key in o.keys()) {
+                if (key == "_edges") continue
                 val s = o.getJSONObject(key)
                 val buckets = IntArray(HOUR_BUCKETS)
                 val arr = s.optJSONArray("h") ?: JSONArray()
@@ -83,7 +109,13 @@ object AacUsageRanker {
                     lastLocation = s.optString("l")
                 )
             }
-            Log.i(TAG, "載入 ${stats.size} 張圖卡的使用統計")
+            o.optJSONObject("_edges")?.let { eo ->
+                for (k in eo.keys()) {
+                    val e = eo.getJSONObject(k)
+                    edges[k] = Edge(e.optDouble("s", 0.0), e.optLong("t"))
+                }
+            }
+            Log.i(TAG, "載入 ${stats.size} 張圖卡統計、${edges.size} 條關聯")
         }.onFailure { Log.w(TAG, "統計載入失敗，重新學習：${it.message}") }
         loaded = true
     }
@@ -99,8 +131,39 @@ object AacUsageRanker {
                     .put("h", JSONArray().apply { v.hourBuckets.forEach { put(it) } })
                     .put("l", v.lastLocation))
             }
+            val eo = JSONObject()
+            edges.forEach { (k, v) -> eo.put(k, JSONObject().put("s", v.score).put("t", v.updatedAt)) }
+            o.put("_edges", eo)
             p.edit().putString(KEY_STATS, o.toString()).apply()
         }
+    }
+
+    /**
+     * 概念詞群（content similarity 的冷啟動知識）：同一群的卡先天相關。
+     * 用「詞包含關鍵字」比對——「喝水」「一杯水」「杯子」「口渴」都命中水群。
+     * 詞群刻意粗：它只負責把相關卡拉進推薦視野，細排序交給學來的共現分。
+     */
+    private val CONCEPTS: List<List<String>> = listOf(
+        listOf("水", "喝", "渴", "杯", "飲", "茶", "咖啡", "牛奶", "吸管", "冰", "熱的", "湯"),
+        listOf("吃", "飯", "餓", "麵", "餐", "食", "水果", "麵包", "糖", "菜單"),
+        listOf("藥", "醫", "病", "痛", "暈", "吐", "燒", "血", "護理", "診", "處方", "過敏"),
+        listOf("錢", "$", "元", "付", "買", "刷卡", "現金", "找零", "貴", "發票", "收據", "悠遊卡"),
+        listOf("廁所", "尿", "清潔", "衛生紙"),
+        listOf("家", "媽", "爸", "小孩", "朋友"),
+        listOf("車", "站", "機場", "登機", "司機", "停車"),
+        listOf("睡", "累", "休息", "躺", "毯子", "床"),
+        listOf("冷", "熱", "溫"),
+        listOf("救", "警", "緊急", "危險", "跌倒", "呼吸", "噎")
+    )
+
+    private fun conceptsOf(label: String): Set<Int> =
+        CONCEPTS.indices.filterTo(HashSet()) { idx -> CONCEPTS[idx].any { label.contains(it) } }
+
+    /** 兩張卡的語意相似度：共享概念群 → 0.4（共享多群不再加，避免詞群重疊灌水）。 */
+    private fun similarity(a: AacItem, b: AacItem): Double {
+        if (a.id == b.id) return 0.0
+        val shared = conceptsOf(a.label) intersect conceptsOf(b.label)
+        return if (shared.isNotEmpty()) 0.4 else 0.0
     }
 
     private fun bucketOf(now: Long): Int {
@@ -108,15 +171,26 @@ object AacUsageRanker {
         return cal.get(java.util.Calendar.HOUR_OF_DAY) / (24 / HOUR_BUCKETS)
     }
 
-    /** 患者按了一張卡：先把舊分數衰減到現在，再 +1（社群的「一次互動」）。 */
+    /**
+     * 患者按了一張卡：先把舊分數衰減到現在，再 +1（社群的「一次互動」）。
+     *
+     * @param companions 目前句子裡已經有的卡——跟新按的這張建立協同關聯
+     *   （同一句一起出現＝患者心裡這些概念是綁在一起的，FB 的 affinity 學的
+     *   就是這種共現訊號）。
+     */
     @Synchronized
-    fun recordUse(itemId: String, locationTag: String = "") {
+    fun recordUse(itemId: String, locationTag: String = "", companions: List<String> = emptyList()) {
         val now = System.currentTimeMillis()
         val s = stats.getOrPut(itemId) { Stat() }
         s.score = s.decayedScore(now) + 1.0
         s.updatedAt = now
         s.hourBuckets[bucketOf(now)]++
         if (locationTag.isNotBlank()) s.lastLocation = locationTag
+        companions.filter { it != itemId }.forEach { other ->
+            val e = edges.getOrPut(pairKey(itemId, other)) { Edge() }
+            e.score = e.decayed(now) + 1.0
+            e.updatedAt = now
+        }
         persist()
     }
 
@@ -144,15 +218,54 @@ object AacUsageRanker {
     }
 
     /**
-     * 「常用」推薦列（社群的 For You）：全庫取分數最高的前 N 張。
+     * EdgeRank 式推薦指數：base（自己的使用分）＋ 從相關卡吸收的分數。
+     *
+     *   rec(i) = base(i) + Σ_j  base(j) × ( 共現(i,j)/(共現+2) ＋ 語意相似(i,j) ) × 0.5
+     *
+     * - j 只跑「真的有分數的卡」（患者實際用過的那幾張），全庫 200+ 張也很便宜
+     * - 共現分做拉普拉斯式壓縮 x/(x+2)：共現 1 次 ≈ 0.33、5 次 ≈ 0.71，
+     *   永遠 < 1——學來的關聯再強也只能「拉抬」，不能超越本尊
+     * - ×0.5 是單層傳播的阻尼（FB 同款思路）：分數只擴散一步，不在圖上迴圈放大
+     * - 效果：患者常按「喝水」→「杯子」「口渴」即使沒按過也有分數，
+     *   會依推薦指數浮進「常用」列
+     */
+    @Synchronized
+    private fun recommendScore(
+        item: AacItem,
+        used: List<Pair<AacItem, Double>>,
+        now: Long,
+        locationTag: String
+    ): Double {
+        var rec = scoreOf(item.id, now, locationTag)
+        for ((other, otherBase) in used) {
+            if (other.id == item.id) continue
+            val co = edges[pairKey(item.id, other.id)]?.decayed(now) ?: 0.0
+            val affinity = co / (co + 2.0) + similarity(item, other)
+            if (affinity > 0.0) rec += otherBase * affinity * 0.5
+        }
+        return rec
+    }
+
+    /** 全庫裡「有使用分」的卡（推薦指數的傳播來源）。 */
+    private fun usedOf(allItems: List<AacItem>, now: Long, locationTag: String): List<Pair<AacItem, Double>> =
+        allItems.mapNotNull { item ->
+            val base = scoreOf(item.id, now, locationTag)
+            if (base > 0.0) item to base else null
+        }
+
+    /**
+     * 「常用」推薦列（社群的 For You）：全庫依**推薦指數**取前 N 張。
+     * 不只是用過的卡——跟常用卡相關的（喝水→杯子）也會依指數浮進來。
      * 冷啟動（什麼都沒按過）回空清單，UI 就不顯示這一列——不硬塞猜測。
      */
     @Synchronized
     fun feed(allItems: List<AacItem>, locationTag: String = "", limit: Int = FEED_SIZE): List<AacItem> {
         val now = System.currentTimeMillis()
+        val used = usedOf(allItems, now, locationTag)
+        if (used.isEmpty()) return emptyList()
         return allItems.asSequence()
-            .map { it to scoreOf(it.id, now, locationTag) }
-            .filter { it.second > 0.0 }
+            .map { it to recommendScore(it, used, now, locationTag) }
+            .filter { it.second > 0.1 }
             .sortedByDescending { it.second }
             .take(limit)
             .map { it.first }
@@ -160,13 +273,15 @@ object AacUsageRanker {
     }
 
     /**
-     * 類別內排序：常用的往前、沒用過的維持原本順序附在後面。
+     * 類別內排序：依推薦指數往前排、沒分數的維持原本順序附在後面。
      * sortedByDescending 是穩定排序，同分（都是 0）不會互換——版面不大風吹。
      */
     @Synchronized
     fun rankWithin(items: List<AacItem>, locationTag: String = ""): List<AacItem> {
         val now = System.currentTimeMillis()
-        return items.sortedByDescending { scoreOf(it.id, now, locationTag) }
+        val used = usedOf(items, now, locationTag)
+        if (used.isEmpty()) return items
+        return items.sortedByDescending { recommendScore(it, used, now, locationTag) }
     }
 
     /** 患者最常用的詞（給重組 prompt 當個人詞彙偏好）。 */

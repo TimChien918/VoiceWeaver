@@ -2370,8 +2370,13 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 點條目 → 累加進句子 */
     fun aacAppendItem(item: AacItem) {
         val s = _aacState.value
-        // 餵給「常用」動態牆：每按一次＝社群的一次互動（含時段與地點情境）
-        AacUsageRanker.recordUse(item.id, _globalTagsVault.value.locationTag)
+        // 餵給「常用」動態牆：每按一次＝社群的一次互動（含時段與地點情境）；
+        // 句子裡已有的卡當共現夥伴（學「喝水↔杯子」這種協同關聯）
+        AacUsageRanker.recordUse(
+            item.id,
+            _globalTagsVault.value.locationTag,
+            companions = s.sentence.map { it.id }
+        )
         // 強烈意圖防護：若是緊急類，立刻過風險閘門發聲 + 標記
         if (item.isStrongIntent) requestSpeak(item.label)
         appendRawToken(item.label)

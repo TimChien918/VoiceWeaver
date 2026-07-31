@@ -79,11 +79,8 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.GridView, null, tint = p.neonCyan, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.aac_title), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = p.textLight)
-                    }
+                    // 統一視覺：跟其他分頁一樣只有「▌ 標題」，不再多一顆重複的分頁圖示
+                    Text(stringResource(R.string.aac_title), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = p.textLight)
                 },
                 navigationIcon = {
                     if (state.selectedCategory != null) {
@@ -98,12 +95,12 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                         Icon(
                             imageVector = if (state.flashcardMode) Icons.Default.GridView else Icons.Default.ViewCarousel,
                             contentDescription = if (state.flashcardMode) I18n.tr("切換到九宮格") else I18n.tr("切換到識字卡"),
-                            tint = p.auraAmber
+                            tint = Color(0xFF007AFF)   // iOS 藍：頂欄動作鈕統一色
                         )
                     }
                     if (state.sentence.isNotEmpty()) {
                         IconButton(onClick = { viewModel.aacClear() }) {
-                            Icon(Icons.Default.DeleteOutline, null, tint = p.dangerRose)
+                            Icon(Icons.Default.DeleteOutline, null, tint = Color(0xFFFF3B30))
                         }
                     }
                 },
@@ -372,7 +369,6 @@ private fun SentencePreview(items: List<AacItem>, p: com.example.ui.theme.AppPal
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AacSearchAndCategoryBar(
     selectedCategory: AacCategory?,
@@ -381,76 +377,91 @@ private fun AacSearchAndCategoryBar(
     onCategoryChange: (AacCategory?) -> Unit,
     p: com.example.ui.theme.AppPalette
 ) {
+    // iOS 風的頂部工具列：搜尋欄＋分類選單各佔一半、44dp 高、10dp 圓角。
+    // 字級全部寫死——這一列是導覽工具不是內容，跟著全域放大倍率跑的話
+    // 「全部分類」會撐成半個螢幕高的巨型方塊（實際發生過）。
     var expanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            leadingIcon = { Icon(Icons.Default.Search, null, tint = p.neonCyan) },
-            trailingIcon = {
-                if (query.isNotBlank()) {
-                    IconButton(onClick = { onQueryChange("") }) {
-                        Icon(Icons.Default.Close, null, tint = p.textMuted)
-                    }
-                }
-            },
-            placeholder = { Text(I18n.tr("搜尋圖卡"), fontSize = 12.sp) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = p.neonCyan,
-                unfocusedBorderColor = p.textMuted.copy(alpha = 0.35f),
-                focusedTextColor = p.textLight,
-                unfocusedTextColor = p.textLight,
-                focusedContainerColor = p.surface,
-                unfocusedContainerColor = p.surface
-            ),
-            modifier = Modifier.weight(1f)
-        )
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-            modifier = Modifier.widthIn(min = 136.dp, max = 180.dp)
+        // 搜尋欄：BasicTextField 才能真正控制高度（OutlinedTextField 最矮 56dp）
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(p.surface)
+                .padding(horizontal = 10.dp)
         ) {
-            OutlinedTextField(
-                value = selectedCategory?.let { "${it.emoji} ${stringResource(catLabelRes(it))}" } ?: I18n.tr("全部分類"),
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = p.auraAmber,
-                    unfocusedBorderColor = p.textMuted.copy(alpha = 0.35f),
-                    focusedTextColor = p.textLight,
-                    unfocusedTextColor = p.textLight,
-                    focusedContainerColor = p.surface,
-                    unfocusedContainerColor = p.surface
-                ),
-                modifier = Modifier.menuAnchor().fillMaxWidth()
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
+            Icon(Icons.Default.Search, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isBlank()) {
+                    Text(I18n.tr("搜尋圖卡"), fontSize = 15.sp, color = p.textMuted, maxLines = 1)
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = p.textLight),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF007AFF)),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (query.isNotBlank()) {
+                Icon(
+                    Icons.Default.Close, I18n.tr("清除"), tint = p.textMuted,
+                    modifier = Modifier.size(18.dp).clickable { onQueryChange("") }
+                )
+            }
+        }
+
+        // 分類選單：白卡按鈕 + 標準 DropdownMenu（44dp 列高、emoji 前綴、目前項打勾）
+        Box {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(p.surface)
+                    .clickable { expanded = true }
+                    .padding(horizontal = 12.dp)
             ) {
+                Text(
+                    selectedCategory?.let { "${it.emoji} ${stringResource(catLabelRes(it))}" }
+                        ?: I18n.tr("全部分類"),
+                    fontSize = 15.sp, color = p.textLight, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 120.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 DropdownMenuItem(
-                    text = { Text(I18n.tr("全部分類")) },
-                    leadingIcon = { Icon(Icons.Default.Apps, null) },
-                    onClick = {
-                        onCategoryChange(null)
-                        expanded = false
-                    }
+                    text = { Text(I18n.tr("全部分類"), fontSize = 15.sp, color = p.textLight) },
+                    trailingIcon = {
+                        if (selectedCategory == null)
+                            Icon(Icons.Default.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                    },
+                    onClick = { onCategoryChange(null); expanded = false },
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
                 AacCategory.values().forEach { cat ->
                     DropdownMenuItem(
-                        text = { Text(stringResource(catLabelRes(cat))) },
-                        leadingIcon = { Text(cat.emoji, fontSize = 18.sp) },
-                        onClick = {
-                            onCategoryChange(cat)
-                            expanded = false
-                        }
+                        text = {
+                            Text("${cat.emoji}  ${stringResource(catLabelRes(cat))}",
+                                fontSize = 15.sp, color = p.textLight)
+                        },
+                        trailingIcon = {
+                            if (selectedCategory == cat)
+                                Icon(Icons.Default.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                        },
+                        onClick = { onCategoryChange(cat); expanded = false },
+                        modifier = Modifier.heightIn(min = 44.dp)
                     )
                 }
             }

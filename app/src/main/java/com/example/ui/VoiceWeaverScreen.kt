@@ -914,22 +914,17 @@ fun VoiceWeaverScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // ── 把整套 AAC 圖卡（grid + 識字卡 + 情境推薦 + 自訂金額）內嵌進重組畫面 ──
-                        // 為什麼搬進來：失語症患者不該為了挑圖卡跳分頁；
-                        // 圖卡點選會 append 到上方 rawText，按下「邊緣端情境重構」直接送出 → TTS 朗讀
-                        AacInlinePanel(viewModel = viewModel)
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // 沉浸式大圖卡模式：純圖卡組句 → AI 重組 → 意圖確認卡 ✓/✗（不識字適用）
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // 圖卡已獨立成底部「圖卡」分頁（一按就到），重組頁不再內嵌整套
+                        // 溝通板——同一份東西出現在兩處只會讓患者困惑「要在哪裡按」。
+                        // 這裡只留一顆窄捷徑給還在找它的人。
                         OutlinedButton(
                             onClick = onOpenAacFull,
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.5f)),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
                         ) {
-                            Text(I18n.tr("🃏 大圖卡模式（適合用圖說話）"), fontSize = 13.sp, color = neonCyan)
+                            Text(I18n.tr("用圖卡說話 → 到「圖卡」分頁"), fontSize = 13.sp, color = neonCyan)
                         }
                     }
                 }
