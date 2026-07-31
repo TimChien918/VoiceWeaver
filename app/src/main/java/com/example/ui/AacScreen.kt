@@ -1243,7 +1243,7 @@ private fun CustomAmountDialog(
                     onExpandedChange = { menuOpen = it }
                 ) {
                     OutlinedTextField(
-                        value = "${currency.code} (${currency.displayName})",
+                        value = "${currency.code} (${I18n.tr(currency.displayName)})",
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuOpen) },
@@ -1261,7 +1261,7 @@ private fun CustomAmountDialog(
                     ) {
                         Currency.values().forEach { c ->
                             DropdownMenuItem(
-                                text = { Text("${c.symbol}  ${c.code}  ·  ${c.displayName}", fontSize = 13.sp) },
+                                text = { Text("${c.symbol}  ${c.code}  ·  ${I18n.tr(c.displayName)}", fontSize = 13.sp) },
                                 onClick = { currency = c; menuOpen = false }
                             )
                         }

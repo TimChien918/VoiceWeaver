@@ -154,8 +154,9 @@ private fun HistoryRecordCard(
     onToggleFavorite: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val dateStr = remember(record.timestamp) {
-        SimpleDateFormat("MM/dd HH:mm", Locale.TAIWAN).format(Date(record.timestamp))
+    // Locale.getDefault() 由 LocaleProvider 隨介面語言設定，日期呈現跟著 App 語言走
+    val dateStr = remember(record.timestamp, Locale.getDefault()) {
+        SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date(record.timestamp))
     }
 
     Card(

@@ -773,7 +773,8 @@ private fun LogRow(
         score >= 50 -> auraAmber
         else -> dangerRose
     }
-    val dateFmt = remember { SimpleDateFormat("MM/dd HH:mm", Locale.TAIWAN) }
+    // Locale.getDefault() 由 LocaleProvider 隨介面語言設定，日期呈現跟著 App 語言走
+    val dateFmt = remember(Locale.getDefault()) { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
     Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.7f)),

@@ -518,7 +518,7 @@ fun VoiceWeaverScreen(
                             var showCameraPreview by remember { mutableStateOf(false) }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 CameraLensChip(
-                                    label = CameraLens.Back.displayName,
+                                    label = I18n.tr(CameraLens.Back.displayName),
                                     selected = settings.cameraLens == CameraLens.Back,
                                     onClick = { viewModel.setCameraLens(CameraLens.Back) },
                                     modifier = Modifier.weight(1f),
@@ -527,7 +527,7 @@ fun VoiceWeaverScreen(
                                     textMuted = textMuted
                                 )
                                 CameraLensChip(
-                                    label = CameraLens.Front.displayName,
+                                    label = I18n.tr(CameraLens.Front.displayName),
                                     selected = settings.cameraLens == CameraLens.Front,
                                     onClick = { viewModel.setCameraLens(CameraLens.Front) },
                                     modifier = Modifier.weight(1f),
@@ -536,7 +536,7 @@ fun VoiceWeaverScreen(
                                     textMuted = textMuted
                                 )
                                 CameraLensChip(
-                                    label = CameraLens.Both.displayName,
+                                    label = I18n.tr(CameraLens.Both.displayName),
                                     selected = settings.cameraLens == CameraLens.Both,
                                     onClick = { viewModel.setCameraLens(CameraLens.Both) },
                                     modifier = Modifier.weight(1f),
@@ -1672,7 +1672,7 @@ private fun CameraPreviewDialog(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 CameraLensChip(
-                    label = CameraLens.Back.displayName,
+                    label = I18n.tr(CameraLens.Back.displayName),
                     selected = lens == CameraLens.Back,
                     onClick = { onLensChange(CameraLens.Back) },
                     modifier = Modifier.weight(1f),
@@ -1681,7 +1681,7 @@ private fun CameraPreviewDialog(
                     textMuted = textMuted
                 )
                 CameraLensChip(
-                    label = CameraLens.Front.displayName,
+                    label = I18n.tr(CameraLens.Front.displayName),
                     selected = lens == CameraLens.Front,
                     onClick = { onLensChange(CameraLens.Front) },
                     modifier = Modifier.weight(1f),
@@ -1690,7 +1690,7 @@ private fun CameraPreviewDialog(
                     textMuted = textMuted
                 )
                 CameraLensChip(
-                    label = CameraLens.Both.displayName,
+                    label = I18n.tr(CameraLens.Both.displayName),
                     selected = lens == CameraLens.Both,
                     onClick = { onLensChange(CameraLens.Both) },
                     modifier = Modifier.weight(1f),

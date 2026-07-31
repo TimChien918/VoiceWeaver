@@ -44,6 +44,10 @@ object TestHooks {
     @Volatile
     var navigator: ((String) -> Unit)? = null
 
+    /** 目前所在分頁（MainActivity 於 debug 版隨路由變化回報；dump 會帶出 current_route）。 */
+    @Volatile
+    var currentRoute: String = ""
+
     /** 由 ViewModel 注入的實作。拆成介面是為了讓 TestHooks 不反向依賴 ai 模組。 */
     interface Bridge {
         fun injectAacUsage(itemId: String, score: Double, ageDays: Double, locationTag: String)
@@ -217,7 +221,9 @@ object TestHooks {
 
                 // ── P1-4 權限覆寫 ──
                 "force_permission" -> {
-                    val perm = args["permission"] ?: return fail("missing permission")
+                    // 畫面端一律用大寫鍵查表（forced["CAMERA"]…），這裡統一轉大寫，
+                    // 讓腳本傳 camera / Camera / CAMERA 都能生效，不會靜默存進沒人讀的鍵。
+                    val perm = args["permission"]?.uppercase() ?: return fail("missing permission")
                     when (val g = args["granted"]) {
                         "clear" -> {
                             _forcedPermissions.value = _forcedPermissions.value - perm
@@ -316,6 +322,7 @@ object TestHooks {
     private fun dumpState(): String {
         val b = bridge ?: return fail("no_bridge")
         val root = b.snapshot()
+        root.put("current_route", currentRoute)
         val ui = _aacUi.value
         root.put("aac_ui", JSONObject()
             .put("search_query", ui.searchQuery)

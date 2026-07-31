@@ -170,8 +170,8 @@ fun SettingsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     com.example.data.SeverityMode.values().forEach { m ->
                         ChoiceRow(
-                            label = m.displayName,
-                            sub = m.description,
+                            label = I18n.tr(m.displayName),
+                            sub = I18n.tr(m.description),
                             selected = settings.severityMode == m,
                             onClick = { viewModel.setSeverityMode(m) },
                             p = p.iosReadable,
@@ -289,7 +289,7 @@ fun SettingsScreen(
                 Section(title = I18n.tr("使用模式"), icon = Icons.Default.Accessibility, p = p) {
                     AdvancedEntryRow(
                         label = I18n.tr("嚴重程度"),
-                        value = settings.severityMode.displayName,
+                        value = I18n.tr(settings.severityMode.displayName),
                         onClick = { showSeverity = true }, p = p,
                         icon = Icons.Filled.Accessible, iconTint = IosCategory.Blue
                     )
@@ -648,7 +648,7 @@ private fun AccessibilitySettingsPanel(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 EyeControlMode.values().forEach { mode ->
                     ChoiceRow(
-                        label = mode.displayName,
+                        label = I18n.tr(mode.displayName),
                         sub = "",
                         selected = settings.eyeControlMode == mode,
                         onClick = { onEyeControlModeChange(mode) },
@@ -1223,7 +1223,7 @@ private fun TermuxSovitsPanel(
                             onApiBaseUrlChange("http://192.168.1.x:9880")
                         }
                     },
-                    label = { Text(m.displayName, fontSize = 10.sp) },
+                    label = { Text(I18n.tr(m.displayName), fontSize = 10.sp) },
                     leadingIcon = {
                         Icon(
                             if (m == com.example.ai.LocalSovitsHelper.ConnectionMode.Wired) Icons.Default.Usb else Icons.Default.Wifi,
@@ -1248,7 +1248,7 @@ private fun TermuxSovitsPanel(
                 )
             }
         }
-        Text(currentMode.description, fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
+        Text(I18n.tr(currentMode.description), fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp)
 
         // ── 已存電腦清單：可切換多台電腦（每台一個 chip，✚ 存目前位址）──
         val servers = com.example.ai.LocalSovitsHelper.parseServerList(serverList)

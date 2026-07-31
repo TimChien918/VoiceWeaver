@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">VoiceWeaver</string>
 
-    <string name="nav_main">文字再構成</string>
-    <string name="nav_rehab">音声リハビリ</string>
+    <string name="nav_main">再構成</string>
+    <string name="nav_rehab">リハビリ</string>
     <string name="nav_history">履歴</string>
     <string name="nav_settings">設定</string>
     <string name="nav_aac">AAC</string>

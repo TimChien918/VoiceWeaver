@@ -45,7 +45,7 @@ grep -c TestCommandReceiver app/build/intermediates/packaged_manifests/release/*
 | `clear_usage` | — | 清空統計，回到冷啟動 |
 | `inject_location` | `tag=` 或 `lat=` `lon=` | 注入地點（tag 直接設定；經緯度會跑完整 Geocoder） |
 | `search` | `query=` | 填入 AAC 搜尋框 |
-| `force_permission` | `permission=` `granted=true/false/clear` | 覆寫權限狀態（不重啟 App） |
+| `force_permission` | `permission=` `granted=true/false/clear` | 覆寫權限狀態（不重啟 App）。鍵不分大小寫，內部統一轉大寫 |
 | `set_font_scale` | `scale=` | 字級（0.8 ~ 1.8） |
 | `set_theme` | `theme=` `highContrast=` | 主題（`Tech`/`Cute`/`Anime`/`Minimal`） |
 | `set_language` | `language=` | 語言（`ZhTW`/`En`/`Ja`/`Ko`）——版面最容易在非中文語系爆掉 |
@@ -75,6 +75,22 @@ grep -c TestCommandReceiver app/build/intermediates/packaged_manifests/release/*
 ```
 
 圖卡 id 可從 `app/src/main/java/com/example/data/AacData.kt` 查。
+
+### dump 欄位速查（腳本請照這些鍵名讀，不要猜）
+
+| 區塊 | 鍵 |
+|---|---|
+| `current_route` | 目前分頁（main/aac/rehab/report/history/settings） |
+| `aac_ui` | `search_query`・`selected_category`・`grid_item_count`・`feed_item_count`・`feed_visible`・`sentence_length`・`flashcard_mode` |
+| `main_ui` | `stt_state`・`reconstruction_state`（sealed class 名：Idle/Loading/…） |
+| `history_ui` | `count` |
+| `rehab_ui` | `log_count` |
+| `settings` | `theme`・`language`・`font_scale`・`high_contrast`・`tts_rate`・`severity_mode`・`developer_mode` |
+| `forced_permissions` | 被覆寫的權限（大寫鍵），空 = 全跟隨系統 |
+
+注意：`aac_ui` 是 AAC 畫面**組成時**回報的快照——人在別的分頁時 `search` 指令
+不會立即生效（注入值等 AAC 畫面下次組成才消費），dump 讀到的也會是上次的快照。
+要驗證搜尋，先 `nav route=aac` 再 `search`，隔一秒再 `dump`。
 
 ## 實測結果（ASUS ROG / Android 15）
 

@@ -96,7 +96,7 @@ fun ReportScreen(
                                 inactiveContainerColor = p.surface,
                                 inactiveContentColor = p.textMuted
                             )
-                        ) { Text(r.displayName) }
+                        ) { Text(I18n.tr(r.displayName)) }
                     }
                 }
             }
