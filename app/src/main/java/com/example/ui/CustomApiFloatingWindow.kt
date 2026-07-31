@@ -23,6 +23,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Usb
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
@@ -55,6 +58,8 @@ import com.example.data.ImageApiEntry
 import com.example.data.ImageProvider
 import com.example.data.LlmApiEntry
 import com.example.data.LlmProvider
+import com.example.data.TtsApiEntry
+import com.example.data.TtsProvider
 import com.example.ui.theme.AppPalette
 import com.example.ui.theme.LocalAppPalette
 
@@ -74,9 +79,11 @@ fun ApiKeysPanel(
     val settings by viewModel.settings.collectAsState()
     val imageApis by viewModel.imageApisFlow.collectAsState()
     val llmApis by viewModel.llmApisFlow.collectAsState()
+    val ttsApis by viewModel.ttsApisFlow.collectAsState()
     LaunchedEffect(Unit) {
         viewModel.ensureImageApisSeeded()
         viewModel.ensureLlmApisSeeded()
+        viewModel.ensureTtsApisSeeded()
     }
 
     FloatingPanel(title = I18n.tr("API 金鑰管理"), icon = Icons.Default.Api, onDismiss = onDismiss) {
@@ -145,6 +152,49 @@ fun ApiKeysPanel(
                 onKey = { viewModel.updateLlmApi(entry.copy(key = it)) },
                 onUse = { viewModel.selectLlmApi(entry.id) },
                 onDelete = { viewModel.deleteLlmApi(entry.id) },
+                p = p
+            )
+        }
+
+        Divider(p)
+
+        // ── 語音合成：跟上面兩區同一套模式（多供應商、自動排序、自動備援）──
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(I18n.tr("語音合成"), fontSize = 13.sp, color = p.textMuted,
+                modifier = Modifier.weight(1f))
+            OutlinedButton(
+                onClick = { viewModel.addTtsApi(TtsProvider.ELEVENLABS) },
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF007AFF).copy(alpha = 0.5f)),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.heightIn(min = 34.dp)
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(I18n.tr("加入"), color = Color(0xFF007AFF), fontSize = 14.sp)
+            }
+        }
+        Text(
+            I18n.tr("加幾家不同的聲音，系統會自動挑最穩最快的那家；「換一個聲音」就是在這些聲音之間換人講。點喇叭可以先試聽。"),
+            fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
+        )
+        val ttsSelId = settings.ttsApiSelectedId
+        // 試聽結果要顯示在按下去的那一列旁邊，不然使用者不知道成功或失敗
+        var testingId by remember { mutableStateOf("") }
+        val ttsStatus by viewModel.sovitsSynthesisStatus.collectAsState()
+        ttsApis.forEach { entry ->
+            TtsApiRow(
+                entry = entry,
+                testStatus = if (entry.id == testingId) ttsStatus else null,
+                isPinned = entry.id == ttsSelId,
+                onProvider = { viewModel.updateTtsApi(entry.copy(provider = it, name = "", model = "", voice = "", endpoint = "", extra = "")) },
+                onKey = { viewModel.updateTtsApi(entry.copy(key = it)) },
+                onVoice = { viewModel.updateTtsApi(entry.copy(voice = it)) },
+                onExtra = { viewModel.updateTtsApi(entry.copy(extra = it)) },
+                onEndpoint = { viewModel.updateTtsApi(entry.copy(endpoint = it)) },
+                onPin = { viewModel.selectTtsApi(entry.id) },
+                onTest = { testingId = entry.id; viewModel.testTtsApi(entry) },
+                onDelete = { viewModel.deleteTtsApi(entry.id) },
                 p = p
             )
         }
@@ -347,6 +397,173 @@ private fun LlmProviderDropdown(
     }
 }
 
+/**
+ * 一筆語音合成設定。跟 [LlmApiRow] 同一個排版，只是多了「聲音」欄位與試聽鈕——
+ * 語音合成跟文字不一樣，同一家可以有很多種聲音，選錯聲音比選錯供應商更容易發生，
+ * 所以聲音要能直接改、而且要能當場聽到。
+ */
+@Composable
+private fun TtsApiRow(
+    entry: TtsApiEntry,
+    isPinned: Boolean,
+    /** 這一列剛按過試聽時的結果訊息；沒按過就是 null。 */
+    testStatus: String?,
+    onProvider: (TtsProvider) -> Unit,
+    onKey: (String) -> Unit,
+    onVoice: (String) -> Unit,
+    onExtra: (String) -> Unit,
+    onEndpoint: (String) -> Unit,
+    onPin: () -> Unit,
+    onTest: () -> Unit,
+    onDelete: () -> Unit,
+    p: AppPalette
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            IconButton(onClick = onPin, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    Icons.Default.PushPin,
+                    if (isPinned) I18n.tr("已釘選（固定優先）") else I18n.tr("釘選以固定優先使用"),
+                    tint = if (isPinned) Color(0xFF007AFF) else p.textMuted.copy(alpha = 0.35f),
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            TtsProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
+            IconButton(onClick = onTest, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.RecordVoiceOver, I18n.tr("試聽"),
+                    tint = Color(0xFF34C759), modifier = Modifier.size(19.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.Delete, I18n.tr("刪除"),
+                    tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
+            }
+        }
+        if (entry.provider.needsKey) KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
+        // 「跑在你的電腦」那種要填區網位址，其他家端點固定不必露出來
+        if (!entry.provider.needsKey && entry.provider.defaultEndpoint.isNotBlank()) {
+            LinkModeChips(entry, onEndpoint, p)
+            PlainField(I18n.tr("電腦位址"), entry.endpoint, onEndpoint, p, hint = entry.provider.defaultEndpoint)
+        }
+        if (entry.provider.extraLabel.isNotBlank()) {
+            PlainField(entry.provider.extraLabel, entry.extra, onExtra, p, hint = entry.provider.extraHint)
+        }
+        if (entry.provider.voiceHint.isNotBlank()) {
+            PlainField(I18n.tr("聲音"), entry.voice, onVoice, p, hint = entry.provider.defaultVoice)
+            Text(entry.provider.voiceHint, fontSize = 12.sp, color = p.textMuted,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp))
+        }
+        Text(
+            testStatus ?: buildString {
+                append(com.example.ai.SmartApiRouter.statusLabel(entry.id))
+                if (!entry.provider.multilingual) append(I18n.tr("・只有英文"))
+                if (isPinned) append(I18n.tr("・已釘選"))
+            },
+            fontSize = 12.sp,
+            color = when {
+                testStatus == null -> p.textMuted
+                testStatus.startsWith("❌") -> Color(0xFFFF3B30)
+                testStatus.startsWith("✅") -> Color(0xFF34C759)
+                else -> p.textMuted
+            },
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(start = 42.dp, top = 2.dp, bottom = 6.dp)
+        )
+    }
+}
+
+/**
+ * 有線 USB／無線 Wi-Fi 一鍵切換（連到自己電腦的那種供應商才有）。
+ *
+ * 為什麼要切：Wi-Fi 不穩或外出（醫院、復健中心的 Wi-Fi 常常不能用）時，
+ * 直接拿 USB 線接電腦就能繼續用自己錄的聲音。兩種模式差別只在位址：
+ *  - 有線：電腦先跑 `adb reverse tcp:9880 tcp:9880`，手機打 127.0.0.1
+ *  - 無線：手機與電腦同一個區網，打電腦的區網 IP
+ *
+ * 切換時保留原本的埠號——使用者可能把 server 開在別的埠，不該被覆蓋掉。
+ */
+@Composable
+private fun LinkModeChips(entry: TtsApiEntry, onEndpoint: (String) -> Unit, p: AppPalette) {
+    val current = entry.effectiveEndpoint
+    val wired = current.contains("127.0.0.1") || current.contains("localhost")
+    val port = Regex(":(\\d+)").find(current)?.groupValues?.get(1) ?: "9880"
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 42.dp, top = 2.dp, bottom = 2.dp)
+    ) {
+        LinkChip(I18n.tr("有線 USB"), Icons.Default.Usb, wired, p) {
+            onEndpoint("http://127.0.0.1:$port")
+        }
+        LinkChip(I18n.tr("無線 Wi-Fi"), Icons.Default.Wifi, !wired, p) {
+            // 已經是區網位址就不要覆蓋掉使用者填好的 IP
+            if (wired) onEndpoint("http://192.168.1.x:$port")
+        }
+    }
+}
+
+@Composable
+private fun LinkChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    p: AppPalette,
+    onClick: () -> Unit
+) {
+    val accent = Color(0xFF007AFF)
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, if (selected) accent else p.textMuted.copy(alpha = 0.3f)),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+        modifier = Modifier.heightIn(min = 32.dp)
+    ) {
+        Icon(icon, null, tint = if (selected) accent else p.textMuted, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(label, fontSize = 13.sp, color = if (selected) accent else p.textMuted, maxLines = 1)
+    }
+}
+
+/** 語音合成供應商下拉選單。 */
+@Composable
+private fun TtsProviderDropdown(
+    current: TtsProvider,
+    onSelect: (TtsProvider) -> Unit,
+    p: AppPalette,
+    modifier: Modifier = Modifier
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        OutlinedButton(
+            onClick = { open = true },
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, p.textMuted.copy(alpha = 0.35f)),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            Text(current.displayName, color = p.textLight, fontSize = 15.sp, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            TtsProvider.entries.forEach { prov ->
+                DropdownMenuItem(
+                    text = {
+                        Text(prov.displayName, fontSize = 15.sp, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = p.textLight)
+                    },
+                    onClick = { onSelect(prov); open = false },
+                    modifier = Modifier.heightIn(min = 44.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun Divider(p: AppPalette) {
     HorizontalDivider(color = p.textMuted.copy(alpha = 0.18f), modifier = Modifier.padding(vertical = 2.dp))
@@ -361,9 +578,15 @@ private fun PlainField(label: String, value: String, onChange: (String) -> Unit,
     LaunchedEffect(text) {
         if (focused && text != value) { kotlinx.coroutines.delay(350); onChange(text) }
     }
+    // 欄位字級寫死：這裡的字會跟著全域字體放大倍率跑，1.8× 時「Google Places（POI 反查）」
+    // 會撐成兩行、輸入框變成一個巨大的方塊。放大是給主畫面看的，設定裡的欄位維持一般大小才讀得順。
     OutlinedTextField(
-        value = text, onValueChange = { text = it }, label = { Text(label) }, singleLine = true,
-        placeholder = if (hint.isNotBlank()) ({ Text(I18n.tr("預設：%s").format(hint), fontSize = 10.sp, color = p.textMuted) }) else null,
+        value = text, onValueChange = { text = it },
+        label = { Text(label, fontSize = 12.sp, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
+        placeholder = if (hint.isNotBlank()) ({ Text(I18n.tr("預設：%s").format(hint), fontSize = 12.sp, color = p.textMuted, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }) else null,
         modifier = Modifier.fillMaxWidth().onFocusChanged { st ->
             focused = st.isFocused
             if (!st.isFocused && text != value) onChange(text)
@@ -382,7 +605,11 @@ private fun KeyField(label: String, value: String, onChange: (String) -> Unit, p
         if (focused && text != value) { kotlinx.coroutines.delay(350); onChange(text) }
     }
     OutlinedTextField(
-        value = text, onValueChange = { text = it }, label = { Text(label) }, singleLine = true,
+        value = text, onValueChange = { text = it },
+        label = { Text(label, fontSize = 12.sp, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             IconButton(onClick = { visible = !visible }) {

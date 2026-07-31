@@ -155,6 +155,13 @@ data class AppSettings(
     val llmApis: String = "",
     /** 目前文字 LLM 使用中的設定 id；空 = 用清單第一筆。 */
     val llmApiSelectedId: String = "",
+    /**
+     * 語音合成 API 清單（JSON）：每筆 {id, provider, name, endpoint, model, voice, key, extra}，
+     * 由 [TtsApiStore] 編解碼。跟生圖／文字 LLM 同一套模式：可加多筆，合成時自動排序＋備援。
+     */
+    val ttsApis: String = "",
+    /** 語音合成「釘選」的供應商 id；空 = 完全交給 SmartApiRouter 自動判斷。 */
+    val ttsApiSelectedId: String = "",
     // ─── 其他 API 金鑰（可在 API 金鑰管理浮動視窗編輯；空則退回 BuildConfig）───
     val apiKeyGroq: String = "",
     val apiKeyOpenRouter: String = "",
@@ -285,6 +292,8 @@ class SettingsRepository(private val context: Context) {
         val ImageApiSelectedId  = stringPreferencesKey("image_api_selected_id")
         val LlmApis             = stringPreferencesKey("llm_apis")
         val LlmApiSelectedId    = stringPreferencesKey("llm_api_selected_id")
+        val TtsApis             = stringPreferencesKey("tts_apis")
+        val TtsApiSelectedId    = stringPreferencesKey("tts_api_selected_id")
         val CustomBackgroundUri = stringPreferencesKey("custom_background_uri")
         // 行為數據彙總
         val BmFirstSpeakCount = longPreferencesKey("bm_first_speak_count")
@@ -352,6 +361,8 @@ class SettingsRepository(private val context: Context) {
         imageApiSelectedId = this[Keys.ImageApiSelectedId] ?: "",
         llmApis = this[Keys.LlmApis] ?: "",
         llmApiSelectedId = this[Keys.LlmApiSelectedId] ?: "",
+        ttsApis = this[Keys.TtsApis] ?: "",
+        ttsApiSelectedId = this[Keys.TtsApiSelectedId] ?: "",
         apiKeyGroq = this[Keys.ApiKeyGroq] ?: "",
         apiKeyOpenRouter = this[Keys.ApiKeyOpenRouter] ?: "",
         apiKeyCohere = this[Keys.ApiKeyCohere] ?: "",
@@ -422,6 +433,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setImageApiSelectedId(id: String) = update { it[Keys.ImageApiSelectedId] = id }
     suspend fun setLlmApis(json: String) = update { it[Keys.LlmApis] = json }
     suspend fun setLlmApiSelectedId(id: String) = update { it[Keys.LlmApiSelectedId] = id }
+    suspend fun setTtsApis(json: String) = update { it[Keys.TtsApis] = json }
+    suspend fun setTtsApiSelectedId(id: String) = update { it[Keys.TtsApiSelectedId] = id }
     suspend fun setApiKeyGroq(v: String) = update { it[Keys.ApiKeyGroq] = v.trim() }
     suspend fun setApiKeyOpenRouter(v: String) = update { it[Keys.ApiKeyOpenRouter] = v.trim() }
     suspend fun setApiKeyCohere(v: String) = update { it[Keys.ApiKeyCohere] = v.trim() }

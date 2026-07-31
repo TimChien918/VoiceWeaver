@@ -35,6 +35,7 @@ import com.example.data.SpeechRecord
 import com.example.data.SpeechRecordRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.Job
@@ -47,6 +48,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import com.example.ai.EyeInteractionMode
 import com.example.ai.EyeControlUiState
@@ -573,6 +575,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // 直接把 TtsModule 的狀態透出給 UI，不需要另外包一層。
     val synthesisTakes: StateFlow<List<java.io.File?>> = ttsModule.synthesisTakes
     val currentTakeIndex: StateFlow<Int> = ttsModule.currentTakeIndex
+    /** 每個版位是「誰在講」（多家雲端語音時三個版本是三種不同的聲音）。 */
+    val takeLabels: StateFlow<List<String>> = ttsModule.takeLabels
     fun cycleSpeechTake() = ttsModule.cycleNextTake()
 
     /** 行為數據彙總（報表頁顯示，治療師評估趨勢用）。lazy：settingsRepo 在下方才初始化。 */
@@ -598,7 +602,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /**
      * 帶風險分級的朗讀請求：一般 → 直接發聲；醫療/疼痛 → 跳確認；
      * 自傷/拒絕治療 → 鎖定語音輸出僅顯示警示。
-     * useTakes：GPT-SoVITS 一次合成 3 個版本供「換一個」；只給重組主卡的主要朗讀按鈕用。
+     * useTakes：一次合成 3 個版本供「換一個聲音」（多家雲端＝三種聲音，GPT-SoVITS＝抽樣三次）；
+     * 只給重組主卡的主要朗讀按鈕用，其他地方單次朗讀就好，免得浪費額度。
      */
     fun requestSpeak(text: String, useTakes: Boolean = false) {
         when (com.example.safety.SafetyGuard.classifyRisk(text)) {
@@ -882,6 +887,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 chineseModelDirUri = s.gptSovitChineseModelDirUri,
                 englishModelDirUri = s.gptSovitEnglishModelDirUri,
                 apiBaseUrl = s.gptSovitApiBaseUrl
+            )
+            // 雲端語音合成清單（多供應商，自動排序＋自動備援）
+            ttsModule.configureCloudTts(
+                entries = com.example.data.TtsApiStore.decode(s.ttsApis),
+                pinnedId = s.ttsApiSelectedId
             )
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
@@ -1718,7 +1728,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 確保升級後仍有可用設定，且永遠有一個免金鑰的備援。
      */
     private suspend fun currentImageApis(): List<ImageApiEntry> {
-        val s = settings.firstOrNull() ?: AppSettings()
+        val s = settingsRepo.settings.first()
         val existing = ImageApiStore.decode(s.imageApis)
         if (existing.isNotEmpty()) {
             // 升級：確保一定有一筆「本機電腦（Mac）」免金鑰選項
@@ -1792,7 +1802,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private suspend fun produceImageBytes(prompt: String): Pair<ByteArray?, String> {
         val all = currentImageApis()
         if (all.isEmpty()) return null to "尚未設定任何生圖 API"
-        val s = settings.firstOrNull() ?: AppSettings()
+        val s = settingsRepo.settings.first()
         val selected = all.firstOrNull { it.id == s.imageApiSelectedId } ?: all.first()
         val cloud = all.filter { it.provider != ImageProvider.LOCAL && (!it.provider.needsKey || it.key.isNotBlank()) }
         val local = all.filter { it.provider == ImageProvider.LOCAL }
@@ -1868,8 +1878,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         _intentImageLoading.value = false
     }
 
+    /**
+     * API 清單（生圖／文字 LLM／語音合成）改動的互斥鎖。
+     *
+     * 這三種清單的每個操作都是「讀出整份清單 → 改一筆 → 整份寫回」。
+     * 使用者按「加入」的同時，剛失焦的輸入框也會送一次存檔，兩個 coroutine
+     * 各自讀到同一份舊清單、各自寫回，後寫的那個就把新加的那筆蓋掉了——
+     * 實測就是這樣：ElevenLabs 加進去畫面看得到，重開 App 就消失。
+     * 全部序列化就沒有這個窗口。
+     */
+    private val apiListMutex = kotlinx.coroutines.sync.Mutex()
+
     /** 新增一筆生圖 API（挑服務商，名稱自動帶序號避免重複）。 */
-    fun addImageApi(provider: ImageProvider) = viewModelScope.launch {
+    fun addImageApi(provider: ImageProvider) = viewModelScope.launch { apiListMutex.withLock {
         val list = currentImageApis().toMutableList()
         val sameCount = list.count { it.provider == provider }
         val id = "img-${System.currentTimeMillis()}"
@@ -1877,19 +1898,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         list.add(ImageApiEntry(id = id, provider = provider, name = name))
         settingsRepo.setImageApis(ImageApiStore.encode(list))
         if (list.size == 1) settingsRepo.setImageApiSelectedId(id)
-    }
+    } }
 
-    fun updateImageApi(entry: ImageApiEntry) = viewModelScope.launch {
+    fun updateImageApi(entry: ImageApiEntry) = viewModelScope.launch { apiListMutex.withLock {
         val list = currentImageApis().map { if (it.id == entry.id) entry else it }
         settingsRepo.setImageApis(ImageApiStore.encode(list))
-    }
+    } }
 
-    fun deleteImageApi(id: String) = viewModelScope.launch {
+    fun deleteImageApi(id: String) = viewModelScope.launch { apiListMutex.withLock {
         val list = currentImageApis().filter { it.id != id }
         settingsRepo.setImageApis(ImageApiStore.encode(list))
-        val s = settings.firstOrNull() ?: AppSettings()
+        val s = settingsRepo.settings.first()
         if (s.imageApiSelectedId == id) settingsRepo.setImageApiSelectedId(list.firstOrNull()?.id ?: "")
-    }
+    } }
 
     fun selectImageApi(id: String) = viewModelScope.launch { settingsRepo.setImageApiSelectedId(id) }
 
@@ -1903,7 +1924,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 取得文字 LLM 清單；為空則用舊的 Groq/OpenRouter/Cohere 設定 + 金鑰自動遷移種入。 */
     private suspend fun currentLlmApis(): List<LlmApiEntry> {
-        val s = settings.firstOrNull() ?: AppSettings()
+        val s = settingsRepo.settings.first()
         val existing = LlmApiStore.decode(s.llmApis)
         if (existing.isNotEmpty()) return existing
         fun k(override: String, fallback: String) = com.example.data.ApiKeyOverrides.resolve(override, fallback)
@@ -1924,26 +1945,81 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun ensureLlmApisSeeded() = viewModelScope.launch { currentLlmApis() }
 
-    fun addLlmApi(provider: LlmProvider) = viewModelScope.launch {
+    fun addLlmApi(provider: LlmProvider) = viewModelScope.launch { apiListMutex.withLock {
         val list = currentLlmApis().toMutableList()
         list.add(LlmApiEntry(id = "llm-${System.currentTimeMillis()}", provider = provider))
         settingsRepo.setLlmApis(LlmApiStore.encode(list))
         if (list.size == 1) settingsRepo.setLlmApiSelectedId(list.first().id)
-    }
+    } }
 
-    fun updateLlmApi(entry: LlmApiEntry) = viewModelScope.launch {
+    fun updateLlmApi(entry: LlmApiEntry) = viewModelScope.launch { apiListMutex.withLock {
         val list = currentLlmApis().map { if (it.id == entry.id) entry else it }
         settingsRepo.setLlmApis(LlmApiStore.encode(list))
-    }
+    } }
 
-    fun deleteLlmApi(id: String) = viewModelScope.launch {
+    fun deleteLlmApi(id: String) = viewModelScope.launch { apiListMutex.withLock {
         val list = currentLlmApis().filter { it.id != id }
         settingsRepo.setLlmApis(LlmApiStore.encode(list))
-        val s = settings.firstOrNull() ?: AppSettings()
+        val s = settingsRepo.settings.first()
         if (s.llmApiSelectedId == id) settingsRepo.setLlmApiSelectedId(list.firstOrNull()?.id ?: "")
-    }
+    } }
 
     fun selectLlmApi(id: String) = viewModelScope.launch { settingsRepo.setLlmApiSelectedId(id) }
+
+    // ─── 語音合成多供應商清單（與生圖／文字 LLM 同模式）───────────────────
+    val ttsApisFlow: StateFlow<List<com.example.data.TtsApiEntry>> =
+        settings.map { com.example.data.TtsApiStore.decode(it.ttsApis) }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    /**
+     * 取得語音合成清單；為空就種入兩筆免金鑰的保底選項（手機內建 + 你電腦上的 GPT-SoVITS），
+     * 讓使用者一打開就看得懂「原來這裡可以加聲音」，而不是面對空白清單。
+     */
+    private suspend fun currentTtsApis(): List<com.example.data.TtsApiEntry> {
+        val s = settingsRepo.settings.first()
+        val existing = com.example.data.TtsApiStore.decode(s.ttsApis)
+        if (existing.isNotEmpty()) return existing
+        val seeded = listOf(
+            com.example.data.TtsApiEntry(
+                id = "tts-seed-system", provider = com.example.data.TtsProvider.SYSTEM),
+            com.example.data.TtsApiEntry(
+                id = "tts-seed-sovits", provider = com.example.data.TtsProvider.GPT_SOVITS,
+                endpoint = s.gptSovitApiBaseUrl)
+        )
+        settingsRepo.setTtsApis(com.example.data.TtsApiStore.encode(seeded))
+        return seeded
+    }
+
+    fun ensureTtsApisSeeded() = viewModelScope.launch { currentTtsApis() }
+
+    fun addTtsApi(provider: com.example.data.TtsProvider) = viewModelScope.launch { apiListMutex.withLock {
+        val list = currentTtsApis().toMutableList()
+        list.add(com.example.data.TtsApiEntry(id = "tts-${System.currentTimeMillis()}", provider = provider))
+        settingsRepo.setTtsApis(com.example.data.TtsApiStore.encode(list))
+    } }
+
+    fun updateTtsApi(entry: com.example.data.TtsApiEntry) = viewModelScope.launch { apiListMutex.withLock {
+        val list = currentTtsApis().map { if (it.id == entry.id) entry else it }
+        settingsRepo.setTtsApis(com.example.data.TtsApiStore.encode(list))
+    } }
+
+    fun deleteTtsApi(id: String) = viewModelScope.launch { apiListMutex.withLock {
+        val list = currentTtsApis().filter { it.id != id }
+        settingsRepo.setTtsApis(com.example.data.TtsApiStore.encode(list))
+        val s = settingsRepo.settings.first()
+        if (s.ttsApiSelectedId == id) settingsRepo.setTtsApiSelectedId("")
+    } }
+
+    /** 釘選／取消釘選：再點一次同一筆＝取消，回到全自動。 */
+    fun selectTtsApi(id: String) = viewModelScope.launch {
+        val s = settingsRepo.settings.first()
+        settingsRepo.setTtsApiSelectedId(if (s.ttsApiSelectedId == id) "" else id)
+    }
+
+    /** 試聽這一筆設定（直接送這家，不走自動排序，才能確認金鑰對不對）。 */
+    fun testTtsApi(entry: com.example.data.TtsApiEntry) = viewModelScope.launch {
+        ttsModule.testSpeak(entry, "你好，這是語音測試。")
+    }
 
     fun resetImageGen() { _imageGenState.value = ImageGenState.Idle }
     fun setSovitsConsentAccepted(on: Boolean) = viewModelScope.launch { settingsRepo.setSovitsConsentAccepted(on) }

@@ -63,6 +63,7 @@ fun VoiceWeaverScreen(
     val reconstructionState by viewModel.reconstructionState.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val synthesisTakes by viewModel.synthesisTakes.collectAsState()
+    val takeLabels by viewModel.takeLabels.collectAsState()
     val currentTakeIndex by viewModel.currentTakeIndex.collectAsState()
     val intentImagePath by viewModel.intentImagePath.collectAsState()
     val intentImageLoading by viewModel.intentImageLoading.collectAsState()
@@ -1200,10 +1201,10 @@ fun VoiceWeaverScreen(
                                         }
                                     }
 
-                                    // GPT-SoVITS 聲音克隆一次合成 3 個版本（每次抽樣抑揚頓挫不同）；
-                                    // 唸的這句不對勁（口氣怪、發音糊）可以換一個版本，不用重新整句朗讀。
-                                    // 三個都不滿意時最後一顆改叫「重新合成」，按下去才會真的重打 3 個新版本。
-                                    if (settings.gptSovitEnabled && synthesisTakes.size > 1) {
+                                    // 一次合成 3 個版本，唸得不對勁（口氣怪、發音糊）就換一個，不用重新整句朗讀。
+                                    // 版本的來源有兩種：多家雲端語音＝三種不同的聲音；GPT-SoVITS＝同一個聲音抽樣三次。
+                                    // 三個都不滿意時最後一顆改叫「換一批」，按下去才會真的再生一批新的。
+                                    if (synthesisTakes.size > 1) {
                                         Spacer(modifier = Modifier.height(6.dp))
                                         val readyCount = synthesisTakes.count { it != null }
                                         val isLastTake = currentTakeIndex >= synthesisTakes.size - 1
@@ -1218,12 +1219,17 @@ fun VoiceWeaverScreen(
                                                 null, tint = neonGreen, modifier = Modifier.size(16.dp)
                                             )
                                             Spacer(Modifier.width(6.dp))
+                                            val who = takeLabels.getOrNull(currentTakeIndex).orEmpty()
                                             Text(
-                                                if (isLastTake)
-                                                    I18n.tr("三個都不對？重新合成")
-                                                else
-                                                    I18n.tr("換一個聲音（%d/%d，%d 個已完成）")
-                                                        .format(currentTakeIndex + 1, synthesisTakes.size, readyCount),
+                                                when {
+                                                    isLastTake -> I18n.tr("都不對？換一批聲音")
+                                                    // 有供應商名稱時直接寫出「現在是誰在講」，比 1/3 這種編號好懂
+                                                    who.isNotBlank() ->
+                                                        I18n.tr("換一個聲音（現在：%s）").format(who)
+                                                    else ->
+                                                        I18n.tr("換一個聲音（%d/%d，%d 個已完成）")
+                                                            .format(currentTakeIndex + 1, synthesisTakes.size, readyCount)
+                                                },
                                                 fontSize = 12.sp, color = neonGreen, fontWeight = FontWeight.Bold
                                             )
                                         }

@@ -144,8 +144,16 @@ object SmartApiRouter {
     }
 
     @Synchronized
-    private fun score(entry: LlmApiEntry, now: Long): Double {
-        val s = stats[entry.id] ?: Stat()
+    private fun score(entry: LlmApiEntry, now: Long): Double =
+        scoreOf(entry.id, !entry.provider.needsKey, now)
+
+    /**
+     * 純粹依 id 的實測評分，不綁任何一種 API 型別——語音合成、生圖之後都能共用
+     * 同一套「成功率／延遲／免費／冷卻」判斷，不必各自再寫一份健康度。
+     */
+    @Synchronized
+    fun scoreOf(id: String, free: Boolean, now: Long = System.currentTimeMillis()): Double {
+        val s = stats[id] ?: Stat()
         var sc = 0.0
 
         // ① 成功率（最重要）
@@ -160,7 +168,7 @@ object SmartApiRouter {
         }
 
         // ③ 免費優先：不用金鑰（本機自架 / 免費服務）省錢，同等表現下優先
-        if (!entry.provider.needsKey) sc += 15.0
+        if (free) sc += 15.0
 
         // ④ 冷卻懲罰：剛失敗的大幅扣分但不完全排除（全掛時仍要有東西可用）
         if (s.cooldownUntil() > now) sc -= 60.0
@@ -195,6 +203,28 @@ object SmartApiRouter {
         val sorted = rotated.sortedByDescending { score(it, now) }
         val pinned = pinnedId?.let { id -> sorted.firstOrNull { it.id == id } }
         return if (pinned != null) listOf(pinned) + sorted.filter { it.id != pinned.id } else sorted
+    }
+
+    /**
+     * 通用排序：任何有 id、有「免不免費」概念的 API 清單都能用同一套實測評分排序
+     * （目前給語音合成用）。跟 [rank] 共用同一份統計，所以「哪家比較穩」的學習
+     * 是全 App 一致的，不會每個功能各自重踩一遍。
+     *
+     * @param bonusOf 型別專屬的額外加分（例如語音合成偏好支援中文的供應商）
+     */
+    @Synchronized
+    fun <T> rankAny(
+        items: List<T>,
+        idOf: (T) -> String,
+        freeOf: (T) -> Boolean,
+        pinnedId: String? = null,
+        bonusOf: (T) -> Double = { 0.0 }
+    ): List<T> {
+        if (items.isEmpty()) return emptyList()
+        val now = System.currentTimeMillis()
+        val sorted = items.sortedByDescending { scoreOf(idOf(it), freeOf(it), now) + bonusOf(it) }
+        val pinned = pinnedId?.let { id -> sorted.firstOrNull { idOf(it) == id } }
+        return if (pinned != null) listOf(pinned) + sorted.filter { idOf(it) != idOf(pinned) } else sorted
     }
 
     /** 給 UI 顯示：這家目前的實測狀態（人話）。 */
