@@ -48,6 +48,7 @@ grep -c TestCommandReceiver app/build/intermediates/packaged_manifests/release/*
 | `force_permission` | `permission=` `granted=true/false/clear` | 覆寫權限狀態（不重啟 App） |
 | `set_font_scale` | `scale=` | 字級（0.8 ~ 1.8） |
 | `set_theme` | `theme=` `highContrast=` | 主題（`Tech`/`Cute`/`Anime`/`Minimal`） |
+| `set_language` | `language=` | 語言（`ZhTW`/`En`/`Ja`/`Ko`）——版面最容易在非中文語系爆掉 |
 | `jank` | `on=true/false` | 掉幀監控；關閉時回報 dropped / worst |
 | `reset_data` | `confirm=true` | 清空全部歷史與統計 |
 

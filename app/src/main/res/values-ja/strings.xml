@@ -140,9 +140,9 @@
     <string name="main_gps_loading">高速測位・逆ジオコーディング中...</string>
     <string name="main_gps_button">物理 GPS 単発取得（JIT 省電モード）</string>
     <string name="main_perm_location">GPS を有効にするには位置情報の許可が必要</string>
-    <string name="main_vision_section">2. カメラスナップショット視覚タグ</string>
-    <string name="main_camera_loading">バックグラウンドで撮影・解析中（カメラはすぐ解放）...</string>
-    <string name="main_camera_button">サイレント単一フレーム &amp; 端末 ML Kit 認識</string>
+    <string name="main_vision_section">📷 見えているもの</string>
+    <string name="main_camera_loading">認識中…</string>
+    <string name="main_camera_button">写真で物を認識</string>
     <string name="main_perm_camera">AI 認識を有効にするにはカメラ許可が必要</string>
     <string name="main_sec_input">▌ 失語症の断片入力</string>
     <string name="main_input_label">不連続な断片語・声調転写・キー音声特徴を入力：</string>

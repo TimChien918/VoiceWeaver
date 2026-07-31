@@ -52,6 +52,7 @@ object TestHooks {
         fun injectLocationTag(tag: String)
         fun setFontScale(scale: Float)
         fun setTheme(name: String, highContrast: Boolean)
+        fun setLanguage(name: String)
         fun resetAllData()
         /** 回傳 App 當下的狀態快照（JSON 物件，交由 [dumpState] 補上 UI 層資訊）。 */
         fun snapshot(): JSONObject
@@ -243,6 +244,13 @@ object TestHooks {
                     val hc = args["highContrast"]?.toBooleanStrictOrNull() ?: false
                     b.setTheme(name, hc)
                     ok("theme=$name highContrast=$hc")
+                }
+
+                // ── 語言（版面最容易在非中文語系爆掉：同一句德/英文常是中文的三倍長）──
+                "set_language" -> {
+                    val name = args["language"] ?: return fail("missing language")
+                    b.setLanguage(name)
+                    ok("language=$name")
                 }
 
                 // ── P2-7 搜尋框填字 ──

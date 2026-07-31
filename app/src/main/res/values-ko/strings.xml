@@ -140,9 +140,9 @@
     <string name="main_gps_loading">고속 측위 및 역지오코딩 중...</string>
     <string name="main_gps_button">물리 GPS 단발 캡처 (JIT 절전)</string>
     <string name="main_perm_location">GPS를 활성화하려면 위치 권한 필요</string>
-    <string name="main_vision_section">2. 카메라 스냅샷 비전 태그</string>
-    <string name="main_camera_loading">백그라운드 캡처 및 분석 중 (카메라 곧 해제)...</string>
-    <string name="main_camera_button">무음 단일 프레임 캡처 &amp; 온디바이스 ML Kit 인식</string>
+    <string name="main_vision_section">📷 보이는 것</string>
+    <string name="main_camera_loading">인식 중…</string>
+    <string name="main_camera_button">사진 찍어 물건 인식</string>
     <string name="main_perm_camera">AI 인식을 활성화하려면 카메라 권한 필요</string>
     <string name="main_sec_input">▌ 실어증 단편 입력</string>
     <string name="main_input_label">불연속 단편 단어, 음조 전사, 주요 음성 특징 입력:</string>

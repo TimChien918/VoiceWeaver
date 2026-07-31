@@ -141,8 +141,8 @@
     <string name="main_gps_button">Physical GPS single-shot capture (JIT power-saving)</string>
     <string name="main_perm_location">Grant location permission to enable GPS</string>
     <string name="main_vision_section">📷 What I see</string>
-    <string name="main_camera_loading">Background capture and analysis (camera will unload)...</string>
-    <string name="main_camera_button">Silent single-frame capture &amp; on-device ML Kit detection</string>
+    <string name="main_camera_loading">Identifying…</string>
+    <string name="main_camera_button">Identify objects</string>
     <string name="main_perm_camera">Grant camera permission to enable AI detection</string>
     <string name="main_sec_input">▌ What to say</string>
     <string name="main_input_label">Enter fragmented words, mumbled syllables, or key voice features:</string>

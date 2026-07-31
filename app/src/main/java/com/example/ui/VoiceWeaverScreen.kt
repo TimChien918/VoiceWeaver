@@ -569,6 +569,10 @@ fun VoiceWeaverScreen(
                                         disabledContentColor = textMuted
                                     ),
                                     shape = RoundedCornerShape(10.dp),
+                                    // 預設的按鈕內距左右各 24dp，光是它就吃掉 48dp——這顆跟旁邊
+                                    // 平分寬度（各約 160dp），圖示加十個字剛好差一點點就得折成兩行。
+                                    // 收掉多餘內距讓標籤維持單行。
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                                     modifier = Modifier.weight(1f).testTag("vision_single_shot_btn"),
                                     enabled = !isSensingVision
                                 ) {
@@ -578,7 +582,7 @@ fun VoiceWeaverScreen(
                                         Text(stringResource(R.string.main_camera_loading), fontSize = 11.sp)
                                     } else {
                                         Icon(Icons.Default.PhotoCamera, "camera_icon", modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(stringResource(R.string.main_camera_button), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }

@@ -2606,6 +2606,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
 
+        override fun setLanguage(name: String) {
+            viewModelScope.launch {
+                runCatching { AppLanguage.valueOf(name) }.getOrNull()?.let { settingsRepo.setLanguage(it) }
+            }
+        }
+
         override fun resetAllData() {
             viewModelScope.launch {
                 clearAllHistory()
