@@ -12,6 +12,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -114,10 +119,35 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
         },
         containerColor = p.darkBg
     ) { innerPadding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        // 版面隨視窗調整：橫向手機又寬又矮（約 2448×1080，換算 880×390dp），
+        // 全部縱向堆疊的話標題＋組合區＋情境列就把高度吃光，圖卡一張都看不到。
+        // 夠寬又矮 → 左右兩欄：左邊放輔助資訊，右邊整片留給圖卡。
+        val cfgAac = LocalConfiguration.current
+        val twoPane = cfgAac.screenWidthDp >= 600 && cfgAac.screenHeightDp < 480
+
+        // 這幾個值 header（推薦列）與 grid（篩選結果）都要用，兩種版面共用同一份，
+        // 所以提到版面分支之前算好，避免兩邊各算一次而不同步。
+
+        val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
+
+        // ── 常用（For You）：社群式動態牆——依「最近使用×時段×地點」排出患者
+        //    此刻最可能要講的卡。冷啟動（沒按過足夠卡片）整列自動隱藏。
+        //    key 帶 sentence.size：每按一張卡就重算，剛按的內容立即反映。
+        // rankerEpoch：測試注入統計後讓下面兩個 remember 重算（release 版恆為 0，無作用）
+        val rankerEpoch by com.example.testing.TestHooks.rankerEpoch.collectAsState()
+        val feed = remember(state.sentence.size, customItems, rankerEpoch) {
+            com.example.ai.AacUsageRanker.feed(customItems + DefaultAacItems)
+        }
+        // 冷啟動時整列隱藏：要有 3 張以上「衰減後仍算常用」的卡才推薦。
+        // 門檻直接問 ranker（同一套衰減標準），不要在這裡逐張 count——
+        // 全庫兩百多張，每次重組都掃一遍不划算，而且容易跟 feed 的判準走鐘。
+        val activeCount = remember(state.sentence.size, customItems, rankerEpoch) {
+            com.example.ai.AacUsageRanker.activeItemCount()
+        }
+        val feedVisible = feed.size >= 3 && activeCount >= 3 &&
+            state.selectedCategory == null && searchQuery.isBlank()
+
+        val headerContent: @Composable ColumnScope.() -> Unit = {
             // ── 句子預覽（總在最上 ── ──
             SentencePreview(items = state.sentence, p = p, onRemoveLast = { viewModel.aacRemoveLast() })
 
@@ -129,25 +159,6 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                     p = p
                 )
             }
-
-            val customItems = remember(settings.customAacItems) { parseCustomAacItems(settings.customAacItems) }
-
-            // ── 常用（For You）：社群式動態牆——依「最近使用×時段×地點」排出患者
-            //    此刻最可能要講的卡。冷啟動（沒按過足夠卡片）整列自動隱藏。
-            //    key 帶 sentence.size：每按一張卡就重算，剛按的內容立即反映。
-            // rankerEpoch：測試注入統計後讓下面兩個 remember 重算（release 版恆為 0，無作用）
-            val rankerEpoch by com.example.testing.TestHooks.rankerEpoch.collectAsState()
-            val feed = remember(state.sentence.size, customItems, rankerEpoch) {
-                com.example.ai.AacUsageRanker.feed(customItems + DefaultAacItems)
-            }
-            // 冷啟動時整列隱藏：要有 3 張以上「衰減後仍算常用」的卡才推薦。
-            // 門檻直接問 ranker（同一套衰減標準），不要在這裡逐張 count——
-            // 全庫兩百多張，每次重組都掃一遍不划算，而且容易跟 feed 的判準走鐘。
-            val activeCount = remember(state.sentence.size, customItems, rankerEpoch) {
-                com.example.ai.AacUsageRanker.activeItemCount()
-            }
-            val feedVisible = feed.size >= 3 && activeCount >= 3 &&
-                state.selectedCategory == null && searchQuery.isBlank()
             if (feedVisible) {
                 FrequentFeedRow(items = feed, onPick = { viewModel.aacAppendItem(it) }, p = p)
             }
@@ -160,87 +171,91 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                 p = p
             )
 
-            // ── 主格子：類別 or 條目；可在 grid 與 flashcard 模式間切換 ──
-            Box(modifier = Modifier.weight(1f)) {
-                val filteredItems = remember(state.selectedCategory, searchQuery, customItems) {
-                    filterAacItems(state.selectedCategory, searchQuery, customItems)
-                }
+        }
 
-                // ── 自動化測試掛勾（release 版為 no-op，見 TestHooks）──
-                // 搜尋字串是 composable 的區域狀態，ViewModel 看不到；由畫面自己回報，
-                // dump 出來的才是「螢幕上真正顯示的東西」而不是從別處推論的。
-                val injectedSearch by com.example.testing.TestHooks.injectedSearch.collectAsState()
-                LaunchedEffect(injectedSearch) {
-                    injectedSearch?.let {
-                        searchQuery = it
-                        com.example.testing.TestHooks.consumeInjectedSearch()
-                    }
-                }
-                LaunchedEffect(searchQuery, state.selectedCategory, filteredItems.size,
-                               feed.size, feedVisible, state.sentence.size, state.flashcardMode) {
-                    com.example.testing.TestHooks.reportAacUi(
-                        com.example.testing.TestHooks.AacUiSnapshot(
-                            searchQuery = searchQuery,
-                            selectedCategory = state.selectedCategory?.name ?: "",
-                            gridItemCount = filteredItems.size,
-                            feedItemCount = feed.size,
-                            feedVisible = feedVisible,
-                            sentenceLength = state.sentence.size,
-                            flashcardMode = state.flashcardMode
-                        )
-                    )
-                }
-                val browsingItems = searchQuery.isNotBlank() || state.selectedCategory != null
-                when {
-                    // 識字卡模式（一次一張）：類別/條目都支援
-                    state.flashcardMode && state.selectedCategory == null -> {
-                        CategoryFlashcard(
-                            p = p,
-                            index = state.flashcardIndex,
-                            onPrev = { viewModel.aacFlashcardPrev(AacCategory.values().size) },
-                            onNext = { viewModel.aacFlashcardNext(AacCategory.values().size) },
-                            onPick = { viewModel.aacSelectCategory(it) }
-                        )
-                    }
-                    state.flashcardMode && state.selectedCategory != null -> {
-                        val cat = state.selectedCategory!!
-                        val items = filteredItems
-                        // Money 類別額外有「自訂金額」卡：當作虛擬卡片附在最前面
-                        val hasCustomMoney = cat == AacCategory.Money
-                        val totalCards = items.size + if (hasCustomMoney) 1 else 0
-                        ItemFlashcard(
-                            p = p,
-                            category = cat,
-                            items = items,
-                            hasCustomMoney = hasCustomMoney,
-                            index = state.flashcardIndex.coerceIn(0, (totalCards - 1).coerceAtLeast(0)),
-                            onPrev = { viewModel.aacFlashcardPrev(totalCards) },
-                            onNext = { viewModel.aacFlashcardNext(totalCards) },
-                            onPickItem = { viewModel.aacAppendItem(it) },
-                            onPickCustomMoney = { showCustomAmount = true }
-                        )
-                    }
-                    !browsingItems -> {
-                        CategoryGrid(
-                            p = p,
-                            gazeIndex = if (gazeEnabled) gazeGridIndex(eyeControl.gazeX, eyeControl.gazeY, AacCategory.values().size) else -1,
-                            onPick = { viewModel.aacSelectCategory(it) }
-                        )
-                    }
-                    else -> {
-                        val itemCount = filteredItems.size + if (state.selectedCategory == AacCategory.Money) 1 else 0
-                        ItemGrid(
-                            items = filteredItems,
-                            p = p,
-                            gazeIndex = if (gazeEnabled) gazeGridIndex(eyeControl.gazeX, eyeControl.gazeY, itemCount) else -1,
-                            onPick = { viewModel.aacAppendItem(it) },
-                            onCustomAmount = if (state.selectedCategory == AacCategory.Money) {
-                                { showCustomAmount = true }
-                            } else null
-                        )
-                    }
+        val gridContent: @Composable () -> Unit = {
+        // ── 主格子：類別 or 條目；可在 grid 與 flashcard 模式間切換 ──
+            val filteredItems = remember(state.selectedCategory, searchQuery, customItems) {
+                filterAacItems(state.selectedCategory, searchQuery, customItems)
+            }
+
+            // ── 自動化測試掛勾（release 版為 no-op，見 TestHooks）──
+            // 搜尋字串是 composable 的區域狀態，ViewModel 看不到；由畫面自己回報，
+            // dump 出來的才是「螢幕上真正顯示的東西」而不是從別處推論的。
+            val injectedSearch by com.example.testing.TestHooks.injectedSearch.collectAsState()
+            LaunchedEffect(injectedSearch) {
+                injectedSearch?.let {
+                    searchQuery = it
+                    com.example.testing.TestHooks.consumeInjectedSearch()
                 }
             }
+            LaunchedEffect(searchQuery, state.selectedCategory, filteredItems.size,
+                           feed.size, feedVisible, state.sentence.size, state.flashcardMode) {
+                com.example.testing.TestHooks.reportAacUi(
+                    com.example.testing.TestHooks.AacUiSnapshot(
+                        searchQuery = searchQuery,
+                        selectedCategory = state.selectedCategory?.name ?: "",
+                        gridItemCount = filteredItems.size,
+                        feedItemCount = feed.size,
+                        feedVisible = feedVisible,
+                        sentenceLength = state.sentence.size,
+                        flashcardMode = state.flashcardMode
+                    )
+                )
+            }
+            val browsingItems = searchQuery.isNotBlank() || state.selectedCategory != null
+            when {
+                // 識字卡模式（一次一張）：類別/條目都支援
+                state.flashcardMode && state.selectedCategory == null -> {
+                    CategoryFlashcard(
+                        p = p,
+                        index = state.flashcardIndex,
+                        onPrev = { viewModel.aacFlashcardPrev(AacCategory.values().size) },
+                        onNext = { viewModel.aacFlashcardNext(AacCategory.values().size) },
+                        onPick = { viewModel.aacSelectCategory(it) }
+                    )
+                }
+                state.flashcardMode && state.selectedCategory != null -> {
+                    val cat = state.selectedCategory!!
+                    val items = filteredItems
+                    // Money 類別額外有「自訂金額」卡：當作虛擬卡片附在最前面
+                    val hasCustomMoney = cat == AacCategory.Money
+                    val totalCards = items.size + if (hasCustomMoney) 1 else 0
+                    ItemFlashcard(
+                        p = p,
+                        category = cat,
+                        items = items,
+                        hasCustomMoney = hasCustomMoney,
+                        index = state.flashcardIndex.coerceIn(0, (totalCards - 1).coerceAtLeast(0)),
+                        onPrev = { viewModel.aacFlashcardPrev(totalCards) },
+                        onNext = { viewModel.aacFlashcardNext(totalCards) },
+                        onPickItem = { viewModel.aacAppendItem(it) },
+                        onPickCustomMoney = { showCustomAmount = true }
+                    )
+                }
+                !browsingItems -> {
+                    CategoryGrid(
+                        p = p,
+                        gazeIndex = if (gazeEnabled) gazeGridIndex(eyeControl.gazeX, eyeControl.gazeY, AacCategory.values().size) else -1,
+                        onPick = { viewModel.aacSelectCategory(it) }
+                    )
+                }
+                else -> {
+                    val itemCount = filteredItems.size + if (state.selectedCategory == AacCategory.Money) 1 else 0
+                    ItemGrid(
+                        items = filteredItems,
+                        p = p,
+                        gazeIndex = if (gazeEnabled) gazeGridIndex(eyeControl.gazeX, eyeControl.gazeY, itemCount) else -1,
+                        onPick = { viewModel.aacAppendItem(it) },
+                        onCustomAmount = if (state.selectedCategory == AacCategory.Money) {
+                            { showCustomAmount = true }
+                        } else null
+                    )
+                }
+            }
+        }
+
+        val statusContent: @Composable ColumnScope.() -> Unit = {
 
             // ── AI 重組中提示 ──
             if (state.composing) {
@@ -321,6 +336,33 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                     I18n.tr("已連續 %d 次選錯，再 %d 次將呼叫家屬").format(state.rejectCount, 3 - state.rejectCount),
                     fontSize = 11.sp, color = p.auraAmber, modifier = Modifier.padding(top = 2.dp)
                 )
+            }
+        }
+
+        if (twoPane) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 左欄固定寬：夠放句子預覽與情境卡，又不會把圖卡擠掉。
+                // 可捲動——矮螢幕下這欄的內容仍可能比高度長。
+                Column(
+                    modifier = Modifier.width(300.dp).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    headerContent()
+                    statusContent()
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { gridContent() }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                headerContent()
+                Box(modifier = Modifier.weight(1f)) { gridContent() }
+                statusContent()
             }
         }
 
@@ -596,7 +638,8 @@ private fun CategoryGrid(
     }
     val orderedCategories = remember(groups) { groups.flatMap { it.second } }
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        // 自適應欄數：手機直向仍是 3 欄，平板與橫向自動變多欄，不再把卡片拉長變形
+        columns = GridCells.Adaptive(minSize = 110.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
@@ -665,7 +708,7 @@ private fun ItemGrid(
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        columns = GridCells.Adaptive(minSize = 110.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize()

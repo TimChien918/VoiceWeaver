@@ -7,7 +7,17 @@ import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,7 +35,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,6 +114,25 @@ class MainActivity : ComponentActivity() {
                     val palette = LocalAppPalette.current
                     val hasCustomBackground = settings.customBackgroundUri.isNotBlank()
 
+                    // 視窗寬度決定導覽擺哪：短邊不足時（橫向手機）底部導覽會吃掉本來就
+                    // 不夠的高度，圖卡整片被擠到畫面外。寬螢幕改用側邊導覽軌，把垂直
+                    // 空間全留給內容。600dp 是 Material 的 compact/medium 分界。
+                    val cfg = LocalConfiguration.current
+                    val useRail = cfg.screenWidthDp >= 600
+                    // 橫向手機的短邊只剩約 390dp，六個「圖示＋文字」的軌道項要 430dp 以上，
+                    // 最後一項（設定）會被切掉。矮螢幕改成只顯示圖示，並讓軌道可捲動保底。
+                    val compactRail = cfg.screenHeightDp < 480
+                    val tabs = listOf(
+                        NavTab("main",     Icons.Default.Home,     stringResource(R.string.nav_main)),
+                        NavTab("rehab",    Icons.Default.School,   stringResource(R.string.nav_rehab)),
+                        // 圖卡（AAC）獨立成一級分頁：對很多患者這才是最常用的輸入方式，
+                        // 藏在重組畫面的按鈕後面等於多一步才能講話
+                        NavTab("aac",      Icons.Default.GridView, I18n.tr("圖卡")),
+                        NavTab("report",   Icons.Default.BarChart, stringResource(R.string.nav_report)),
+                        NavTab("history",  Icons.Default.History,  stringResource(R.string.nav_history)),
+                        NavTab("settings", Icons.Default.Settings, stringResource(R.string.nav_settings)),
+                    )
+
                     val navColors = NavigationBarItemDefaults.colors(
                         selectedIconColor = palette.neonCyan,
                         selectedTextColor = palette.neonCyan,
@@ -119,71 +150,71 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
+                        Row(modifier = Modifier.fillMaxSize()) {
+                        if (useRail) {
+                            NavigationRail(
+                                containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface,
+                                modifier = Modifier
+                                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical))
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                // 導覽軌垂直置中：橫向手機的軌道很矮，靠上排會離拇指太遠
+                                if (!compactRail) Spacer(Modifier.weight(1f))
+                                tabs.forEach { tab ->
+                                    NavigationRailItem(
+                                        icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                        label = if (compactRail) null else {
+                                            { Text(tab.label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                        },
+                                        selected = currentRoute == tab.route,
+                                        onClick = { navController.go(tab.route) },
+                                        colors = NavigationRailItemDefaults.colors(
+                                            selectedIconColor = palette.neonCyan,
+                                            selectedTextColor = palette.neonCyan,
+                                            unselectedIconColor = palette.textMuted,
+                                            unselectedTextColor = palette.textMuted,
+                                            indicatorColor = palette.darkBg
+                                        )
+                                    )
+                                }
+                                if (!compactRail) Spacer(Modifier.weight(1f))
+                            }
+                        }
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
                             containerColor = if (hasCustomBackground) palette.darkBg.copy(alpha = 0.78f) else palette.darkBg,
                             bottomBar = {
-                                NavigationBar(containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface) {
-                                val labelMain = stringResource(R.string.nav_main)
-                                val labelRehab = stringResource(R.string.nav_rehab)
-                                val labelHistory = stringResource(R.string.nav_history)
-                                val labelSettings = stringResource(R.string.nav_settings)
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Home, contentDescription = labelMain) },
-                                    label = { Text(labelMain, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    selected = currentRoute == "main",
-                                    onClick = { navController.go("main") },
-                                    colors = navColors
-                                )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.School, contentDescription = labelRehab) },
-                                    label = { Text(labelRehab, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    selected = currentRoute == "rehab",
-                                    onClick = { navController.go("rehab") },
-                                    colors = navColors
-                                )
-                                // 圖卡（AAC）獨立成一級分頁：對很多患者這才是最常用的輸入方式，
-                                // 藏在重組畫面的按鈕後面等於多一步才能講話
-                                val labelAac = I18n.tr("圖卡")
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.GridView, contentDescription = labelAac) },
-                                    label = { Text(labelAac, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    selected = currentRoute == "aac",
-                                    onClick = { navController.go("aac") },
-                                    colors = navColors
-                                )
-                                val labelReport = stringResource(R.string.nav_report)
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.BarChart, contentDescription = labelReport) },
-                                    label = { Text(labelReport, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    selected = currentRoute == "report",
-                                    onClick = { navController.go("report") },
-                                    colors = navColors
-                                )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.History, contentDescription = labelHistory) },
-                                    label = { Text(labelHistory, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    selected = currentRoute == "history",
-                                    onClick = { navController.go("history") },
-                                    colors = navColors
-                                )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Settings, contentDescription = labelSettings) },
-                                    label = { Text(labelSettings, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    selected = currentRoute == "settings",
-                                    onClick = { navController.go("settings") },
-                                    colors = navColors
-                                )
+                                // 寬螢幕改用左側導覽軌（在 Scaffold 外層），這裡就不重複出現
+                                if (!useRail) {
+                                    NavigationBar(containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface) {
+                                        tabs.forEach { tab ->
+                                            NavigationBarItem(
+                                                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                                label = { Text(tab.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                                selected = currentRoute == tab.route,
+                                                onClick = { navController.go(tab.route) },
+                                                colors = navColors
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         ) { innerPadding ->
+                            // 平板／橫向：內容置中並收在可讀寬度內。整行拉到兩千像素會讓
+                            // 眼睛從行尾找不回行首，對失語症患者更吃力。
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding)
+                                    .consumeWindowInsets(innerPadding),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
                             NavHost(
                                 navController = navController,
                                 startDestination = "main",
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(innerPadding)
-                                    .consumeWindowInsets(innerPadding)
+                                    .widthIn(max = 840.dp)
                             ) {
                             composable("main") {
                                 VoiceWeaverScreen(
@@ -248,6 +279,8 @@ class MainActivity : ComponentActivity() {
                         // 危機介入「與家人對話」視窗（Dialog 自成 window）
                         com.example.ui.CrisisConversationWindow(viewModel = viewModel)
                         }
+                        }   // Box（內容置中）
+                        }   // Row（導覽軌 + 內容）
 
                         // ── 全螢幕 overlay：放在 Scaffold 之外的最外層 Box，
                         //    才能蓋過底部導覽列，讓鼻控游標可以點到底部分頁。 ──
@@ -284,6 +317,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 }
+
+/** 一個一級分頁。底部導覽列與側邊導覽軌共用同一份定義，兩邊不會漂移。 */
+private data class NavTab(
+    val route: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val label: String
+)
 
 /** NavController 共用導航設定（popUpTo main + singleTop）*/
 private fun androidx.navigation.NavController.go(route: String) {
