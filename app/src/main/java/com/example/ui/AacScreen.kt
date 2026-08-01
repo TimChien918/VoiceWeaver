@@ -43,6 +43,7 @@ import com.example.R
 import com.example.ai.EyeInteractionMode
 import com.example.ai.VoiceWeaverViewModel
 import com.example.data.AacCategory
+import com.example.data.AacI18n
 import com.example.data.AacItem
 import com.example.data.Currency
 import com.example.data.DefaultAacItems
@@ -402,7 +403,7 @@ private fun SentencePreview(items: List<AacItem>, p: com.example.ui.theme.AppPal
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(it.emoji, fontSize = 20.sp)
-                        Text(it.label, fontSize = 10.sp, color = p.textLight, maxLines = 1)
+                        Text(AacI18n.label(it), fontSize = 10.sp, color = p.textLight, maxLines = 1)
                     }
                 }
             }
@@ -555,6 +556,7 @@ private fun filterAacItems(category: AacCategory?, query: String, extra: List<Aa
         .filter { item ->
             normalizedQuery.isBlank() ||
                 item.label.contains(normalizedQuery, ignoreCase = true) ||
+                AacI18n.label(item).contains(normalizedQuery, ignoreCase = true) ||
                 item.id.contains(normalizedQuery, ignoreCase = true) ||
                 item.category.key.contains(normalizedQuery, ignoreCase = true)
         }
@@ -733,7 +735,7 @@ private fun ItemGrid(
                     Text(item.emoji, fontSize = 36.sp)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        item.label, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                        AacI18n.label(item), fontSize = 14.sp, fontWeight = FontWeight.Bold,
                         color = p.textLight, textAlign = TextAlign.Center, maxLines = 2
                     )
                 }
@@ -741,7 +743,7 @@ private fun ItemGrid(
                 if (showMenu) {
                     AlertDialog(
                         onDismissRequest = { showMenu = false },
-                        title = { Text(item.label) },
+                        title = { Text(AacI18n.label(item)) },
                         text = { Text(I18n.tr("選擇操作")) },
                         confirmButton = {
                             TextButton(onClick = {
@@ -1014,7 +1016,7 @@ private fun ItemFlashcard(
         FlashcardChrome(
             p = p,
             emoji = item.emoji,
-            label = item.label,
+            label = AacI18n.label(item),
             sublabel = if (item.isStrongIntent) I18n.tr("緊急 — 按 ✓ 會立即播報") else null,
             progressText = "${safeIndex + 1}/$totalCards",
             accent = accent,
@@ -1335,7 +1337,7 @@ private fun FrequentFeedRow(
                     ) {
                         Text(item.emoji, fontSize = 16.sp)
                         Spacer(Modifier.width(4.dp))
-                        Text(item.label, color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(AacI18n.label(item), color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
                 LaunchedEffect(isPressed) {
@@ -1367,7 +1369,7 @@ private fun ContextHintRow(
             Icon(Icons.Default.LocationOn, null, tint = p.auraAmber, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
             Text(
-                "📍 ${hint.locationLabel}  ·  ${hint.intro}",
+                "📍 ${I18n.tr(hint.locationLabel)}  ·  ${I18n.tr(hint.intro)}",
                 color = p.textLight, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
             )
         }
@@ -1389,7 +1391,7 @@ private fun ContextHintRow(
                 ) {
                     Text(item.emoji, fontSize = 16.sp)
                     Spacer(Modifier.width(4.dp))
-                    Text(item.label, color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(AacI18n.label(item), color = p.textLight, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

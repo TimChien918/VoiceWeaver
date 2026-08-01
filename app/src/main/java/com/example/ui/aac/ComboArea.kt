@@ -150,7 +150,7 @@ private fun ComboChip(
                 Text(item.emoji, fontSize = 18.sp)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    item.label,
+                    com.example.data.AacI18n.label(item),
                     color = palette.textLight,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold

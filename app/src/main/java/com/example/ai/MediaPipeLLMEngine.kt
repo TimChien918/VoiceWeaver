@@ -177,7 +177,7 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
     private fun buildAacPrompt(items: List<com.example.data.AacItem>, location: String) = buildString {
         appendLine("<|im_start|>system")
         appendLine(
-            "你是失語症患者的溝通助理。使用者透過圖卡點選一串元素，請組合成一句**自然口語、有禮貌**的繁體中文。" +
+            "你是失語症患者的溝通助理。使用者透過圖卡點選一串元素，請組合成一句**自然口語、有禮貌**的" + com.example.ui.I18n.outputLanguageName() + "。" +
             "規則：只輸出一句、不解釋、不要引號；金額自然嵌入；不憑空加入未提到的物品。<|im_end|>"
         )
         appendLine("<|im_start|>user")

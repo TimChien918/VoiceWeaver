@@ -194,14 +194,19 @@ interface InferenceEngine {
     ): List<String> = defaultPracticeFallback(avgScore, location)
 
     /**
-     * 把 AAC 圖卡序列組成一句自然的繁體中文口語。
+     * 把 AAC 圖卡序列組成一句自然的口語（語言跟著介面走）。
      * 預設只做純串接（fallback for RegexTemplateEngine 或網路掛了）；
      * Hybrid / MediaPipe 引擎會覆寫為真正 LLM 重組。
+     *
+     * 串接用**譯後**詞面：這是沒有 LLM 時真的會被唸出來的字，日文介面不該唸中文。
+     * （送進危機攔截的 rawDraft 仍是中文原文，見 [aacConfirm]。）
      */
     suspend fun composeAacSentence(
         items: List<AacItem>,
         location: String
-    ): Result<String> = Result.success(items.joinToString("") { it.label })
+    ): Result<String> = Result.success(
+        items.joinToString("") { com.example.data.AacI18n.label(it) }
+    )
 
     /**
      * 語音復健跟讀評分：完全由 AI 依「語意完整性／流暢性／語氣」判讀，非字元差異。
@@ -2429,6 +2434,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val items = s.sentence
             val location = _globalTagsVault.value.locationTag
+            // 中文原文，不可換成譯文：下一行的危機字眼攔截比對的就是中文關鍵字。
             val rawDraft = items.joinToString("") { it.label }
 
             // 防禦層 1：危機字眼攔截 → 不送 LLM、不 TTS、改觸發 Telegram 求救

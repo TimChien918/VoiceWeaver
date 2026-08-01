@@ -371,7 +371,7 @@ class HybridInferenceEngine(
 
     private fun buildAacPrompt(items: List<com.example.data.AacItem>, location: String) = CloudPrompt(
         system = """
-            你是失語症患者的溝通助理。使用者透過圖卡點選了一串元素，請組合成一句**自然、口語、有禮貌**的繁體中文。
+            你是失語症患者的溝通助理。使用者透過圖卡點選了一串元素，請組合成一句**自然、口語、有禮貌**的${com.example.ui.I18n.outputLanguageName()}。
             規則：
             - 只輸出一句話、不要解釋、不要加引號。
             - 若有金額（如 NT$100），請依場景自然嵌入（例如「總共 100 元」）。

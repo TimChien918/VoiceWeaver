@@ -20,6 +20,19 @@ import com.example.data.AppLanguage
 object I18n {
     @Volatile var lang: AppLanguage = AppLanguage.ZhTW
 
+    /**
+     * 給 LLM 提示詞用的「輸出語言」名稱。
+     *
+     * 提示詞本身維持中文（模型對中文指令的遵從度在實測中比較穩），只把「要用什麼
+     * 語言回答」這件事抽出來——日文介面的使用者不該拿到中文句子。
+     */
+    fun outputLanguageName(): String = when (lang) {
+        AppLanguage.En -> "英文"
+        AppLanguage.Ja -> "日文"
+        AppLanguage.Ko -> "韓文"
+        else           -> "繁體中文"
+    }
+
     /** 取翻譯；繁中或查無 → 回原文。 */
     fun tr(zh: String): String {
         if (lang == AppLanguage.ZhTW) return zh
@@ -526,6 +539,59 @@ object I18n {
         "換一個聲音（%d/%d，%d 個已完成）" to arrayOf("Change voice (%d/%d, %d ready)", "声を変える（%d/%d、%d 完了）", "목소리 바꾸기 (%d/%d, %d개 완료)"),
         "收起" to arrayOf("Collapse", "閉じる", "접기"),
         "更多" to arrayOf("More", "もっと", "더 보기"),
+
+        // ── 情境推薦的地點名（AacContextSuggester 的 Rule 鍵）──
+        "便利商店" to arrayOf("Convenience store", "コンビニ", "편의점"),
+        "速食店" to arrayOf("Fast food", "ファストフード", "패스트푸드"),
+        "餐廳" to arrayOf("Restaurant", "レストラン", "식당"),
+        "咖啡店" to arrayOf("Café", "カフェ", "카페"),
+        "飲料店" to arrayOf("Drinks shop", "ドリンク店", "음료 가게"),
+        "醫院" to arrayOf("Hospital", "病院", "병원"),
+        "診所" to arrayOf("Clinic", "診療所", "의원"),
+        "藥局" to arrayOf("Pharmacy", "薬局", "약국"),
+        "超市" to arrayOf("Supermarket", "スーパー", "마트"),
+        "百貨" to arrayOf("Department store", "デパート", "백화점"),
+        "購物中心" to arrayOf("Shopping mall", "ショッピングモール", "쇼핑몰"),
+        "服飾店" to arrayOf("Clothing store", "服屋", "옷 가게"),
+        "車站" to arrayOf("Station", "駅", "역"),
+        "捷運站" to arrayOf("Metro station", "地下鉄駅", "지하철역"),
+        "機場" to arrayOf("Airport", "空港", "공항"),
+        "停車場" to arrayOf("Car park", "駐車場", "주차장"),
+        "加油站" to arrayOf("Petrol station", "ガソリンスタンド", "주유소"),
+        "銀行" to arrayOf("Bank", "銀行", "은행"),
+        "郵局" to arrayOf("Post office", "郵便局", "우체국"),
+        "圖書館" to arrayOf("Library", "図書館", "도서관"),
+        "旅館" to arrayOf("Hotel", "ホテル", "호텔"),
+        "公園" to arrayOf("Park", "公園", "공원"),
+        "廟宇" to arrayOf("Temple", "お寺", "사원"),
+        "教堂" to arrayOf("Church", "教会", "교회"),
+        "住家" to arrayOf("Home", "自宅", "집"),
+        // ── 情境推薦的地點開場白（AacContextSuggester）──
+        "在便利商店常用：" to arrayOf("Common at a convenience store:", "コンビニでよく使う：", "편의점에서 자주 쓰는 말:"),
+        "在停車場常用：" to arrayOf("Common at the car park:", "駐車場でよく使う：", "주차장에서 자주 쓰는 말:"),
+        "在公園常用：" to arrayOf("Common at the park:", "公園でよく使う：", "공원에서 자주 쓰는 말:"),
+        "在加油站常用：" to arrayOf("Common at the petrol station:", "ガソリンスタンドでよく使う：", "주유소에서 자주 쓰는 말:"),
+        "在咖啡店常用：" to arrayOf("Common at a café:", "カフェでよく使う：", "카페에서 자주 쓰는 말:"),
+        "在圖書館常用：" to arrayOf("Common at the library:", "図書館でよく使う：", "도서관에서 자주 쓰는 말:"),
+        "在家裡常用：" to arrayOf("Common at home:", "家でよく使う：", "집에서 자주 쓰는 말:"),
+        "在廟裡常用：" to arrayOf("Common at the temple:", "お寺でよく使う：", "사원에서 자주 쓰는 말:"),
+        "在捷運站常用：" to arrayOf("Common at the metro station:", "地下鉄駅でよく使う：", "지하철역에서 자주 쓰는 말:"),
+        "在教堂常用：" to arrayOf("Common at church:", "教会でよく使う：", "교회에서 자주 쓰는 말:"),
+        "在旅館常用：" to arrayOf("Common at the hotel:", "ホテルでよく使う：", "호텔에서 자주 쓰는 말:"),
+        "在服飾店常用：" to arrayOf("Common at a clothing store:", "服屋でよく使う：", "옷 가게에서 자주 쓰는 말:"),
+        "在機場常用：" to arrayOf("Common at the airport:", "空港でよく使う：", "공항에서 자주 쓰는 말:"),
+        "在百貨常用：" to arrayOf("Common at a department store:", "デパートでよく使う：", "백화점에서 자주 쓰는 말:"),
+        "在藥局常用：" to arrayOf("Common at the pharmacy:", "薬局でよく使う：", "약국에서 자주 쓰는 말:"),
+        "在診所常用：" to arrayOf("Common at the clinic:", "診療所でよく使う：", "의원에서 자주 쓰는 말:"),
+        "在購物中心常用：" to arrayOf("Common at a shopping mall:", "ショッピングモールでよく使う：", "쇼핑몰에서 자주 쓰는 말:"),
+        "在超市常用：" to arrayOf("Common at the supermarket:", "スーパーでよく使う：", "마트에서 자주 쓰는 말:"),
+        "在車站常用：" to arrayOf("Common at the station:", "駅でよく使う：", "역에서 자주 쓰는 말:"),
+        "在速食店常用：" to arrayOf("Common at a fast-food place:", "ファストフードでよく使う：", "패스트푸드점에서 자주 쓰는 말:"),
+        "在郵局常用：" to arrayOf("Common at the post office:", "郵便局でよく使う：", "우체국에서 자주 쓰는 말:"),
+        "在醫院常用：" to arrayOf("Common at the hospital:", "病院でよく使う：", "병원에서 자주 쓰는 말:"),
+        "在銀行常用：" to arrayOf("Common at the bank:", "銀行でよく使う：", "은행에서 자주 쓰는 말:"),
+        "在飲料店常用：" to arrayOf("Common at a drinks shop:", "ドリンク店でよく使う：", "음료 가게에서 자주 쓰는 말:"),
+        "在餐廳常用：" to arrayOf("Common at a restaurant:", "レストランでよく使う：", "식당에서 자주 쓰는 말:"),
 
         // ── enum displayName／description（SeverityMode・EyeControlMode・CameraLens・ReportRange・ConnectionMode・Currency）──
         "輕度" to arrayOf("Mild", "軽度", "경도"),
