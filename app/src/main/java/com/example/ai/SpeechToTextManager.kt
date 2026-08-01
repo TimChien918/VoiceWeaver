@@ -92,7 +92,14 @@ class SpeechToTextManager(
             collected.clear()
             collectedWords.clear()
             collectedAlternatives.clear()
-            if (finalText.isNotEmpty()) onResult(finalText, finalWords, finalAlts)
+            // vosk-model-small-cn 是簡體普通話模型，輸出一律簡體。使用者是台灣人，
+            // 碎詞欄、歷史紀錄、復健比對都該是繁體，所以在這裡統一轉一次，
+            // 讓這個 manager 對外的約定就是「回傳繁體」，各呼叫端不必各轉一遍。
+            if (finalText.isNotEmpty()) onResult(
+                ChineseConverter.toTraditional(context, finalText),
+                finalWords,
+                finalAlts.map { ChineseConverter.toTraditional(context, it) }
+            )
             _sttState.value = SttState.Idle
         }
 

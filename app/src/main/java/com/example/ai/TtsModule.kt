@@ -80,6 +80,62 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     val synthesisStatus: StateFlow<String?> = _synthesisStatus.asStateFlow()
 
     /**
+     * 正在等電腦端合成（GPT-SoVITS 走 CPU 時要 10～30 秒）。
+     * 給主畫面的進度條用——沒有這個，使用者按了朗讀之後畫面完全沒反應，
+     * 分不清是在算還是壞了，只好一直重按。
+     */
+    private val _isSynthesizing = MutableStateFlow(false)
+    val isSynthesizing: StateFlow<Boolean> = _isSynthesizing.asStateFlow()
+
+    // ── 合成結果快取 ──────────────────────────────────────────────────
+    // 同一句話、同一個聲音、同樣的參數，合出來就是同一份音訊。電腦端 CPU 合成
+    // 一次要 10～30 秒，同一句再唸一次還要重等一輪是沒道理的。
+    //
+    // key 直接雜湊「伺服器位址 + 送出去的整包 JSON」——換句子、換角色、換情緒、
+    // 改語速都會改到那包 JSON，快取自動失效，不必逐項列舉哪些參數要納入 key。
+    private val TTS_CACHE_MAX_FILES = 80
+    // 不能用 by lazy：mkdirs() 只會在首次取用時跑一次，而 Android 會在儲存吃緊時
+    // 清掉整個 cacheDir（升級安裝也會），清完之後 lazy 仍指著一個已不存在的目錄，
+    // 寫檔就丟 ENOENT。每次取用都確認一下，代價只是一個 stat。
+    private val ttsCacheDir: File
+        get() = File(context.cacheDir, "sovits_tts").apply { if (!isDirectory) mkdirs() }
+
+    /**
+     * 把合成好的音訊寫進快取，回傳可播放的檔案；完全寫不出來才回 null。
+     * 快取只是加速——寫失敗絕不能讓使用者聽不到句子，所以退一步用暫存檔照樣播。
+     */
+    private fun writeSynthesizedAudio(cacheKey: String, bytes: ByteArray): File? {
+        runCatching {
+            val out = File(ttsCacheDir, "$cacheKey.wav")
+            out.writeBytes(bytes)
+            trimTtsCache()
+            return out
+        }.onFailure { addLog("[GPT-SoVITS] 寫入快取失敗，改用暫存檔照常播放：${it.message}") }
+        return runCatching {
+            File(context.cacheDir.apply { mkdirs() }, "gpt_sovit_last.wav").apply { writeBytes(bytes) }
+        }.onFailure { addLog("[GPT-SoVITS] 暫存檔也寫不出來：${it.message}") }.getOrNull()
+    }
+
+    private fun cacheKeyFor(url: String, json: String): String =
+        java.security.MessageDigest.getInstance("SHA-1")
+            .digest((url + " " + json).toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+    private fun cachedAudio(key: String): File? =
+        File(ttsCacheDir, "$key.wav").takeIf { it.isFile && it.length() > 0 }
+
+    /** 超過上限就刪最久沒用到的，避免 cacheDir 無限長大（wav 不小）。 */
+    private fun trimTtsCache() {
+        runCatching {
+            val files = ttsCacheDir.listFiles()?.filter { it.isFile } ?: return
+            if (files.size <= TTS_CACHE_MAX_FILES) return
+            files.sortedBy { it.lastModified() }
+                .take(files.size - TTS_CACHE_MAX_FILES)
+                .forEach { it.delete() }
+        }
+    }
+
+    /**
      * GPT-SoVITS「一次生成 N 個版本，講錯了再換」：聲音克隆每次抽樣的抑揚頓挫都不一樣，
      * 好壞全憑運氣，所以跟語句重組一樣——一次平行送 N 個合成請求，播第一個做好的，
      * 「換一個」在已完成的版本間切換；還沒做好就顯示合成中，做好自動接著播。
@@ -650,14 +706,13 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         val url = "$apiBaseUrl/tts"
         // 自動語言切換 + 合成都要 suspend / 阻塞網路 → 丟到背景 scope 跑。
         ttsScope.launch {
-            // ⓪′ 接手計畫＝手機（連線太慢，傳大音檔不划算）→ 直接用 Android 本機 TTS，不打電腦。
-            //     expressiveTest（使用者主動測試 GPT-SoVITS）例外，仍走電腦。
-            if (!expressiveTest && !OffloadManager.shouldUseComputerVoice() &&
-                OffloadManager.lastPlan.tier != OffloadManager.OffloadTier.OFFLINE) {
-                addLog("[GPT-SoVITS] 接手計畫：連線較慢，語音改用手機本機 TTS（省流量/延遲）")
-                _synthesisStatus.value = "📱 連線較慢，語音由手機處理"
-                if (takeSlot != null) markTakeFailed(takeSlot, text, onComplete) else speakWithSystemTts(text, onComplete)
-                return@launch
+            // ⓪′ 走到這裡的使用者一定是自己去設定裡開了 GPT-SoVITS——
+            //     tryGptSovitApiSynthesis 只在 gptSovitEnabled 時才會被呼叫。
+            //     這裡以前會因為「連線量測偏慢」就無聲改用手機內建 TTS，結果就是
+            //     明明選了角色聲音、出來卻是機械音，畫面還只寫「連線較慢」不講它換掉了你的選擇。
+            //     明確的設定不該被效能啟發式蓋掉；真的連不上，下面的 reachable 檢查會接住。
+            if (!OffloadManager.shouldUseComputerVoice()) {
+                addLog("[GPT-SoVITS] 連線量測偏慢，但使用者已指定角色聲音 → 仍走電腦合成")
             }
             // ⓪ 先確認伺服器是否連得上＋有模型；離線或沒模型 → 改用 Android 本機 TTS（仍能發聲）。
             _synthesisStatus.value = "⏳ 確認語音伺服器…"
@@ -771,6 +826,24 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         if (expressiveTest) {
             addLog("[GPT-SoVITS] 快速測試參數：steps=$sampleSteps, temp=$temperature, top_p=$topP, speed=$speedFactor")
         }
+        // 快取命中＝這句話用這個聲音已經合成過，直接播，不用再等電腦算一輪。
+        // 放在設 _isSynthesizing 之前，命中時不該閃一下進度條。
+        val cacheKey = cacheKeyFor(url, json)
+        cachedAudio(cacheKey)?.let { hit ->
+            hit.setLastModified(System.currentTimeMillis())   // LRU：用到就往後排
+            addLog("[GPT-SoVITS] 快取命中，直接播放（${hit.length() / 1024} KB）")
+            _synthesisStatus.value = "⚡ 這句已經合成過，直接播放"
+            if (takeSlot != null) {
+                _synthesisTakes.update { current ->
+                    if (takeSlot < current.size) current.toMutableList().apply { this[takeSlot] = hit } else current
+                }
+                if (takeSlot == _currentTakeIndex.value) playSynthesizedAudio(hit, onComplete) else onComplete()
+            } else {
+                playSynthesizedAudio(hit, onComplete)
+            }
+            return
+        }
+
         val request = Request.Builder()
             .url(url)
             .post(json.toRequestBody("application/json; charset=utf-8".toMediaType()))
@@ -778,8 +851,10 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         addLog("[GPT-SoVITS] 呼叫 API 合成：$url")
         addLog("[GPT-SoVITS] 等待合成中；v4/CPU 仍可能較慢，短句會最快")
         _synthesisStatus.value = "⏳ 合成中…（電腦 CPU 運算，約 10～30 秒）"
+        _isSynthesizing.value = true
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
+                _isSynthesizing.value = false
                 when {
                     takeSlot != null -> {
                         addLog("[GPT-SoVITS] 版本 ${takeSlot + 1} 合成失敗：${e.message}")
@@ -799,6 +874,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             }
 
             override fun onResponse(call: Call, response: Response) {
+                _isSynthesizing.value = false   // 拿到回應＝合成階段結束（之後是播放）
                 response.use {
                     if (!it.isSuccessful) {
                         when {
@@ -840,8 +916,13 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                         return
                     }
                     if (takeSlot != null) {
-                        val out = File(context.cacheDir, "gpt_sovit_take_$takeSlot.wav")
-                        out.writeBytes(bytes)
+                        // 以參數雜湊命名，下次同樣的句子＋聲音就直接命中，不再重合成
+                        val out = writeSynthesizedAudio(cacheKey, bytes)
+                        if (out == null) {
+                            addLog("[GPT-SoVITS] 版本 ${takeSlot + 1} 音訊寫檔失敗")
+                            markTakeFailed(takeSlot, originalText, onComplete)
+                            return
+                        }
                         _synthesisTakes.update { current ->
                             if (takeSlot < current.size) current.toMutableList().apply { this[takeSlot] = out } else current
                         }
@@ -853,10 +934,16 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                             onComplete()
                         }
                     } else {
-                        val out = File(context.cacheDir, "gpt_sovit_last.wav")
-                        out.writeBytes(bytes)
-                        _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
-                        playSynthesizedAudio(out, onComplete)
+                        // 以參數雜湊命名做快取（固定檔名會每次覆蓋＝同一句再唸還要重合成一輪）
+                        val out = writeSynthesizedAudio(cacheKey, bytes)
+                        if (out == null) {
+                            addLog("[GPT-SoVITS] 音訊寫檔失敗，改用 Android 本機 TTS")
+                            _synthesisStatus.value = "⚠️ 音訊寫檔失敗，改用本機 TTS"
+                            speakWithSystemTts(originalText, onComplete)
+                        } else {
+                            _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
+                            playSynthesizedAudio(out, onComplete)
+                        }
                     }
                 }
             }

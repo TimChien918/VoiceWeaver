@@ -43,15 +43,17 @@ class ReconstructionUseCase(
             )
         }
 
-        // 3. 雙層防護機制審核
-        // A. 判定信心度：只有「極低把握（<0.40）」才整句蓋成 fallback。
-        //    原本 0.70 太嚴——失語症碎詞（例如單字「十」）LLM 常自評 0.4~0.6，
-        //    卻被整句藏掉、換成「我不確定您的意思」，等於很多可用的最佳猜測都看不到。
-        //    幻覺由 NativeRuleCritic 另外把關（憑空捏造照樣擋），所以這裡放寬即可；
-        //    0.40~0.75 的猜測仍會顯示，UI 會自動標「△ 把握較低，請確認再唸」讓照護者確認。
+        // 3. 雙層防護：信心極低（<0.40）或 NativeRuleCritic 判定幻覺。
+        //
+        //    以前只要其中一項不過，就把整句換成「我不確定您的意思…」。那太保守了：
+        //    「我 痛 醫院」這種語意其實很清楚的碎詞也會被換成一句廢話，
+        //    而且 fallback 會重建 ReconstructedData、把三個候選句一起丟掉，
+        //    使用者連挑都沒得挑。藏起最佳猜測對講不出話的人是幫倒忙。
+        //
+        //    改成：句子照給，只把信心壓低 → UI 自動標「△ 把握較低，請確認再唸」，
+        //    由照護者自己判斷要不要唸。真的什麼都沒有（引擎失敗／清乾淨後是空字串）
+        //    才用 fallbackMessage。
         val isConfidenceLow = data.confidence < 0.40
-
-        // B. 判定幻覺：NativeRuleCritic 是否審核不通過
         val passesCritic = try {
             NativeRuleCritic.audit(data.reconstructedText, vault)
         } catch (e: Exception) {
@@ -61,34 +63,41 @@ class ReconstructionUseCase(
 
         val elapsed = System.currentTimeMillis() - startTime
 
-        if (isConfidenceLow || !passesCritic) {
+        // 收斂空白：任何引擎都可能吐出前後換行/多段空行，壓成單行避免輸出卡爆高一片空白；
+        // 萬一壓完變空字串，才退回 fallbackMessage，不讓卡片空白無內容。
+        // 候選句也套同一套問句保留／收斂空白規則，切換時才不會漏字或跑版。
+        fun cleanOne(text: String) = preserveExplicitQuestions(vault.rawText, text)
+            .trim().replace(Regex("\\s*\\n\\s*"), " ")
+            .ifBlank { fallbackMessage }
+
+        val cleaned = cleanOne(data.reconstructedText)
+        val distrusted = isConfidenceLow || !passesCritic
+
+        if (distrusted) {
             Log.w(
                 "ReconstructionUseCase",
-                "Fallback triggered! Confidence low: $isConfidenceLow (value: ${data.confidence}), Passes critic: $passesCritic"
-            )
-            // 觸發 Fallback: 回傳極佳 UI 安全提示
-            ReconstructedData(
-                originalText = vault.rawText,
-                reconstructedText = fallbackMessage,
-                confidence = data.confidence,
-                engineUsed = "${data.engineUsed} -> Fallback Protection Grid",
-                inferenceTimeMs = elapsed
+                "Low trust (shown anyway) — confidence low: $isConfidenceLow (${data.confidence}), passes critic: $passesCritic"
             )
         } else {
             Log.i("ReconstructionUseCase", "Reconstruction passed all checks successfully!")
-            // 全部通過，返回重組後的句子。
-            // 收斂空白：任何引擎都可能吐出前後換行/多段空行，壓成單行避免輸出卡爆高一片空白；
-            // 萬一壓完變空字串，退回 fallbackMessage，不讓卡片空白無內容。
-            fun cleanOne(text: String) = preserveExplicitQuestions(vault.rawText, text)
-                .trim().replace(Regex("\\s*\\n\\s*"), " ")
-                .ifBlank { fallbackMessage }
-            // 「換一個」候選也要套同一套問句保留／收斂空白規則，切換時才不會漏字或跑版。
-            data.copy(
-                reconstructedText = cleanOne(data.reconstructedText),
-                alternatives = data.alternatives.map { it.copy(text = cleanOne(it.text)) },
-                inferenceTimeMs = elapsed
-            )
         }
+
+        data.copy(
+            reconstructedText = cleaned,
+            alternatives = data.alternatives.map { it.copy(text = cleanOne(it.text)) },
+            // 壓到 0.75（UI 的「大致正確」門檻）以下，讓卡片明確標示需要確認。
+            // 取 min 是因為模型自評可能比實際可信度樂觀（截圖那次自評 85% 卻被 critic 打掉）。
+            confidence = if (cleaned == fallbackMessage) 0.0
+                         else if (distrusted) minOf(data.confidence, LOW_TRUST_CONFIDENCE)
+                         else data.confidence,
+            engineUsed = if (distrusted) "${data.engineUsed} -> 低信心" else data.engineUsed,
+            inferenceTimeMs = elapsed
+        )
+    }
+
+    private companion object {
+        /** 被判定不可信時顯示的信心值——低於 UI 的 0.75 門檻，會標「把握較低，請確認再唸」。 */
+        const val LOW_TRUST_CONFIDENCE = 0.35
     }
 
     private fun preserveExplicitQuestions(rawText: String, reconstructedText: String): String {

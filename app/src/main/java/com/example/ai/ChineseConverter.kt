@@ -50,4 +50,45 @@ object ChineseConverter {
         for (ch in text) sb.append(m[ch] ?: ch)
         return sb.toString()
     }
+
+    @Volatile private var s2tMap: Map<Char, Char>? = null
+
+    /**
+     * 由 t2s 表反推的簡→繁對照，**只收唯一對應的字**。
+     *
+     * 繁→簡是多對一：發／髮 都變「发」、乾／幹／干 都變「干」。整張表反轉會讓
+     * 「頭发」變成「頭發」這種錯字——把使用者要講的話改錯，比留著簡體更糟。
+     * 所以有歧義的字（同一個簡體字對到多個繁體字）一律不轉，寧可不動。
+     */
+    private fun ensureS2tLoaded(context: Context): Map<Char, Char> {
+        s2tMap?.let { return it }
+        synchronized(this) {
+            s2tMap?.let { return it }
+            val t2s = ensureLoaded(context)
+            val simplifiedUseCount = HashMap<Char, Int>(t2s.size)
+            for (simplified in t2s.values) {
+                simplifiedUseCount[simplified] = (simplifiedUseCount[simplified] ?: 0) + 1
+            }
+            val built = HashMap<Char, Char>(t2s.size)
+            for ((traditional, simplified) in t2s) {
+                if (traditional == simplified) continue          // 兩邊同字，不用轉
+                if (simplifiedUseCount[simplified] == 1) built[simplified] = traditional
+            }
+            s2tMap = built
+            return built
+        }
+    }
+
+    /**
+     * 簡體 → 繁體。給雲端 STT（Whisper 轉寫中文預設吐簡體）的結果用，
+     * 讓畫面與歷史紀錄維持繁體。有歧義的字會原樣保留，見 [ensureS2tLoaded]。
+     */
+    fun toTraditional(context: Context, text: String): String {
+        if (text.isEmpty()) return text
+        val m = ensureS2tLoaded(context)
+        if (m.isEmpty()) return text
+        val sb = StringBuilder(text.length)
+        for (ch in text) sb.append(m[ch] ?: ch)
+        return sb.toString()
+    }
 }

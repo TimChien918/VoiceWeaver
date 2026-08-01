@@ -176,6 +176,18 @@ interface InferenceEngine {
         vault: GlobalTagsVault
     ): Result<ReconstructedData> = Result.failure(UnsupportedOperationException("此引擎不支援音訊理解"))
 
+    /**
+     * 【危機意圖分流】關鍵字命中之後，判斷「想自傷的是誰」。
+     *
+     * 為什麼需要：關鍵字分不出「我想自殺」和「我朋友想自殺，快叫救護車」。
+     * 後者是替別人求救，鎖住語音等於害另一個人叫不到救護車——而講不出話的人
+     * 沒有別的求救管道。
+     *
+     * 預設回 UNKNOWN（沒有雲端能力的引擎），呼叫端據此走「通報家人但放行」。
+     */
+    suspend fun classifyCrisisIntent(text: String): com.example.safety.SafetyGuard.CrisisIntent =
+        com.example.safety.SafetyGuard.CrisisIntent.UNKNOWN
+
     /** 這個引擎現在是否真的能做音訊理解（要有音訊能力的供應商且已設好金鑰）。 */
     fun supportsAudioUnderstanding(): Boolean = false
 
@@ -623,9 +635,21 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             com.example.safety.SafetyGuard.RiskLevel.CONFIRM ->
                 _speakGate.value = SpeakGate.NeedConfirm(text, useTakes)
             com.example.safety.SafetyGuard.RiskLevel.LOCK -> {
-                // 自傷類危機字眼：鎖語音 + 立即觸發緊急通報（取 GPS → 發 Telegram）
                 if (com.example.safety.SafetyGuard.containsCrisisSignal(text)) {
-                    triggerEmergencyReport(text)
+                    // 關鍵字命中不代表就是本人求救——先問 AI「想自傷的是誰」，
+                    // 替別人求救的句子必須放行，擋下來會害另一個人叫不到救護車。
+                    viewModelScope.launch {
+                        when (activeEngine.classifyCrisisIntent(text)) {
+                            com.example.safety.SafetyGuard.CrisisIntent.SELF ->
+                                triggerEmergencyReport(text)
+                            com.example.safety.SafetyGuard.CrisisIntent.UNKNOWN -> {
+                                // 判不出來：通報家人但不鎖語音，讓他把話講出來
+                                triggerEmergencyReport(text, lockSpeech = false)
+                                doSpeak(text, useTakes)
+                            }
+                            else -> doSpeak(text, useTakes)   // OTHER／NONE：正常唸
+                        }
+                    }
                 } else {
                     _speakGate.value = SpeakGate.Locked(
                         I18n.tr("內容涉及高風險意圖，語音輸出已鎖定。請照護者協助確認。")
@@ -640,7 +664,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 主重組與朗讀路徑都走這裡，確保「我想自殺」等字眼一定觸發通報。
      * 同時開啟「與家人對話」危機介入視窗（含前後鏡頭 + 即時音檔）。
      */
-    fun triggerEmergencyReport(text: String, poiTag: String = "") {
+    /**
+     * @param lockSpeech false＝只通報家人、不鎖語音也不開危機視窗。
+     *   給「AI 判不出是誰想自傷」的情況用：真是本人求救→家人仍收到通報；
+     *   是替別人求救→話送得出去。兩邊的最壞情況都不致命。
+     */
+    fun triggerEmergencyReport(text: String, poiTag: String = "", lockSpeech: Boolean = true) {
+        if (!lockSpeech) {
+            // 靜默通報：不動 speakGate、不開危機視窗，不打斷使用者講話
+            viewModelScope.launch {
+                runCatching { emergencyTrigger.interceptAndReport(text, poiTag = poiTag) }
+            }
+            return
+        }
         _speakGate.value = SpeakGate.Locked(I18n.tr("偵測到高風險訊息，正在通報緊急聯絡人…"))
         viewModelScope.launch {
             val outcome = runCatching {
@@ -847,7 +883,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun chooseCandidate(index: Int, text: String) {
         viewModelScope.launch { settingsRepo.recordCandidateChoice(index == 0) }
         rememberUtterance(text)
-        requestSpeak(text, useTakes = index == 0)
+        // 只合成一份：使用者要的是「先在三個句子裡挑一個，再針對那一句合成」，
+        // 而不是同一句合成三種聲音再挑。平行三份會讓等待時間變成三倍。
+        requestSpeak(text)
     }
 
     /**
@@ -870,6 +908,31 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 三個都不對（已經在看最後一個）→ 不是繞回去重看被拒絕過的第一個，而是重新呼叫 LLM
      * 生成全新一批候選（沿用同一份 vault，即同一段碎詞／地點／物件）。
      */
+    /**
+     * 直接選定第 index 個候選句——三句並列讓使用者挑，不再一顆按鈕逐一循環。
+     *
+     * 只換顯示的句子與意圖圖，「不」順便合成語音：合成要等使用者按朗讀鍵。
+     * 挑句子的過程若每點一次就送一次合成請求，等於三倍的等待與額度，
+     * 而使用者要的正好相反——先挑定一句，再針對那一句合成。
+     */
+    fun selectReconstructionAlternative(index: Int) {
+        val state = _reconstructionState.value as? ReconstructionUiState.Success ?: return
+        val data = state.data
+        val pick = data.alternatives.getOrNull(index) ?: return
+        if (data.alternativeIndex == index) return
+        val updated = data.copy(
+            reconstructedText = pick.text,
+            confidence = pick.confidence,
+            alternativeIndex = index
+        )
+        _reconstructionState.value = ReconstructionUiState.Success(updated)
+        if (settings.value.aacIntentImageEnabled) generateIntentImage(updated.reconstructedText)
+        else clearIntentImage()
+    }
+
+    /** 三句都不對 → 沿用同一份 vault 重新呼叫 LLM，生出全新一批候選。 */
+    fun regenerateAlternatives() = triggerSentenceReconstruction()
+
     fun cycleReconstructionAlternative() {
         val state = _reconstructionState.value as? ReconstructionUiState.Success ?: return
         val data = state.data
@@ -1361,13 +1424,32 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     // ─── STT ─────────────────────────────────────────────────────────────────
 
+    /**
+     * 麥克風鍵。
+     *
+     * 有雲端音訊能力時走「直接讓 AI 聽」，沒有才退回裝置端 Vosk。
+     * 原因：Vosk 用的是 42MB 的 small 簡體模型，拿正常語音訓練的，
+     * 對構音不標準的使用者常整句聽錯（實測「我肚子很不舒服」→「肚惡」）。
+     * 把錄音整段交給模型聽，語調與停頓不會被壓掉，對失語症患者準得多。
+     *
+     * 復健評分不走這裡（它用 startRehabRecording），因為發音評分要逐字信心，
+     * 只有 Vosk 給得出來。
+     */
     fun toggleStt() {
         viewModelScope.launch(Dispatchers.Main) {
+            // 已經在錄「直接聽」的音 → 交給那條路自己收尾（再按一下＝說完了）
+            if (_isListeningDirect.value) {
+                toggleDirectAudioUnderstanding()
+                return@launch
+            }
             when (sttManager.sttState.value) {
                 is SttState.Listening -> sttManager.stopListening()
                 is SttState.Processing -> {}   // 辨識結算中，忽略
                 is SttState.Preparing -> {}    // 模型準備中，忽略
-                else -> sttManager.startListening()
+                else -> {
+                    if (sttMode == SttMode.NORMAL && canUnderstandAudio()) toggleDirectAudioUnderstanding()
+                    else sttManager.startListening()
+                }
             }
         }
     }
@@ -1451,6 +1533,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     }
     /** 即時轉發 TtsModule 的合成狀態（⏳/✅/❌ 人話訊息），給設定頁測試按鈕下方顯示。 */
     val sovitsSynthesisStatus: StateFlow<String?> get() = ttsModule.synthesisStatus
+    /** 正在等電腦端合成——主畫面據此顯示進度條。 */
+    val isSynthesizing: StateFlow<Boolean> get() = ttsModule.isSynthesizing
 
     // 語音情緒手動覆寫（""＝自動偵測）。UI 選情緒 → 之後合成都用該情緒的參考音。
     private val _voiceEmotion = MutableStateFlow("")
@@ -2202,19 +2286,30 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
-        // 防禦層 1：危機字眼（如「我想自殺」）在送 LLM 前就攔截 → 不重組、不朗讀，立即通報緊急聯絡人。
-        if (com.example.safety.SafetyGuard.containsCrisisSignal(currentVault.rawText)) {
-            _reconstructionState.value = ReconstructionUiState.Error(
-                "偵測到高風險訊息，已停止重組並通報緊急聯絡人。如有立即危險請撥打 1925 安心專線或 119。"
-            )
-            triggerEmergencyReport(currentVault.rawText, poiTag = currentVault.locationTag)
-            return
-        }
-
         _reconstructionState.value = ReconstructionUiState.Loading
 
         viewModelScope.launch {
             try {
+                // 防禦層 1：危機字眼在送 LLM 前攔截。但關鍵字分不出「我想自殺」和
+                // 「我朋友想自殺，快叫救護車」——後者是替別人求救，擋下來會害另一個人，
+                // 所以命中後再讓 AI 判斷是誰。只有 SELF 才停止重組。
+                if (com.example.safety.SafetyGuard.containsCrisisSignal(currentVault.rawText)) {
+                    when (activeEngine.classifyCrisisIntent(currentVault.rawText)) {
+                        com.example.safety.SafetyGuard.CrisisIntent.SELF -> {
+                            _reconstructionState.value = ReconstructionUiState.Error(
+                                "偵測到高風險訊息，已停止重組並通報緊急聯絡人。如有立即危險請撥打 1925 安心專線或 119。"
+                            )
+                            triggerEmergencyReport(currentVault.rawText, poiTag = currentVault.locationTag)
+                            return@launch
+                        }
+                        // 判不出來（沒網路／模型拒答）：通報家人，但讓他把話講出來。
+                        // 真是本人求救→家人仍收到通報；是替人求救→話送得出去。兩邊最壞情況都不致命。
+                        com.example.safety.SafetyGuard.CrisisIntent.UNKNOWN ->
+                            triggerEmergencyReport(currentVault.rawText, poiTag = currentVault.locationTag, lockSpeech = false)
+                        // OTHER／NONE：正常重組，不打斷
+                        else -> Unit
+                    }
+                }
                 settingsRepo.recordInput(viaAac = false)
                 val useCase = ReconstructionUseCase(activeEngine)
                 val data = useCase.execute(currentVault)

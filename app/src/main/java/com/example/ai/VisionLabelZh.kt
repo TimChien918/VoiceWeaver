@@ -8,8 +8,9 @@ package com.example.ai
  * 查不到「藥」「輪椅」「拐杖」「病床」。這是基礎模型的先天限制，
  * 不是設定問題；真要認這些東西必須另外訓練自訂模型（ML Kit 支援 custom model）。
  *
- * 這裡只翻「日常照護場景真的會出現」的標籤；查不到的維持英文原樣，
- * 不亂猜、不硬湊——寧可讓照護者看到英文，也不要顯示錯的中文。
+ * 這裡只翻「日常照護場景真的會出現」的標籤，而且**這張表就是白名單**：
+ * 沒收錄的標籤一律不顯示（見 [isUseful]）。不亂猜、不硬湊中文，
+ * 也不讓英文原文外漏到病人與照護者的畫面上。
  */
 object VisionLabelZh {
 
@@ -26,8 +27,18 @@ object VisionLabelZh {
         "Wool", "Leather", "Porcelain", "Brick", "Tile", "Sand", "Soil", "Space"
     )
 
-    /** 這個標籤值不值得講給病人／照護者看。 */
-    fun isUseful(label: String): Boolean = label !in NOISE
+    /**
+     * 這個標籤值不值得講給病人／照護者看。
+     *
+     * 用白名單（必須在 [MAP] 裡）而不是黑名單。原本只要不在 NOISE 就放行，
+     * 結果沒收錄的標籤會以英文原樣出現在畫面上——像拍到人卻跳出「Bumper (69%)」，
+     * 照護者看不懂，對重組也是雜訊。ML Kit 基礎模型那 400+ 標籤大多是
+     * Bonfire／Circus／Safari 這類跟照護無關的通用詞，沒收進表裡就代表
+     * 「這個詞對溝通沒用」，不顯示比顯示英文好。
+     *
+     * 要讓某個標籤出現，就把它加進 [MAP]——一個動作同時決定「顯示」與「怎麼翻」。
+     */
+    fun isUseful(label: String): Boolean = label !in NOISE && label in MAP
 
     private val MAP: Map<String, String> = mapOf(
         // ML Kit 物件偵測的 5 個粗類（跟影像標籤不同來源，會一起出現）

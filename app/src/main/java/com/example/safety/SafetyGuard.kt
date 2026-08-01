@@ -51,7 +51,10 @@ object SafetyGuard {
     val DEFENSIVE_SYSTEM_PROMPT: String = """
 你是醫療輔助溝通系統，使用者為失語症患者。請遵守以下硬性規定：
 1) 絕對不可生成「自殺、自殘、想死、結束生命、你不會好了、放棄治療」等負面或鼓勵放棄的字眼。
-2) 若使用者輸入觸及自傷、絕望，請改以「我聽到了，建議聯絡家屬或撥打 1925 安心專線」回應。
+2) 若「使用者本人」表達自傷、絕望，請改以「我聽到了，建議聯絡家屬或撥打 1925 安心專線」回應。
+   但若使用者是在替「別人」求救或描述他人處境（例如「我朋友想自殺，快叫救護車」），
+   必須忠實重組成能對外求救的句子，不可以替換成上面那句安撫語——
+   使用者講不出話，這是他唯一的求救管道，擋下來會害另一個人叫不到救護車。
 3) 不可給出具體藥物劑量、自行用藥建議；遇到醫療問題請建議聯絡醫師。
 4) 語氣維持平靜、溫和、簡短。輸出永遠是繁體中文，除非使用者明確切換語言。
 """.trimIndent()
@@ -71,6 +74,14 @@ object SafetyGuard {
      *  - [LOCK]：自傷 / 拒絕治療 → 強制鎖定語音輸出，只顯示警示（緊急通報照舊走輸入端攔截）
      */
     enum class RiskLevel { NORMAL, CONFIRM, LOCK }
+
+    /**
+     * 危機語句裡「想自傷的是誰」。關鍵字比對分不出下面兩句，但處理方式完全相反：
+     *   「我想自殺」                 → SELF，鎖住語音並通報家人
+     *   「我朋友想自殺，快叫救護車」 → OTHER，必須讓他講出去，擋下來會害另一個人
+     * 由 [InferenceEngine.classifyCrisisIntent] 用 LLM 判定；判不出來時是 UNKNOWN。
+     */
+    enum class CrisisIntent { SELF, OTHER, NONE, UNKNOWN }
 
     /** 拒絕治療類：不在 CRISIS（不觸發 Telegram），但屬於 LOCK 級不可發聲。 */
     private val REFUSAL_PATTERNS: List<Regex> = listOf(

@@ -62,9 +62,8 @@ fun VoiceWeaverScreen(
     val vault by viewModel.globalTagsVault.collectAsState()
     val reconstructionState by viewModel.reconstructionState.collectAsState()
     val settings by viewModel.settings.collectAsState()
-    val synthesisTakes by viewModel.synthesisTakes.collectAsState()
-    val takeLabels by viewModel.takeLabels.collectAsState()
-    val currentTakeIndex by viewModel.currentTakeIndex.collectAsState()
+    val synthesisStatus by viewModel.sovitsSynthesisStatus.collectAsState()
+    val isSynthesizing by viewModel.isSynthesizing.collectAsState()
     val intentImagePath by viewModel.intentImagePath.collectAsState()
     val intentImageLoading by viewModel.intentImageLoading.collectAsState()
 
@@ -759,8 +758,11 @@ fun VoiceWeaverScreen(
                                     onClick = { viewModel.toggleStt() },
                                     enabled = sttState !is SttState.Processing && sttState !is SttState.Preparing,
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = when (sttState) {
-                                            is SttState.Listening -> dangerRose
+                                        // 有雲端音訊能力時這顆會走「直接讓 AI 聽」，錄音中是 isListeningDirect
+                                        // 而不是 sttState.Listening——兩個都要看，否則錄音中按鈕看起來沒反應。
+                                        containerColor = when {
+                                            isListeningDirect -> dangerRose
+                                            sttState is SttState.Listening -> dangerRose
                                             else -> neonCyan
                                         },
                                         contentColor = Color.White,
@@ -771,10 +773,11 @@ fun VoiceWeaverScreen(
                                     modifier = Modifier.testTag("stt_btn")
                                 ) {
                                     Text(
-                                        text = when (sttState) {
-                                            is SttState.Listening -> stringResource(R.string.main_stt_btn_stop)
-                                            is SttState.Processing -> stringResource(R.string.main_stt_btn_processing)
-                                            is SttState.Preparing -> stringResource(R.string.main_stt_btn_preparing)
+                                        text = when {
+                                            isListeningDirect -> stringResource(R.string.main_stt_btn_stop)
+                                            sttState is SttState.Listening -> stringResource(R.string.main_stt_btn_stop)
+                                            sttState is SttState.Processing -> stringResource(R.string.main_stt_btn_processing)
+                                            sttState is SttState.Preparing -> stringResource(R.string.main_stt_btn_preparing)
                                             else -> stringResource(R.string.main_stt_btn_start)
                                         },
                                         fontSize = 12.sp,
@@ -1167,28 +1170,69 @@ fun VoiceWeaverScreen(
                                         fontWeight = FontWeight.Medium
                                     )
 
-                                    // AI 一次取樣 3 個候選句（自我一致性）；不只 1 個時給「換一個」按鈕，
-                                    // 原地循環切換，不必重新呼叫 LLM；三個都不對時最後一顆改叫「重新生成」，
-                                    // 按下去才會真的再呼叫一次 LLM 生出全新一批。
+                                    // AI 一次取樣 3 個候選句（自我一致性），三句一起攤開讓使用者挑，
+                                    // 依信心度由高到低排——最可能對的排最上面，手指移動距離最短。
+                                    // 點一下只是「選定」，不會發聲；要唸出來還是按下面那顆大的朗讀鍵，
+                                    // 這樣挑的過程不會每點一次就送一次合成請求。
                                     if (data.alternatives.size > 1) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            I18n.tr("挑一句最接近的"),
+                                            fontSize = 11.sp, color = textMuted, fontWeight = FontWeight.Medium
+                                        )
                                         Spacer(modifier = Modifier.height(6.dp))
-                                        val isLastAlternative = data.alternativeIndex >= data.alternatives.size - 1
+                                        val ranked = remember(data.alternatives) {
+                                            data.alternatives.withIndex().sortedByDescending { it.value.confidence }
+                                        }
+                                        ranked.forEach { (originalIndex, cand) ->
+                                            val selected = data.alternativeIndex == originalIndex
+                                            OutlinedButton(
+                                                onClick = { viewModel.selectReconstructionAlternative(originalIndex) },
+                                                shape = RoundedCornerShape(10.dp),
+                                                border = BorderStroke(
+                                                    if (selected) 2.dp else 1.dp,
+                                                    if (selected) neonCyan else textMuted.copy(alpha = 0.35f)
+                                                ),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(bottom = 6.dp)
+                                            ) {
+                                                Icon(
+                                                    if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                    null,
+                                                    tint = if (selected) neonCyan else textMuted,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    cand.text,
+                                                    fontSize = 14.sp,
+                                                    color = if (selected) textLight else textMuted,
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                    lineHeight = 20.sp,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text(
+                                                    "${(cand.confidence * 100).toInt()}%",
+                                                    fontSize = 11.sp,
+                                                    color = if (selected) neonCyan else textMuted,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                        // 三句都不對＝AI 這批全猜錯，重新呼叫 LLM 生一批新的
                                         OutlinedButton(
-                                            onClick = { viewModel.cycleReconstructionAlternative() },
+                                            onClick = { viewModel.regenerateAlternatives() },
                                             shape = RoundedCornerShape(10.dp),
                                             border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.5f)),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Icon(
-                                                if (isLastAlternative) Icons.Default.Autorenew else Icons.Default.Refresh,
-                                                null, tint = neonCyan, modifier = Modifier.size(16.dp)
-                                            )
+                                            Icon(Icons.Default.Autorenew, null, tint = neonCyan, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                if (isLastAlternative)
-                                                    I18n.tr("三個都不對？重新生成")
-                                                else
-                                                    I18n.tr("換一個說法（%d/%d）").format(data.alternativeIndex + 1, data.alternatives.size),
+                                                I18n.tr("三個都不對？重新生成"),
                                                 fontSize = 12.sp, color = neonCyan, fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -1230,37 +1274,13 @@ fun VoiceWeaverScreen(
                                         }
                                     }
 
-                                    // 一次合成 3 個版本，唸得不對勁（口氣怪、發音糊）就換一個，不用重新整句朗讀。
-                                    // 版本的來源有兩種：多家雲端語音＝三種不同的聲音；GPT-SoVITS＝同一個聲音抽樣三次。
-                                    // 三個都不滿意時最後一顆改叫「換一批」，按下去才會真的再生一批新的。
-                                    if (synthesisTakes.size > 1) {
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        val readyCount = synthesisTakes.count { it != null }
-                                        val isLastTake = currentTakeIndex >= synthesisTakes.size - 1
-                                        OutlinedButton(
-                                            onClick = { viewModel.cycleSpeechTake() },
-                                            shape = RoundedCornerShape(10.dp),
-                                            border = BorderStroke(1.dp, neonGreen.copy(alpha = 0.5f)),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(
-                                                if (isLastTake) Icons.Default.Autorenew else Icons.Default.RecordVoiceOver,
-                                                null, tint = neonGreen, modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                            val who = takeLabels.getOrNull(currentTakeIndex).orEmpty()
-                                            Text(
-                                                when {
-                                                    isLastTake -> I18n.tr("都不對？換一批聲音")
-                                                    // 有供應商名稱時直接寫出「現在是誰在講」，比 1/3 這種編號好懂
-                                                    who.isNotBlank() ->
-                                                        I18n.tr("換一個聲音（現在：%s）").format(who)
-                                                    else ->
-                                                        I18n.tr("換一個聲音（%d/%d，%d 個已完成）")
-                                                            .format(currentTakeIndex + 1, synthesisTakes.size, readyCount)
-                                                },
-                                                fontSize = 12.sp, color = neonGreen, fontWeight = FontWeight.Bold
-                                            )
+                                    // 合成狀態：角色聲音走電腦 CPU 要 10～30 秒，按下朗讀後
+                                    // 畫面得有東西動，否則分不清在算還是壞了，只好一直重按。
+                                    // 不畫進度條——伺服器不回報進度，畫出來的比例只會是編的。
+                                    if (isSynthesizing) {
+                                        synthesisStatus?.let { st ->
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(st, fontSize = 12.sp, color = textMuted)
                                         }
                                     }
 

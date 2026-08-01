@@ -375,9 +375,16 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
                 Log.w(TAG, "CoT JSON parse failed, fallback to plain text: ${e.message}")
             }
         }
-        // 退回：整段純文字當重組句（去掉殘留 JSON 符號），信心保守
-        val plain = cleaned.removePrefix("assistant").trim().ifBlank { buildFallback(vault) }
-        return CoTParsed(plain, 0.6)
+        // 退回：整段純文字當重組句，信心保守。
+        // 注意被截斷的 JSON（reasoning 寫太長時很常見）也是「非空字串」，
+        // 直接拿來當句子會讓病人畫面出現 {"reasoning":… 還被當成可以唸的話。
+        // 所以先從殘缺 JSON 撈 reconstructed，撈不到就走關鍵字 fallback。
+        salvageReconstructed(cleaned)?.let { return CoTParsed(it, 0.6) }
+        val plain = cleaned.removePrefix("assistant").trim()
+        return CoTParsed(
+            if (plain.isBlank() || looksLikeRawJson(plain)) buildFallback(vault) else plain,
+            0.6
+        )
     }
 
     private fun buildFallback(vault: GlobalTagsVault): String {

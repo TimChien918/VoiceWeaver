@@ -64,8 +64,8 @@ class OfflinePoiIndex(private val appContext: Context) {
                             if (parts.size < 3) continue
                             val lat = parts[0].toDoubleOrNull() ?: continue
                             val lon = parts[1].toDoubleOrNull() ?: continue
-                            val cat = parts[2]
                             val name = parts.getOrNull(3).orEmpty()
+                            val cat = CATEGORY_CORRECTIONS[name] ?: parts[2]
                             if (cat.isBlank()) continue
                             val key = cellKey(latBucket(lat), lonBucket(lon))
                             map.getOrPut(key) { ArrayList(4) }.add(Poi(lat, lon, cat, name))
@@ -133,5 +133,22 @@ class OfflinePoiIndex(private val appContext: Context) {
         private val ASSET_CANDIDATES = listOf("poi/worldwide_pois.tsv", LEGACY_ASSET_PATH)
         /** 網格大小（度）。0.005° ≈ 555 m，3x3 掃描範圍 ≈ 1.7 km，遠超 80m 半徑安全裕度 */
         private const val CELL_DEG = 0.005
+
+        /**
+         * 上游 OSM 分類標錯的逐筆修正。
+         *
+         * 例：明誠附小在 OSM 被標成 amenity=kindergarten，使用者人在小學裡，
+         * 句子卻說他在幼兒園。位置比對其實是準的（就是這棟），錯的只有類別。
+         *
+         * 刻意用「逐筆對照」而不是「看名字含小學就改成學校」的規則：
+         * 全台有 80 筆「○○國小附設幼兒園」，那些標幼兒園是**對的**，
+         * 用名稱猜規則會把它們一起改壞。真正標錯的只有個位數，列出來最安全。
+         *
+         * 修正寫在程式碼而不是直接改 assets 的 TSV——那份 13MB 的資料沒有納入 git，
+         * 改了不會留下紀錄，日後重新匯出就沒了。
+         */
+        private val CATEGORY_CORRECTIONS = mapOf(
+            "天主教高雄市明誠高級中學附設雙語實驗小學" to "學校"
+        )
     }
 }

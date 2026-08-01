@@ -534,6 +534,7 @@ object I18n {
         "用圖卡說話 → 到「圖卡」分頁" to arrayOf("Talk with cards → open the Cards tab", "カードで話す → 「カード」タブへ", "카드로 말하기 → '카드' 탭으로"),
         "三個都不對？重新生成" to arrayOf("None of the three? Regenerate", "3つとも違う？再生成", "셋 다 아니면? 다시 생성"),
         "換一個說法（%d/%d）" to arrayOf("Another phrasing (%d/%d)", "別の言い方（%d/%d）", "다른 표현 (%d/%d)"),
+        "挑一句最接近的" to arrayOf("Pick the closest one", "いちばん近いものを選ぶ", "가장 가까운 문장을 고르세요"),
         "都不對？換一批聲音" to arrayOf("None fit? Try other voices", "合わない？別の声に", "다 아니면? 다른 목소리"),
         "換一個聲音（現在：%s）" to arrayOf("Change voice (now: %s)", "声を変える（現在：%s）", "목소리 바꾸기 (현재: %s)"),
         "換一個聲音（%d/%d，%d 個已完成）" to arrayOf("Change voice (%d/%d, %d ready)", "声を変える（%d/%d、%d 完了）", "목소리 바꾸기 (%d/%d, %d개 완료)"),

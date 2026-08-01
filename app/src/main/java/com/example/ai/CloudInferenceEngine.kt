@@ -236,8 +236,10 @@ class HybridInferenceEngine(
         vault: GlobalTagsVault
     ): String? = withContext(Dispatchers.IO) {
         val bytes = runCatching { audioFile.readBytes() }.getOrNull() ?: return@withContext null
+        // prompt 的字體會影響 Whisper 的輸出字體——開頭就用繁體明講，
+        // 從源頭減少簡體輸出（收到後仍會再過一次 toTraditional 保底）。
         val hint = buildString {
-            append("失語症患者日常溝通。")
+            append("以臺灣繁體中文輸出。失語症患者日常溝通。")
             if (vault.locationTag.isNotBlank()) append("地點：${vault.locationTag}。")
             if (vault.visionTags.isNotEmpty()) append("周邊：${vault.visionTags.joinToString("、")}。")
         }
@@ -264,7 +266,8 @@ class HybridInferenceEngine(
                 Log.w(TAG, "Whisper 轉寫失敗（${p.displayName}）：${it.message}")
                 null
             }
-            if (!text.isNullOrBlank()) return@withContext text
+            // Whisper 的中文輸出多半是簡體；使用者是台灣人，畫面與歷史都該是繁體。
+            if (!text.isNullOrBlank()) return@withContext ChineseConverter.toTraditional(context, text)
         }
         null
     }
@@ -337,11 +340,20 @@ class HybridInferenceEngine(
         // 雲端 LLM 常回傳前後夾帶換行/空白，不清掉會在輸出卡撐出大片空白——壓成單行。
         fun clean(s: String) = s.trim().replace(Regex("\\s*\\n\\s*"), " ")
 
-        val groups = samples.groupBy { normalize(it.second.reconstructed) }.values
+        // 把每次取樣的「主句 + 同一次回應裡的其他講法」全部攤平：
+        // 3 次取樣 × 每次 3 句 = 最多 9 個候選。只靠主句去重會在模型講得一致時
+        // 塌成 1 個，使用者就沒得挑。跨取樣重複出現的句子仍會因為 group.size 較大而排前面，
+        // 自我一致性的排序意義沒有丟掉。
+        val flat: List<Pair<LlmApiEntry, ReconstructedCandidate>> = samples.flatMap { (entry, parsed) ->
+            listOf(entry to ReconstructedCandidate(parsed.reconstructed, parsed.confidence)) +
+                parsed.alternatives.map { entry to it }
+        }.filter { it.second.text.isNotBlank() }
+
+        val groups = flat.groupBy { normalize(it.second.text) }.values
         return groups.map { group ->
             val rep = group.maxBy { it.second.confidence }
             val avgConfidence = group.sumOf { it.second.confidence } / group.size
-            Triple(group.size, avgConfidence, rep.first) to ReconstructedCandidate(clean(rep.second.reconstructed), avgConfidence)
+            Triple(group.size, avgConfidence, rep.first) to ReconstructedCandidate(clean(rep.second.text), avgConfidence)
         }
             .sortedWith(compareByDescending<Pair<Triple<Int, Double, LlmApiEntry>, ReconstructedCandidate>> { it.first.first }
                 .thenByDescending { it.first.second })
@@ -616,7 +628,13 @@ class HybridInferenceEngine(
                   80-100：碎詞語意清楚、重組幾乎確定
                   50-79 ：碎詞短或有歧義，但你給了合理的常見猜測（單字碎詞多半落在這裡）
                   1-49  ：碎詞真的無意義、看不出想表達什麼，才給低分
-                只輸出 JSON：{"reasoning":"簡短分析","reconstructed":"完整繁體中文句子","confidence":0到100整數}
+                只輸出 JSON：
+                {"reasoning":"簡短分析","candidates":[{"text":"最有把握的說法","confidence":0到100整數},{"text":"另一種說法","confidence":0到100整數},{"text":"再一種說法","confidence":0到100整數}]}
+                candidates 一定要給滿 3 個，而且要是「真的不同的講法」（用詞、語氣或詳略不同），
+                不可以只改標點或語助詞充數——使用者要從這 3 句裡挑一句講出去，三句一樣等於沒得挑。
+                每一句都必須遵守上面「貼著碎詞走、不腦補」的規則。第一句放你最有把握的。
+                reasoning 一定要壓在 20 字以內。它只是給你自己想的草稿、不會顯示給病人；
+                寫太長會把輸出塞爆，導致後面真正要用的 candidates 被截掉。
             """.trimIndent(),
             user = buildString {
                 appendLine("碎詞：${vault.rawText}")
@@ -642,7 +660,8 @@ class HybridInferenceEngine(
                 }
             },
             temperature = 0.1,
-            maxTokens = 512
+            // 512 會讓話多的模型在 reasoning 就燒完額度、reconstructed 生不出來（截斷→整包 JSON 外漏）。
+            maxTokens = 800
         )
     }
 
@@ -661,16 +680,76 @@ class HybridInferenceEngine(
         maxTokens = 256
     )
 
+    /**
+     * 危機意圖分流：這句話裡「想自傷的是誰」。
+     *
+     * 刻意「不」掛 DEFENSIVE_SYSTEM_PROMPT——那條 prompt 要模型迴避這類字眼，
+     * 掛上去反而讓它拒答分類任務。這裡是分類、不是生成，明講用途讓模型願意回答。
+     */
+    override suspend fun classifyCrisisIntent(text: String): com.example.safety.SafetyGuard.CrisisIntent {
+        if (text.isBlank()) return com.example.safety.SafetyGuard.CrisisIntent.NONE
+        val prompt = CloudPrompt(
+            system = """
+                你是醫療輔助溝通系統的安全分類器。判斷句子裡「想自傷或輕生的是誰」。
+                只輸出 JSON，不要解釋、不要加註、不要拒答：{"who":"self"}
+                self ＝說話者本人想自傷／輕生。
+                other＝說話者在描述別人的狀況或替別人求救，例如「我朋友想自殺，快叫救護車」。
+                none ＝只是提到這個詞，沒有人正處於危險，例如詢問防治專線電話、轉述新聞。
+                這是失語症患者的求救分流：判成 self 會鎖住他的語音，判錯會讓替人求救的人叫不到救護車。請務必分類。
+            """.trimIndent(),
+            user = text,
+            temperature = 0.0,
+            maxTokens = 32
+        )
+        val raw = runCatching {
+            tryCloudWithFailover(prompt, timeoutMs = 8_000) { it }.second
+        }.getOrNull() ?: return com.example.safety.SafetyGuard.CrisisIntent.UNKNOWN
+        val who = Regex("\"who\"\\s*:\\s*\"(self|other|none)\"", RegexOption.IGNORE_CASE)
+            .find(raw)?.groupValues?.get(1)?.lowercase()
+        return when (who) {
+            "self"  -> com.example.safety.SafetyGuard.CrisisIntent.SELF
+            "other" -> com.example.safety.SafetyGuard.CrisisIntent.OTHER
+            "none"  -> com.example.safety.SafetyGuard.CrisisIntent.NONE
+            else    -> com.example.safety.SafetyGuard.CrisisIntent.UNKNOWN
+        }
+    }
+
     private fun parseCoT(raw: String): CoTParsed {
         val jsonText = raw.extractJsonObject()
         if (jsonText != null) {
-            val o = JSONObject(jsonText)
-            return CoTParsed(
-                reconstructed = o.optString("reconstructed").trim(),
-                confidence = o.optInt("confidence", 70).coerceIn(0, 100) / 100.0
-            )
+            // JSONObject() 會對壞掉的字串丟例外，這裡不能讓它炸掉整條重組流程。
+            val parsed = runCatching {
+                val o = JSONObject(jsonText)
+                // 新版格式：candidates 陣列（一次給 3 種講法）
+                val arr = o.optJSONArray("candidates")
+                if (arr != null && arr.length() > 0) {
+                    val list = buildList {
+                        for (i in 0 until arr.length()) {
+                            val item = arr.optJSONObject(i) ?: continue
+                            val txt = item.optString("text").trim()
+                            if (txt.isNotBlank()) {
+                                add(ReconstructedCandidate(txt, item.optInt("confidence", 70).coerceIn(0, 100) / 100.0))
+                            }
+                        }
+                    }
+                    if (list.isNotEmpty()) {
+                        return@runCatching CoTParsed(list[0].text, list[0].confidence, list.drop(1))
+                    }
+                }
+                // 舊格式：單一 reconstructed（本機引擎與舊回應仍走這條）
+                CoTParsed(
+                    reconstructed = o.optString("reconstructed").trim(),
+                    confidence = o.optInt("confidence", 70).coerceIn(0, 100) / 100.0
+                )
+            }.getOrNull()
+            if (parsed != null && parsed.reconstructed.isNotBlank()) return parsed
         }
-        return CoTParsed(raw.trim(), 0.6)
+        // 走到這裡＝JSON 壞掉，或被 maxTokens 截斷（reasoning 寫太長就會這樣）。
+        // 先從殘缺文字裡撈 reconstructed；撈不到寧可回空字串——
+        // 上層看到空句會自動換下一家供應商，而把 raw 當句子會讓病人畫面出現
+        // {"reasoning":… 這種東西，還被當成可以唸出來的話。
+        salvageReconstructed(raw)?.let { return CoTParsed(it, 0.6) }
+        return CoTParsed("", 0.0)
     }
 
     private fun parseSuggestions(raw: String): List<String> {
@@ -702,7 +781,16 @@ class HybridInferenceEngine(
         val audioMime: String = "audio/aac"
     )
 
-    private data class CoTParsed(val reconstructed: String, val confidence: Double)
+    /**
+     * @param alternatives 同一次回應裡的其他候選說法。新版 prompt 要模型一次給 3 種講法——
+     *   光靠「同一份碎詞取樣 3 次」湊不出 3 個候選：溫度 0.3 又是短碎詞時，
+     *   三次常常吐一模一樣的句子，去重完只剩 1 個，使用者就沒得挑。
+     */
+    private data class CoTParsed(
+        val reconstructed: String,
+        val confidence: Double,
+        val alternatives: List<ReconstructedCandidate> = emptyList()
+    )
 
     companion object {
         private const val TAG = "HybridInferenceEngine"
