@@ -133,6 +133,31 @@ class HybridInferenceEngine(
         provider != CloudProvider.LocalOnly &&
             (nativeAudioCandidates().isNotEmpty() || transcribeCandidates().isNotEmpty())
 
+    override fun supportsCloudTranscription(): Boolean =
+        provider != CloudProvider.LocalOnly && transcribeCandidates().isNotEmpty()
+
+    /**
+     * 純轉寫（復健跟讀用）：只要「他到底唸出了什麼」，不做任何重組或推測。
+     *
+     * 跟 [reconstructFromAudio] 的差別是這裡刻意不讓模型幫忙猜——跟讀評分要
+     * 比對的是實際發音，模型若把含糊的發音「修好」成目標句，分數就失真了。
+     */
+    override suspend fun transcribe(
+        audioFile: java.io.File,
+        languageTag: String,
+        promptHint: String
+    ): Result<String> {
+        val candidates = transcribeCandidates()
+        if (provider == CloudProvider.LocalOnly || candidates.isEmpty()) {
+            return Result.failure(IllegalStateException(
+                com.example.ui.I18n.tr("沒有可用的雲端語音轉寫供應商")))
+        }
+        val text = transcribeWithWhisper(audioFile, candidates, GlobalTagsVault(), languageTag, promptHint)
+        return if (text.isNullOrBlank()) {
+            Result.failure(IllegalStateException(com.example.ui.I18n.tr("雲端語音轉寫沒有回傳結果")))
+        } else Result.success(text)
+    }
+
     override suspend fun reconstructFromAudio(
         audioFile: java.io.File,
         vault: GlobalTagsVault
@@ -233,15 +258,22 @@ class HybridInferenceEngine(
     private suspend fun transcribeWithWhisper(
         audioFile: java.io.File,
         candidates: List<LlmApiEntry>,
-        vault: GlobalTagsVault
+        vault: GlobalTagsVault,
+        languageTag: String = "zh",
+        extraHint: String = ""
     ): String? = withContext(Dispatchers.IO) {
         val bytes = runCatching { audioFile.readBytes() }.getOrNull() ?: return@withContext null
-        // prompt 的字體會影響 Whisper 的輸出字體——開頭就用繁體明講，
+        val isZh = languageTag.startsWith("zh")
+        // prompt 的字體會影響 Whisper 的輸出字體——中文時開頭就用繁體明講，
         // 從源頭減少簡體輸出（收到後仍會再過一次 toTraditional 保底）。
+        // 非中文語言不要餵中文提示詞，否則 Whisper 會被帶偏、把英文聽成中文。
         val hint = buildString {
-            append("以臺灣繁體中文輸出。失語症患者日常溝通。")
-            if (vault.locationTag.isNotBlank()) append("地點：${vault.locationTag}。")
-            if (vault.visionTags.isNotEmpty()) append("周邊：${vault.visionTags.joinToString("、")}。")
+            if (isZh) {
+                append("以臺灣繁體中文輸出。失語症患者日常溝通。")
+                if (vault.locationTag.isNotBlank()) append("地點：${vault.locationTag}。")
+                if (vault.visionTags.isNotEmpty()) append("周邊：${vault.visionTags.joinToString("、")}。")
+            }
+            if (extraHint.isNotBlank()) append(extraHint)
         }
         for (entry in candidates) {
             val p = entry.provider
@@ -252,8 +284,8 @@ class HybridInferenceEngine(
                     model = p.transcribeModel,
                     audioBytes = bytes,
                     audioFormat = audioFile.extension.ifBlank { "aac" },
-                    languageHint = "zh",
-                    promptHint = hint
+                    languageHint = languageTag,
+                    promptHint = hint.ifBlank { null }
                 )
             }.getOrNull() ?: continue
             val text = runCatching {
@@ -267,7 +299,10 @@ class HybridInferenceEngine(
                 null
             }
             // Whisper 的中文輸出多半是簡體；使用者是台灣人，畫面與歷史都該是繁體。
-            if (!text.isNullOrBlank()) return@withContext ChineseConverter.toTraditional(context, text)
+            // 非中文語言不能過這一關——轉換表只處理漢字，但沒必要多跑一趟。
+            if (!text.isNullOrBlank()) {
+                return@withContext if (isZh) ChineseConverter.toTraditional(context, text) else text
+            }
         }
         null
     }
@@ -564,7 +599,7 @@ class HybridInferenceEngine(
                 • 流暢性（30%）：有無重複、結巴？語氣是否連貫自然？信心度低的字可能發音不清。
                 • 語氣語調（20%）：語氣是否符合句型（問句/請求/感謝）？
 
-                只回傳 JSON：{"score":整數, "feedback":"一句繁體中文鼓勵或指引（20字以內）", "wrongChars":["說得不準或漏掉的字"]}
+                只回傳 JSON：{"score":整數, "feedback":"一句${com.example.ui.I18n.outputLanguageName()}鼓勵或指引（20字以內）", "wrongChars":["說得不準或漏掉的字或詞"]}
             """.trimIndent(),
             temperature = 0.15,   // 評分求穩定：低溫讓同樣表現得到一致分數
             maxTokens = 150
@@ -665,10 +700,19 @@ class HybridInferenceEngine(
         )
     }
 
+    /**
+     * 練習句要用哪種語言。
+     *
+     * 只有雲端 Whisper（多語）可用時才敢出非中文——裝置端 Vosk 只認中文，
+     * 出了英文句子使用者唸完會固定拿 0 分，比不提供更糟。
+     */
+    private fun practiceLanguageName(): String =
+        if (supportsCloudTranscription()) com.example.ui.I18n.outputLanguageName() else "繁體中文"
+
     private fun buildSuggestPrompt(avgScore: Double, location: String, recent: List<String>) = CloudPrompt(
         system = """
-            你是失語症語言復健助理。依患者近期平均分、場景與已練過句子，產生 3 句適合跟讀的繁體中文練習句。
-            難度規則：分數<60 產生 1-4 字短詞；60-79 產生 5-8 字短句；>=80 產生 9-15 字完整情境句。
+            你是失語症語言復健助理。依患者近期平均分、場景與已練過句子，產生 3 句適合跟讀的${practiceLanguageName()}練習句。
+            難度規則：分數<60 產生 1-4 字短詞；60-79 產生 5-8 字短句；>=80 產生 9-15 字完整情境句（非中文語言請換算成相當的長度）。
             只輸出 JSON：{"sentences":["...","...","..."],"level":"easy|medium|hard"}
         """.trimIndent(),
         user = """

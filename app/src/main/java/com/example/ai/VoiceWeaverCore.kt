@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -190,6 +191,26 @@ interface InferenceEngine {
 
     /** 這個引擎現在是否真的能做音訊理解（要有音訊能力的供應商且已設好金鑰）。 */
     fun supportsAudioUnderstanding(): Boolean = false
+
+    /** 現在能不能做雲端語音轉寫（要有 Whisper 端點的供應商＋金鑰）。 */
+    fun supportsCloudTranscription(): Boolean = false
+
+    /**
+     * 【純轉寫】把錄音轉成文字，不做任何重組或推測。
+     *
+     * 復健跟讀評分需要這條路：裝置端 Vosk 用的是簡體中文模型，只認中文，
+     * 英／日／韓介面的使用者沒辦法練自己的語言。雲端 Whisper 是多語的。
+     *
+     * 預設不支援（回 failure）；只有具備轉寫端點的引擎會覆寫。
+     *
+     * @param languageTag ISO 語言碼（zh／en／ja／ko），指定可明顯提升準確度
+     * @param promptHint  偏置詞彙（跟讀時餵目標句，同音字誤判會少很多）
+     */
+    suspend fun transcribe(
+        audioFile: java.io.File,
+        languageTag: String,
+        promptHint: String = ""
+    ): Result<String> = Result.failure(UnsupportedOperationException("此引擎不支援雲端轉寫"))
 
     /**
      * 依患者狀況產生 3 句適合「跟讀練習」的繁體中文句子。
@@ -1636,18 +1657,102 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         if (t.isNotBlank()) ttsModule.speak(t)
     }
 
-    /** 開始跟讀錄音（走 Vosk，REHAB 模式）*/
+    // ── 跟讀錄音：雲端 Whisper 優先，離線／沒金鑰時退回 Vosk ──────────────
+    //
+    // Vosk 用的是 vosk-model-small-cn，只認中文，所以英／日／韓介面的使用者
+    // 沒辦法練自己的語言（唸英文、辨識吐中文，分數永遠是 0）。雲端 Whisper 是
+    // 多語的，而且對構音不標準的語音也比 small 模型準。
+    //
+    // 代價是要連網，所以中文題目在雲端不可用時仍然退回 Vosk——中文使用者
+    // 不該因為這個改動變成沒網路就不能練。非中文題目沒有這條退路，只能明講。
+
+    /** 走雲端那條路時的錄音檔；null＝這次是走 Vosk。 */
+    private var rehabAudioPath: String? = null
+
+    /** 雲端跟讀自己推的狀態；null＝交給 Vosk 的狀態。 */
+    private val _rehabCloudStt = MutableStateFlow<SttState?>(null)
+
+    /**
+     * 復健畫面專用的錄音狀態：走 Vosk 時直接反映 [SpeechToTextManager]，
+     * 走雲端時由這條路自己推（雲端不經過 sttManager，狀態不會自己動）。
+     */
+    val rehabSttState: StateFlow<SttState> =
+        combine(sttManager.sttState, _rehabCloudStt) { vosk, cloud -> cloud ?: vosk }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SttState.Idle)
+
+    /** 這台裝置現在的跟讀評分能不能認非中文（＝題庫要不要換成介面語言）。 */
+    fun rehabCanUseCloudStt(): Boolean =
+        ::activeEngine.isInitialized && activeEngine.supportsCloudTranscription()
+
+    /** 介面語言 → Whisper 的 ISO 語言碼。 */
+    private fun rehabLanguageTag(): String = when (com.example.ui.I18n.lang) {
+        AppLanguage.En -> "en"
+        AppLanguage.Ja -> "ja"
+        AppLanguage.Ko -> "ko"
+        else -> "zh"
+    }
+
+    /** 開始跟讀錄音。 */
     fun startRehabRecording() {
         val target = _rehabState.value.target
         if (target.isBlank()) return
         rehabTarget = target
         sttMode = SttMode.REHAB
-        _rehabState.value = _rehabState.value.copy(isRecording = true)
-        viewModelScope.launch(Dispatchers.Main) { sttManager.startListening() }
+        viewModelScope.launch(Dispatchers.Main) {
+            if (rehabCanUseCloudStt()) {
+                val path = audioRecorder.startRecording()
+                if (path != null) {
+                    rehabAudioPath = path
+                    _rehabCloudStt.value = SttState.Listening
+                    _rehabState.value = _rehabState.value.copy(isRecording = true)
+                    return@launch
+                }
+                Log.w("VoiceWeaverViewModel", "雲端跟讀錄音啟動失敗，改用 Vosk")
+            }
+            rehabAudioPath = null
+            _rehabCloudStt.value = null
+            _rehabState.value = _rehabState.value.copy(isRecording = true)
+            sttManager.startListening()
+        }
     }
 
     fun stopRehabRecording() {
-        viewModelScope.launch(Dispatchers.Main) { sttManager.stopListening() }
+        viewModelScope.launch(Dispatchers.Main) {
+            if (rehabAudioPath == null) { sttManager.stopListening(); return@launch }
+            rehabAudioPath = null
+            _rehabCloudStt.value = SttState.Processing
+            val path = audioRecorder.stopRecording()
+            if (path == null) {
+                rehabCloudFailed(com.example.ui.I18n.tr("錄音失敗，請再試一次"))
+                return@launch
+            }
+            val file = java.io.File(path)
+            // 目標句當偏置詞彙餵給 Whisper：同音誤判會少很多。餵的是「目標」不是
+            // 「答案」——Whisper 的 prompt 只影響詞彙傾向，不會讓它憑空補出沒唸的字。
+            val result = activeEngine.transcribe(file, rehabLanguageTag(), rehabTarget)
+            runCatching { file.delete() }   // 語音是敏感資料，評完立刻刪
+            result.onSuccess { heard ->
+                _rehabCloudStt.value = null
+                scoreRehabAttempt(heard)
+            }.onFailure { e ->
+                Log.w("VoiceWeaverViewModel", "雲端跟讀轉寫失敗：${e.message}")
+                rehabCloudFailed(com.example.ui.I18n.tr("連不上雲端語音辨識，請檢查網路後再試一次"))
+            }
+        }
+    }
+
+    /**
+     * 雲端跟讀失敗的收尾。刻意不退回 Vosk 重錄一次：使用者已經唸過了，
+     * 再叫他唸一次也一樣，而且非中文題目就算重錄 Vosk 也只會給 0 分——
+     * 講清楚是網路問題，比給一個假的低分誠實。
+     */
+    private fun rehabCloudFailed(message: String) {
+        _rehabCloudStt.value = SttState.Error(message)
+        _rehabState.value = _rehabState.value.copy(isRecording = false)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(4000)
+            if (_rehabCloudStt.value is SttState.Error) _rehabCloudStt.value = null
+        }
     }
 
     /** Vosk 跟讀結果 → AI 評分（語意/流暢/語氣，任何引擎皆 AI 優先、Levenshtein 備援）→ 寫入復健日誌 */
@@ -2863,6 +2968,9 @@ fun String.toRehabTokens(): List<String> =
  *
  * 設計理由：純單字 TTS 會誤讀破音字（倒 dào/dǎo、樂 lè/yuè...），
  * 2 字一組讓 TTS 有上下文判讀，且字卡顯示 = 播放內容（視覺/聽覺一致）。
+ *
+ * 拉丁字母的詞整個一張卡，不可以每 2 字硬切——「water」切成 wa/te/r
+ * 既唸不出來也沒有練習意義。空白本來就是切分點，切完自然是一詞一卡。
  */
 fun String.toRehabChips(): List<String> = buildList {
     val phrases = this@toRehabChips
@@ -2870,6 +2978,8 @@ fun String.toRehabChips(): List<String> = buildList {
         .filter { it.isNotBlank() }
     for (phrase in phrases) {
         val chars = phrase.filter { it.isLetterOrDigit() }
+        if (chars.isEmpty()) continue
+        if (chars.any { it in 'A'..'Z' || it in 'a'..'z' }) { add(chars); continue }
         var i = 0
         while (i < chars.length) {
             val end = (i + 2).coerceAtMost(chars.length)

@@ -3,22 +3,25 @@ package com.example.data
 import com.example.ui.I18n
 
 /**
- * 復健題庫的「語意註解」——給看不懂中文的照護者用。
+ * 復健題庫的多語版本。同一份譯文在兩種模式下用途不同，取決於「辨識器認不認得非中文」。
  *
- * ## 為什麼是註解，不是翻譯
+ * ## 兩種模式
  * [AphasiaPractice] 裡的字是**要唸出來、而且會被語音辨識評分**的練習目標：
- * 點題目 → 設成 rehabTarget → 病人唸 → Vosk 辨識 → scoreRehab(target, recognized) 比對。
- * 而語音辨識只有 `vosk-model-small-cn-0.22`（中文單一模型，沒有英文）。
- * 若把「水」換成「Water」，病人會看著英文唸、中文辨識器聽不懂，分數永遠是 0。
- * 題庫本身也是「漢語標準失語症檢查表（CRRCAE）」的臨床題，沒有對應的英文題庫。
+ * 點題目 → 設成 rehabTarget → 病人唸 → 辨識 → scoreRehab(target, recognized) 比對。
  *
- * 所以中文題目一律保留，只在非中文介面時**額外**顯示一行語意註解，
- * 讓照護者知道現在在練什麼。查不到就不顯示註解（不影響練習）。
+ * - **雲端 Whisper 可用**（多語）→ [target]：整題換成介面語言，畫面上的字＝拿去比對的字。
+ *   英文介面的使用者練英文句子，唸的跟比對的是同一串，分數才有意義。
+ * - **只有裝置端 Vosk**（`vosk-model-small-cn-0.22`，中文單一模型）→ [gloss]：
+ *   題目一律保留中文，只在下面補一行語意註解給看不懂中文的照護者。
+ *   這時若把「水」換成「Water」，病人看著英文唸、中文辨識器聽不懂，分數永遠是 0。
+ *
+ * 題庫本身是「漢語標準失語症檢查表（CRRCAE）」的臨床題，譯文只是同義對照，
+ * 不是另一套經過標準化的英文題庫——臨床解讀時要知道這件事。
  */
 object AphasiaPracticeI18n {
 
-    /** 目前介面語言下的語意註解；中文介面或查無資料時回 null（呼叫端就不顯示）。 */
-    fun gloss(zh: String): String? {
+    /** 目前介面語言的譯文；中文介面或查無資料時回 null。 */
+    private fun translate(zh: String): String? {
         if (I18n.lang == AppLanguage.ZhTW) return null
         val row = M[zh] ?: return null
         val i = when (I18n.lang) {
@@ -29,6 +32,18 @@ object AphasiaPracticeI18n {
         }
         return row.getOrNull(i)?.takeIf { it.isNotBlank() }
     }
+
+    /** 目前介面語言下的語意註解；中文介面或查無資料時回 null（呼叫端就不顯示）。 */
+    fun gloss(zh: String): String? = translate(zh)
+
+    /**
+     * 拿去練習與比對的題目本身。
+     *
+     * @param multilingualStt 辨識器認不認得非中文（＝雲端 Whisper 可不可用）。
+     *        false 時一律回中文原文——這是唯一辨識得出來的語言，換掉只會得 0 分。
+     */
+    fun target(zh: String, multilingualStt: Boolean): String =
+        if (multilingualStt) translate(zh) ?: zh else zh
 
     // 鍵 = 練習題原文（繁中）；值 = [en, ja, ko]
     private val M: Map<String, Array<String>> = mapOf(

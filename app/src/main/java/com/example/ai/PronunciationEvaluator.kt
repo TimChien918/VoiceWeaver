@@ -32,10 +32,20 @@ object PronunciationEvaluator {
         }
 
     /**
-     * 找出目標句中「沒被辨識到」的字（給字卡高亮提示哪幾個字說得不準）。
-     * 純比對：目標字不在辨識結果裡 → 視為說得不準。離線備援用。
+     * 找出目標句中「沒被辨識到」的部分（給字卡高亮提示哪裡說得不準）。
+     * 純比對：目標的字／詞不在辨識結果裡 → 視為說得不準。離線備援用。
+     *
+     * 中文按「字」比、拉丁語言按「詞」比：英文若照中文那樣逐字母比，
+     * 回傳的會是一堆單獨的字母，跟畫面上的字卡（一詞一卡）對不起來。
      */
     fun wrongChars(target: String, recognized: String): List<String> {
+        if (target.any { it in 'A'..'Z' || it in 'a'..'z' }) {
+            val heard = recognized.lowercase()
+                .split(Regex("[^\\p{L}\\p{N}']+")).filter { it.isNotBlank() }.toSet()
+            return target.split(Regex("[^\\p{L}\\p{N}']+"))
+                .filter { it.isNotBlank() && it.lowercase() !in heard }
+                .distinct()
+        }
         val r = normalize(recognized)
         return normalize(target).toCharArray()
             .filter { it.toString() !in r.map { c -> c.toString() } }

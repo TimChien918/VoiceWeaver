@@ -53,7 +53,9 @@ fun RehabScreen(
     onTraining: () -> Unit = {}
 ) {
     val rehab by viewModel.rehabState.collectAsState()
-    val sttState by viewModel.sttState.collectAsState()
+    // 復健跟讀有兩條路（雲端 Whisper／裝置端 Vosk），rehabSttState 已經把兩邊合流；
+    // 用 viewModel.sttState 的話走雲端時按鈕會一直停在「開始」。
+    val sttState by viewModel.rehabSttState.collectAsState()
     val recentTargets by viewModel.rehabTargetCandidates.collectAsState()
     val rehabLogs by viewModel.rehabLogs.collectAsState()
     val rehabStats by viewModel.rehabStats.collectAsState()
@@ -182,6 +184,7 @@ fun RehabScreen(
                         recent = recentTargets,
                         aiSuggestions = aiSuggestions,
                         isGenerating = isGenerating,
+                        multilingualStt = viewModel.rehabCanUseCloudStt(),
                         onPick = { viewModel.startRehab(it) },
                         onPickParagraph = { viewModel.startRehabParagraph(it) },
                         onRequestAi = { viewModel.requestAiSuggestions() },
@@ -247,6 +250,8 @@ private fun TargetPicker(
     recent: List<String>,
     aiSuggestions: List<String>,
     isGenerating: Boolean,
+    /** 辨識器認不認得非中文（雲端 Whisper 可用時為 true）；決定題庫要不要換語言 */
+    multilingualStt: Boolean,
     onPick: (String) -> Unit,
     onPickParagraph: (String) -> Unit,
     onRequestAi: () -> Unit,
@@ -328,10 +333,13 @@ private fun TargetPicker(
             // 臨床常用題庫（漢語標準失語症檢查表通用題）：一鍵開始，離線也能用
             Spacer(Modifier.height(16.dp))
             Text(I18n.tr("臨床常用題庫（點一下開始練）"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = neonCyan)
-            ClinicalBankRow(I18n.tr("字詞（名詞）"), com.example.data.AphasiaPractice.nouns.take(12), onPick, neonCyan, textLight)
-            ClinicalBankRow(I18n.tr("字詞（動作）"), com.example.data.AphasiaPractice.verbs.take(10), onPick, neonCyan, textLight)
-            ClinicalBankRow(I18n.tr("短句"), com.example.data.AphasiaPractice.mediumSentences.take(8), onPick, neonCyan, textLight)
-            ClinicalBankRow(I18n.tr("情境句"), com.example.data.AphasiaPractice.hardSentences.take(4), onPick, neonCyan, textLight)
+            // 有雲端 Whisper（多語）就整題換成介面語言；只有裝置端 Vosk（中文單一模型）
+            // 時題目必須維持中文，改成在下面補一行語意註解。
+            val multiStt = multilingualStt
+            ClinicalBankRow(I18n.tr("字詞（名詞）"), com.example.data.AphasiaPractice.nouns.take(12), multiStt, onPick, neonCyan, textLight)
+            ClinicalBankRow(I18n.tr("字詞（動作）"), com.example.data.AphasiaPractice.verbs.take(10), multiStt, onPick, neonCyan, textLight)
+            ClinicalBankRow(I18n.tr("短句"), com.example.data.AphasiaPractice.mediumSentences.take(8), multiStt, onPick, neonCyan, textLight)
+            ClinicalBankRow(I18n.tr("情境句"), com.example.data.AphasiaPractice.hardSentences.take(4), multiStt, onPick, neonCyan, textLight)
 
             // AI 智慧推薦（依使用者程度）
             Spacer(Modifier.height(16.dp))
@@ -431,6 +439,8 @@ private fun TargetPicker(
 private fun ClinicalBankRow(
     label: String,
     items: List<String>,
+    /** 辨識器認不認得非中文；true＝整題換成介面語言，false＝中文題目＋語意註解 */
+    multilingualStt: Boolean,
     onPick: (String) -> Unit,
     accent: Color,
     textLight: Color
@@ -443,7 +453,10 @@ private fun ClinicalBankRow(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        items.forEach { item ->
+        items.forEach { zh ->
+            // 畫面上的字＝點下去會被拿去比對的字，兩者必須是同一串，
+            // 否則使用者唸螢幕上的英文、系統拿中文去比，分數永遠是 0。
+            val item = com.example.data.AphasiaPracticeI18n.target(zh, multilingualStt)
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -454,7 +467,7 @@ private fun ClinicalBankRow(
                 // 題目本身一律維持中文——它是要唸出來、而且由中文語音辨識評分的目標，
                 // 換成譯文會讓分數永遠是 0（見 AphasiaPracticeI18n 的說明）。
                 // 非中文介面時在下面補一行語意註解，讓照護者看得懂在練什麼。
-                val gloss = com.example.data.AphasiaPracticeI18n.gloss(item)
+                val gloss = if (multilingualStt) null else com.example.data.AphasiaPracticeI18n.gloss(zh)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(item, fontSize = 12.sp, color = textLight)
                     if (gloss != null) {
@@ -649,7 +662,11 @@ private fun PracticeCard(
                 },
                 enabled = sttState !is SttState.Processing && sttState !is SttState.Preparing,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (sttState is SttState.Listening) dangerRose else neonGreen,
+                    containerColor = when {
+                        sttState is SttState.Listening -> dangerRose
+                        sttState is SttState.Error -> auraAmber
+                        else -> neonGreen
+                    },
                     disabledContainerColor = textMuted.copy(alpha = 0.20f),
                     disabledContentColor = textMuted
                 ),
@@ -666,6 +683,7 @@ private fun PracticeCard(
                         sttState is SttState.Listening -> stringResource(R.string.rehab_stop)
                         sttState is SttState.Processing -> stringResource(R.string.rehab_scoring)
                         sttState is SttState.Preparing -> (sttState as SttState.Preparing).message
+                        sttState is SttState.Error -> (sttState as SttState.Error).message
                         else -> stringResource(R.string.rehab_start)
                     },
                     fontSize = 13.sp, fontWeight = FontWeight.Bold

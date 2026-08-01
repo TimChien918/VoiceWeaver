@@ -458,6 +458,19 @@ object I18n {
             "GPT-SoVITS API address", "GPT-SoVITS API アドレス", "GPT-SoVITS API 주소"),
         "http://電腦IP:9880" to arrayOf(
             "http://<computer IP>:9880", "http://<PC の IP>:9880", "http://<컴퓨터 IP>:9880"),
+        // 復健跟讀走雲端 Whisper 的錯誤訊息
+        "連不上雲端語音辨識，請檢查網路後再試一次" to arrayOf(
+            "Can't reach cloud speech recognition — check your connection and try again",
+            "クラウド音声認識に接続できません。通信を確認して再試行してください",
+            "클라우드 음성 인식에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도하세요"),
+        "沒有可用的雲端語音轉寫供應商" to arrayOf(
+            "No cloud speech-to-text provider available",
+            "利用できるクラウド音声認識プロバイダーがありません",
+            "사용 가능한 클라우드 음성 인식 제공자가 없습니다"),
+        "雲端語音轉寫沒有回傳結果" to arrayOf(
+            "Cloud speech-to-text returned nothing",
+            "クラウド音声認識が結果を返しませんでした",
+            "클라우드 음성 인식이 결과를 반환하지 않았습니다"),
         // SmartApiRouter.statusLabel（供應商實測狀態列）
         "尚未使用過" to arrayOf("Not used yet", "未使用", "아직 사용 안 함"),
         "成功率 %d%%" to arrayOf("%d%% success", "成功率 %d%%", "성공률 %d%%"),
