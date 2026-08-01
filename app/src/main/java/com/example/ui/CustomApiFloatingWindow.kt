@@ -175,7 +175,7 @@ fun ApiKeysPanel(
             }
         }
         Text(
-            I18n.tr("加幾家不同的聲音，系統會自動挑最穩最快的那家；「換一個聲音」就是在這些聲音之間換人講。點喇叭可以先試聽。"),
+            I18n.tr("加幾家不同的聲音，系統會自動挑最穩最快的那家；某一家掛掉會自動換下一家。點喇叭可以先試聽。"),
             fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
         )
         val ttsSelId = settings.ttsApiSelectedId
@@ -281,7 +281,7 @@ private fun ProviderDropdown(
             contentPadding = PaddingValues(horizontal = 12.dp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
-            Text(current.displayName, color = p.textLight, fontSize = 15.sp, maxLines = 1,
+            Text(I18n.tr(current.displayName), color = p.textLight, fontSize = 15.sp, maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
@@ -291,7 +291,7 @@ private fun ProviderDropdown(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            "${prov.displayName}${if (!prov.needsKey) I18n.tr("（免金鑰）") else ""}",
+                            "${I18n.tr(prov.displayName)}${if (!prov.needsKey) I18n.tr("（免金鑰）") else ""}",
                             fontSize = 15.sp, maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             color = p.textLight
@@ -373,7 +373,7 @@ private fun LlmProviderDropdown(
             contentPadding = PaddingValues(horizontal = 12.dp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
-            Text(current.displayName, color = p.textLight, fontSize = 15.sp, maxLines = 1,
+            Text(I18n.tr(current.displayName), color = p.textLight, fontSize = 15.sp, maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
@@ -383,7 +383,7 @@ private fun LlmProviderDropdown(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            prov.displayName,
+                            I18n.tr(prov.displayName),
                             fontSize = 15.sp, maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             color = p.textLight
@@ -449,11 +449,11 @@ private fun TtsApiRow(
             PlainField(I18n.tr("電腦位址"), entry.endpoint, onEndpoint, p, hint = entry.provider.defaultEndpoint)
         }
         if (entry.provider.extraLabel.isNotBlank()) {
-            PlainField(entry.provider.extraLabel, entry.extra, onExtra, p, hint = entry.provider.extraHint)
+            PlainField(I18n.tr(entry.provider.extraLabel), entry.extra, onExtra, p, hint = I18n.tr(entry.provider.extraHint))
         }
         if (entry.provider.voiceHint.isNotBlank()) {
             PlainField(I18n.tr("聲音"), entry.voice, onVoice, p, hint = entry.provider.defaultVoice)
-            Text(entry.provider.voiceHint, fontSize = 12.sp, color = p.textMuted,
+            Text(I18n.tr(entry.provider.voiceHint), fontSize = 12.sp, color = p.textMuted,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp))
         }
         Text(
@@ -543,7 +543,7 @@ private fun TtsProviderDropdown(
             contentPadding = PaddingValues(horizontal = 12.dp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
-            Text(current.displayName, color = p.textLight, fontSize = 15.sp, maxLines = 1,
+            Text(I18n.tr(current.displayName), color = p.textLight, fontSize = 15.sp, maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
@@ -552,7 +552,7 @@ private fun TtsProviderDropdown(
             TtsProvider.entries.forEach { prov ->
                 DropdownMenuItem(
                     text = {
-                        Text(prov.displayName, fontSize = 15.sp, maxLines = 1,
+                        Text(I18n.tr(prov.displayName), fontSize = 15.sp, maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             color = p.textLight)
                     },

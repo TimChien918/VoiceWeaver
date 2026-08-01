@@ -451,7 +451,16 @@ private fun ClinicalBankRow(
                     .clickable { onPick(item) }
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text(item, fontSize = 12.sp, color = textLight)
+                // 題目本身一律維持中文——它是要唸出來、而且由中文語音辨識評分的目標，
+                // 換成譯文會讓分數永遠是 0（見 AphasiaPracticeI18n 的說明）。
+                // 非中文介面時在下面補一行語意註解，讓照護者看得懂在練什麼。
+                val gloss = com.example.data.AphasiaPracticeI18n.gloss(item)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(item, fontSize = 12.sp, color = textLight)
+                    if (gloss != null) {
+                        Text(gloss, fontSize = 9.sp, color = textLight.copy(alpha = 0.55f))
+                    }
+                }
             }
         }
     }
@@ -495,6 +504,11 @@ private fun PracticeCard(
                 fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 color = Color.White, lineHeight = 28.sp
             )
+            // 目標句維持中文（要唸的就是它）；非中文介面補一行語意註解給照護者看。
+            com.example.data.AphasiaPracticeI18n.gloss(rehab.target)?.let { gloss ->
+                Spacer(Modifier.height(4.dp))
+                Text(gloss, fontSize = 12.sp, color = textMuted, lineHeight = 16.sp)
+            }
 
             // 整句播放
             Spacer(Modifier.height(14.dp))

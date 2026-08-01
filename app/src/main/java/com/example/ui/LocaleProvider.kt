@@ -47,6 +47,22 @@ fun LocaleProvider(language: AppLanguage, content: @Composable () -> Unit) {
 }
 
 /**
+ * 在 Dialog／Popup 內重掛一次語言。
+ *
+ * Compose 的 [androidx.compose.ui.window.Dialog] 會用自己的 window 建 view，
+ * 該 view 的 AndroidComposeView 在 `ProvideAndroidCompositionLocals` 裡把
+ * `LocalContext` / `LocalConfiguration` 換成「view 自己的 context」——外層 [LocaleProvider]
+ * 提供的 localized context 就這樣被蓋掉了。結果是同一個面板裡
+ * `I18n.tr()`（純物件、不看 context）是英文，`stringResource()` 卻退回裝置語言的中文。
+ *
+ * 所以凡是 Dialog 內容都要包這一層。
+ */
+@Composable
+fun ReapplyAppLocale(content: @Composable () -> Unit) {
+    LocaleProvider(language = I18n.lang, content = content)
+}
+
+/**
  * baseContext 仍為原 Activity（保留 Activity 鏈，permission API 可用），
  * 只把 resources/assets 切換到 localized 版本。
  */

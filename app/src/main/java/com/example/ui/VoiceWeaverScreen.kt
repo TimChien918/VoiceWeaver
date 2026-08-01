@@ -465,7 +465,7 @@ fun VoiceWeaverScreen(
                                         Text(emoji, fontSize = 14.sp)
                                         Spacer(Modifier.width(4.dp))
                                         Text(
-                                            text = tag,
+                                            text = I18n.tr(tag),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isSelected) textLight else textMuted
@@ -940,7 +940,7 @@ fun VoiceWeaverScreen(
                                         val current = vault.rawText
                                         viewModel.onRawTextChanged(if (current.isEmpty()) phrase else "$current $phrase")
                                     },
-                                    label = { Text(text = phrase, fontSize = 11.sp) },
+                                    label = { Text(text = I18n.tr(phrase), fontSize = 11.sp) },
                                     colors = AssistChipDefaults.assistChipColors(
                                         containerColor = subtleContainer,
                                         labelColor = textLight
@@ -1526,7 +1526,7 @@ private fun LocationPresetDropdown(
             modifier = Modifier.fillMaxWidth()
         ) {
             OutlinedTextField(
-                value = "${group.icon} ${group.title}",
+                value = "${group.icon} ${I18n.tr(group.title)}",
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
@@ -1548,7 +1548,7 @@ private fun LocationPresetDropdown(
             ) {
                 locationPresetGroups.forEachIndexed { index, item ->
                     DropdownMenuItem(
-                        text = { Text(item.title, fontSize = 14.sp, fontWeight = FontWeight.Bold) },
+                        text = { Text(I18n.tr(item.title), fontSize = 14.sp, fontWeight = FontWeight.Bold) },
                         leadingIcon = { Text(item.icon, fontSize = 18.sp) },
                         trailingIcon = {
                             if (index == groupIndex) Icon(Icons.Default.Check, null, tint = auraAmber, modifier = Modifier.size(18.dp))
@@ -1569,8 +1569,8 @@ private fun LocationPresetDropdown(
         ) {
             OutlinedTextField(
                 value = selectedPreset?.takeIf { group.presets.any { p -> p.label == it.label } }
-                    ?.let { "${it.emoji} ${it.label}" }
-                    ?: I18n.tr("選擇%s情境").format(group.title),
+                    ?.let { "${it.emoji} ${I18n.tr(it.label)}" }
+                    ?: I18n.tr("選擇%s情境").format(I18n.tr(group.title)),
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
@@ -1594,7 +1594,7 @@ private fun LocationPresetDropdown(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                preset.label,
+                                I18n.tr(preset.label),
                                 fontSize = 14.sp,
                                 fontWeight = if (preset.label == activeCategory) FontWeight.Bold else FontWeight.Normal
                             )
@@ -1820,7 +1820,7 @@ private fun VisionCatalogDialog(
                     com.example.ai.AacContextSuggester.VISION_CATALOG.forEach { (category, items) ->
                         item(key = "h_$category") {
                             Text(
-                                category,
+                                I18n.tr(category),
                                 fontSize = 12.sp, fontWeight = FontWeight.Bold,
                                 color = p.neonGreen,
                                 modifier = Modifier
@@ -1854,7 +1854,7 @@ private fun VisionCatalogDialog(
                                             Text(v.emoji, fontSize = 14.sp)
                                             Spacer(Modifier.width(4.dp))
                                             Text(
-                                                v.label,
+                                                I18n.tr(v.label),
                                                 fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                                 color = if (isSel) p.textLight else p.textMuted
                                             )

@@ -55,6 +55,9 @@ fun FloatingPanel(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         val iosP = LocalAppPalette.current.iosReadable
+        // Dialog 會用自己的 view context 蓋掉 LocalContext，stringResource() 會退回裝置語言，
+        // 造成面板裡 I18n.tr() 是英文、strings.xml 的字卻是中文。這裡重掛一次語言。
+        ReapplyAppLocale {
         CompositionLocalProvider(LocalAppPalette provides iosP) {
             val p = iosP
             Column(
@@ -93,6 +96,7 @@ fun FloatingPanel(
                     content()
                 }
             }
+        }
         }
     }
 }

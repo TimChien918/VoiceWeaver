@@ -230,15 +230,15 @@ object SmartApiRouter {
     /** 給 UI 顯示：這家目前的實測狀態（人話）。 */
     @Synchronized
     fun statusLabel(id: String): String {
-        val s = stats[id] ?: return "尚未使用過"
-        if (s.success + s.failure == 0) return "尚未使用過"
+        val s = stats[id] ?: return com.example.ui.I18n.tr("尚未使用過")
+        if (s.success + s.failure == 0) return com.example.ui.I18n.tr("尚未使用過")
         val rate = (s.successRate * 100).toInt()
         val ms = s.avgLatencyMs.toInt()
         val cooling = s.cooldownUntil() > System.currentTimeMillis()
         return buildString {
-            append("成功率 $rate%")
-            if (ms > 0) append("・約 ${ms}ms")
-            if (cooling) append("・暫時跳過（剛失敗）")
+            append(com.example.ui.I18n.tr("成功率 %d%%").format(rate))
+            if (ms > 0) append(com.example.ui.I18n.tr("・約 %dms").format(ms))
+            if (cooling) append(com.example.ui.I18n.tr("・暫時跳過（剛失敗）"))
         }
     }
 }

@@ -384,11 +384,17 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
 
         // ── 家屬通報對話 ──
         if (state.alertTriggered) {
+            // AlertDialog 的 slot 在 Dialog 子組合裡跑，那裡的 LocalContext 被換掉、
+            // 語言會退回裝置語言；先在外面取好字串再傳進去。
+            val alertTitle = stringResource(R.string.aac_alert_title)
+            val alertBody = stringResource(R.string.aac_alert_body)
+            val alertSendSms = stringResource(R.string.aac_alert_send_sms)
+            val alertCancel = stringResource(R.string.aac_alert_cancel)
             AlertDialog(
                 onDismissRequest = { viewModel.aacDismissAlert() },
                 icon = { Icon(Icons.Default.Warning, null, tint = p.dangerRose) },
-                title = { Text(stringResource(R.string.aac_alert_title), color = p.textLight) },
-                text = { Text(stringResource(R.string.aac_alert_body), color = p.textMuted) },
+                title = { Text(alertTitle, color = p.textLight) },
+                text = { Text(alertBody, color = p.textMuted) },
                 confirmButton = {
                     TextButton(onClick = {
                         // SMS Intent（無收件人，由使用者在簡訊 App 中選聯絡人）
@@ -397,11 +403,11 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                                 .putExtra("sms_body", I18n.tr("我目前需要協助，請聯絡我（VoiceWeaver 緊急通報）。")))
                         }
                         viewModel.aacDismissAlert()
-                    }) { Text(stringResource(R.string.aac_alert_send_sms), color = p.dangerRose) }
+                    }) { Text(alertSendSms, color = p.dangerRose) }
                 },
                 dismissButton = {
                     TextButton(onClick = { viewModel.aacDismissAlert() }) {
-                        Text(stringResource(R.string.aac_alert_cancel), color = p.textMuted)
+                        Text(alertCancel, color = p.textMuted)
                     }
                 },
                 containerColor = p.surface
@@ -1259,16 +1265,22 @@ private fun CustomAmountDialog(
     var currency by remember { mutableStateOf(defaultCurrency) }
     var menuOpen by remember { mutableStateOf(false) }
 
+    // 同上：先取好字串再進 AlertDialog，否則 Dialog 內的 stringResource() 會退回裝置語言。
+    val amountTitle = stringResource(R.string.aac_custom_amount_title)
+    val amountLabel = stringResource(R.string.aac_amount_label)
+    val currencyLabel = stringResource(R.string.aac_currency_label)
+    val amountAdd = stringResource(R.string.aac_amount_add)
+    val cancelLabel = stringResource(R.string.aac_alert_cancel)
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.Edit, null, tint = p.auraAmber) },
-        title = { Text(stringResource(R.string.aac_custom_amount_title), color = p.textLight) },
+        title = { Text(amountTitle, color = p.textLight) },
         text = {
             Column {
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { v -> amount = v.filter { it.isDigit() || it == '.' }.take(8) },
-                    label = { Text(stringResource(R.string.aac_amount_label), fontSize = 11.sp) },
+                    label = { Text(amountLabel, fontSize = 11.sp) },
                     leadingIcon = { Text(currency.symbol, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = p.auraAmber) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1281,7 +1293,7 @@ private fun CustomAmountDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.aac_currency_label), fontSize = 11.sp, color = p.textMuted)
+                Text(currencyLabel, fontSize = 11.sp, color = p.textMuted)
                 Spacer(Modifier.height(4.dp))
                 ExposedDropdownMenuBox(
                     expanded = menuOpen,
@@ -1318,10 +1330,10 @@ private fun CustomAmountDialog(
             TextButton(
                 onClick = { if (amount.isNotBlank()) onConfirm(amount, currency) },
                 enabled = amount.isNotBlank()
-            ) { Text(stringResource(R.string.aac_amount_add), color = p.auraAmber, fontWeight = FontWeight.Bold) }
+            ) { Text(amountAdd, color = p.auraAmber, fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.aac_alert_cancel), color = p.textMuted) }
+            TextButton(onClick = onDismiss) { Text(cancelLabel, color = p.textMuted) }
         },
         containerColor = p.surface
     )

@@ -376,6 +376,19 @@ private fun themeBlurbRes(t: AppTheme) = when (t) {
     AppTheme.Anime   -> R.string.theme_blurb_anime
     AppTheme.Minimal -> R.string.theme_blurb_minimal
 }
+/**
+ * 已存電腦的名稱是「按下＋存目前位址」當下產生並寫進 DataStore 的字串，
+ * 所以在中文介面存的機器，之後切到英文介面還是會顯示「電腦 1」。
+ * 這裡在顯示端把自動產生的名稱（「電腦 N」／「USB 電腦」）翻回當前語言；
+ * 使用者自己改過的名稱不符合這兩個型樣，會原樣保留。
+ */
+private fun localizedServerName(name: String): String {
+    Regex("^電腦 (\\d+)$").find(name)?.let {
+        return I18n.tr("電腦 %d").format(it.groupValues[1].toInt())
+    }
+    return I18n.tr(name)
+}
+
 private fun powerLabelRes(m: PowerMode) = when (m) {
     PowerMode.Saver       -> R.string.power_saver
     PowerMode.Balanced    -> R.string.power_balanced
@@ -875,8 +888,8 @@ private fun GptSovitDeveloperPanel(
                     if (!st.isFocused && urlText != apiBaseUrl) onApiBaseUrlChange(urlText)  // 失焦立即存
                 },
             singleLine = true,
-            label = { Text("GPT-SoVITS API 位址") },
-            placeholder = { Text("http://電腦IP:9880") },
+            label = { Text(I18n.tr("GPT-SoVITS API 位址")) },
+            placeholder = { Text(I18n.tr("http://電腦IP:9880")) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = p.textLight,
                 unfocusedTextColor = p.textLight,
@@ -1206,8 +1219,10 @@ private fun TermuxSovitsPanel(
             Text(I18n.tr("用 Mac 跑 SoVITS（無線 / 有線）"), fontSize = 12.sp, color = p.textLight, fontWeight = FontWeight.Bold)
         }
         Text(
-            "GPT-SoVITS 要 Python + PyTorch，Android 內跑不了 .pth 權重。\n" +
-            "做法：Mac 開 server，手機用 Wi-Fi 或 USB 連過去。",
+            I18n.tr(
+                "GPT-SoVITS 要 Python + PyTorch，Android 內跑不了 .pth 權重。\n" +
+                "做法：Mac 開 server，手機用 Wi-Fi 或 USB 連過去。"
+            ),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
         )
 
@@ -1278,13 +1293,15 @@ private fun TermuxSovitsPanel(
             ) {
                 servers.forEach { srv ->
                     val active = apiBaseUrl.trim().trimEnd('/') == srv.url
+                    // 名稱是存檔當下就寫死的字串（可能是別的語言存的），顯示時再翻一次
+                    val srvName = localizedServerName(srv.name)
                     FilterChip(
                         selected = active,
                         onClick = { onApiBaseUrlChange(srv.url); pingResult = null; switchStatus = null },
-                        label = { Text("${srv.name}（${srv.url.removePrefix("http://")}）", fontSize = 10.sp) },
+                        label = { Text("$srvName（${srv.url.removePrefix("http://")}）", fontSize = 10.sp) },
                         trailingIcon = {
                             Icon(
-                                Icons.Default.Close, I18n.tr("刪除 %s").format(srv.name),
+                                Icons.Default.Close, I18n.tr("刪除 %s").format(srvName),
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clickable {
@@ -1493,14 +1510,18 @@ private fun TermuxSovitsPanel(
 
         // 依模式不同的教學
         val instructions = if (currentMode == com.example.ai.LocalSovitsHelper.ConnectionMode.Wired) {
-            "① USB 線把手機接上 Mac，授權 USB 偵錯\n" +
-            "② Mac 雙擊「VoiceWeaver語音中心.app」(會自動 adb reverse 並啟動伺服器)\n" +
-            "③ 按「測試連線」綠燈 → 用「🎤 合成測試」確認授權角色音色"
+            I18n.tr(
+                "① USB 線把手機接上 Mac，授權 USB 偵錯\n" +
+                "② Mac 雙擊「VoiceWeaver語音中心.app」(會自動 adb reverse 並啟動伺服器)\n" +
+                "③ 按「測試連線」綠燈 → 用「🎤 合成測試」確認授權角色音色"
+            )
         } else {
-            "① 手機與 Mac 連同一個 Wi-Fi\n" +
-            "② Mac 雙擊「VoiceWeaver語音中心.app」啟動伺服器\n" +
-            "③ 看控制中心(自動開啟)顯示的區網 IP，上方 API URL 改成 http://<那個IP>:9880\n" +
-            "④ 按「測試連線」綠燈（外網可裝 Tailscale，改填 100.x IP）"
+            I18n.tr(
+                "① 手機與 Mac 連同一個 Wi-Fi\n" +
+                "② Mac 雙擊「VoiceWeaver語音中心.app」啟動伺服器\n" +
+                "③ 看控制中心(自動開啟)顯示的區網 IP，上方 API URL 改成 http://<那個IP>:9880\n" +
+                "④ 按「測試連線」綠燈（外網可裝 Tailscale，改填 100.x IP）"
+            )
         }
         Text(instructions, fontSize = 10.sp, color = p.textMuted, lineHeight = 15.sp)
     }
