@@ -468,10 +468,15 @@ private fun ClinicalBankRow(
                 // 換成譯文會讓分數永遠是 0（見 AphasiaPracticeI18n 的說明）。
                 // 非中文介面時在下面補一行語意註解，讓照護者看得懂在練什麼。
                 val gloss = if (multilingualStt) null else com.example.data.AphasiaPracticeI18n.gloss(zh)
+                // lineHeight 一定要跟著這裡的 fontSize 明確給。只寫 fontSize 的話會沿用
+                // 主題 bodyLarge 的絕對行高（24sp × 字體倍率），倍率放大時一個 12sp 的字
+                // 會被塞進 37sp 的行框裡，卡片被拉成內容的三倍高、兩行之間一片空白。
+                // （主題那張表不能改成 em，會讓所有帶 label 的輸入框 crash，見 Type.kt。）
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(item, fontSize = 12.sp, color = textLight)
+                    Text(item, fontSize = 12.sp, lineHeight = 15.sp, color = textLight)
                     if (gloss != null) {
-                        Text(gloss, fontSize = 9.sp, color = textLight.copy(alpha = 0.55f))
+                        Text(gloss, fontSize = 9.sp, lineHeight = 12.sp,
+                            color = textLight.copy(alpha = 0.55f))
                     }
                 }
             }
