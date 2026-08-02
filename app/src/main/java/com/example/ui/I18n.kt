@@ -476,6 +476,10 @@ object I18n {
         // 裝置端評分提示詞的 few-shot 範例評語（要跟著介面語言，模型會照抄範例的語言）
         "意思很清楚，很好！" to arrayOf(
             "Very clear meaning — nice work!", "意味がはっきり伝わっています、いいですね！", "의미가 아주 분명해요, 잘했어요!"),
+        "沒有聽到聲音，請靠近麥克風再試一次" to arrayOf(
+            "Didn't hear anything — move closer to the mic and try again",
+            "音声を検出できませんでした。マイクに近づいてもう一度お試しください",
+            "소리가 들리지 않았어요. 마이크에 가까이서 다시 시도해 주세요"),
         // 復健跟讀走雲端 Whisper 的錯誤訊息
         "連不上雲端語音辨識，請檢查網路後再試一次" to arrayOf(
             "Can't reach cloud speech recognition — check your connection and try again",

@@ -5,6 +5,7 @@ import com.example.data.AppLanguage
 import com.example.ui.I18n
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -97,5 +98,62 @@ class MultilingualRehabTest {
     fun `中文仍然逐字回報`() {
         val wrong = PronunciationEvaluator.wrongChars("我想喝水", "我要喝")
         assertEquals(listOf("想", "水"), wrong)
+    }
+
+    // ── 沒出聲的防護 ────────────────────────────────────────────────────────
+    // 失語症患者「想說但發不出聲音」是常態不是例外。這種時候回一段他沒講過的話
+    // 再配一個分數，對患者是打擊、對治療師是髒資料。
+
+    @Test
+    fun `太安靜或太短的錄音會被擋下來`() {
+        assertTrue(SpeechNoiseGuard.isTooQuiet(0))
+        assertTrue(SpeechNoiseGuard.isTooQuiet(SpeechNoiseGuard.MIN_PEAK_AMPLITUDE - 1))
+        assertTrue(SpeechNoiseGuard.isTooShort(200))
+    }
+
+    @Test
+    fun `正常音量與長度不會被擋`() {
+        assertFalse(SpeechNoiseGuard.isTooQuiet(SpeechNoiseGuard.MIN_PEAK_AMPLITUDE))
+        assertFalse(SpeechNoiseGuard.isTooQuiet(8000))
+        assertFalse(SpeechNoiseGuard.isTooShort(1500))
+    }
+
+    @Test
+    fun `構音微弱的氣音仍然放行`() {
+        // 門檻刻意訂低：把真的講話當成沒講話，比偶爾放一段噪音進去嚴重得多。
+        assertFalse(SpeechNoiseGuard.isTooQuiet(700))
+    }
+
+    @Test
+    fun `空的辨識結果視為沒出聲`() {
+        assertTrue(SpeechNoiseGuard.looksLikeSilenceHallucination("", "我想喝水"))
+        assertTrue(SpeechNoiseGuard.looksLikeSilenceHallucination("   ", "我想喝水"))
+    }
+
+    @Test
+    fun `Whisper 對靜音常吐的固定句被判為幻覺`() {
+        listOf(
+            "Thank you." to "The boy is washing his hair",
+            "Thanks for watching!" to "It hurts",
+            "謝謝觀看" to "我想喝水",
+            "字幕由 Amara.org 社群提供" to "我想回家",
+            "ご視聴ありがとうございました" to "水が飲みたい"
+        ).forEach { (heard, target) ->
+            assertTrue("$heard 應判為幻覺", SpeechNoiseGuard.looksLikeSilenceHallucination(heard, target))
+        }
+    }
+
+    @Test
+    fun `目標句本身就是那句話時不可以擋`() {
+        // 「謝謝」是真的會出現在題庫裡的練習句，不能因為它也在幻覺清單裡就吃掉。
+        assertFalse(SpeechNoiseGuard.looksLikeSilenceHallucination("謝謝", "謝謝"))
+        assertFalse(SpeechNoiseGuard.looksLikeSilenceHallucination("Thank you.", "Thank you"))
+    }
+
+    @Test
+    fun `正常的跟讀結果不會被誤判`() {
+        assertFalse(SpeechNoiseGuard.looksLikeSilenceHallucination(
+            "the boy is washing his hair", "The boy is washing his hair"))
+        assertFalse(SpeechNoiseGuard.looksLikeSilenceHallucination("我要喝", "我想喝水"))
     }
 }

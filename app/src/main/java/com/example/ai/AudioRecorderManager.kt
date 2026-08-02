@@ -7,7 +7,13 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -42,6 +48,24 @@ class AudioRecorderManager(private val context: Context) {
     private var mediaRecorder: MediaRecorder? = null
     private var currentOutputFile: File? = null
     private var isRecording = false
+    private var startedAtMs = 0L
+    private var peakPollJob: Job? = null
+    private val pollScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * 上一次錄音的峰值音量（0..32767）與長度（ms）。用途見 [SpeechNoiseGuard]——
+     * 沒出聲的錄音不該送去辨識，Whisper 會對靜音幻覺出一整段話。
+     *
+     * 峰值一定要**邊錄邊輪詢**取最大值，不能只在停止前讀一次：
+     * getMaxAmplitude() 回的是「距離上次呼叫以來」的最大值，而且 Android 文件
+     * 明寫「setAudioSource() 之後的第一次呼叫一律回 0」。只在停止前讀一次的話，
+     * 那次就是第一次呼叫 → 永遠拿到 0 → 每一次跟讀都會被誤判成沒出聲。
+     * （這不是推測，是實機拍到的：放 TTS 給麥克風收，peak 還是 0。）
+     */
+    var lastPeakAmplitude: Int = 0
+        private set
+    var lastDurationMs: Long = 0L
+        private set
 
     /**
      * 動態啟動錄音
@@ -93,6 +117,17 @@ class AudioRecorderManager(private val context: Context) {
 
             mediaRecorder = recorder
             isRecording = true
+            startedAtMs = System.currentTimeMillis()
+            lastPeakAmplitude = 0
+            lastDurationMs = 0L
+            runCatching { recorder.maxAmplitude }   // 第一次固定回 0，先丟掉（見上方註解）
+            peakPollJob = pollScope.launch {
+                while (isActive) {
+                    delay(PEAK_POLL_INTERVAL_MS)
+                    val amp = runCatching { mediaRecorder?.maxAmplitude ?: 0 }.getOrDefault(0)
+                    if (amp > lastPeakAmplitude) lastPeakAmplitude = amp
+                }
+            }
             Log.i("AudioRecorderManager", "Recording started successfully. Output: ${tempFile.absolutePath}")
             tempFile.absolutePath
 
@@ -115,6 +150,9 @@ class AudioRecorderManager(private val context: Context) {
             return@withContext null
         }
 
+        peakPollJob?.cancel()
+        peakPollJob = null
+        lastDurationMs = System.currentTimeMillis() - startedAtMs
         return@withContext try {
             mediaRecorder?.apply {
                 stop()
@@ -129,6 +167,11 @@ class AudioRecorderManager(private val context: Context) {
             mediaRecorder = null
             isRecording = false
         }
+    }
+
+    private companion object {
+        /** 100ms 夠密——一次跟讀至少幾百毫秒，不會整段錯過音量高點。 */
+        const val PEAK_POLL_INTERVAL_MS = 100L
     }
 
     private fun hasAudioPermission(): Boolean {

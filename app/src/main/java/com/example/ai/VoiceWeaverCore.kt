@@ -1728,6 +1728,18 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 return@launch
             }
             val file = java.io.File(path)
+            // 沒出聲就別上傳：Whisper 對靜音會幻覺出一整段沒人講過的話
+            // （實測錄環境噪音拿到「we are going to the bathroom to rest...」）。
+            // 在這裡擋掉還省一次 API 呼叫。
+            if (SpeechNoiseGuard.isTooShort(audioRecorder.lastDurationMs) ||
+                SpeechNoiseGuard.isTooQuiet(audioRecorder.lastPeakAmplitude)) {
+                Log.i("VoiceWeaverViewModel",
+                    "跟讀沒收到聲音（peak=${audioRecorder.lastPeakAmplitude}, " +
+                        "${audioRecorder.lastDurationMs}ms），不送雲端")
+                runCatching { file.delete() }
+                rehabNoSpeech()
+                return@launch
+            }
             // 目標句當偏置詞彙餵給 Whisper：同音誤判會少很多。餵的是「目標」不是
             // 「答案」——Whisper 的 prompt 只影響詞彙傾向，不會讓它憑空補出沒唸的字。
             val result = activeEngine.transcribe(file, rehabLanguageTag(), rehabTarget)
@@ -1747,6 +1759,17 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 再叫他唸一次也一樣，而且非中文題目就算重錄 Vosk 也只會給 0 分——
      * 講清楚是網路問題，比給一個假的低分誠實。
      */
+    /**
+     * 這次嘗試沒有偵測到說話。
+     *
+     * 刻意不打分、也不寫進復健日誌：講不出話正是失語症最常見的狀態，
+     * 每次都記一個 0 分只會讓患者看到一排紅字、讓治療師看到被灌水的曲線。
+     * 這不是「表現不好」，是「這次沒有資料」。
+     */
+    private fun rehabNoSpeech() {
+        rehabCloudFailed(com.example.ui.I18n.tr("沒有聽到聲音，請靠近麥克風再試一次"))
+    }
+
     private fun rehabCloudFailed(message: String) {
         _rehabCloudStt.value = SttState.Error(message)
         _rehabState.value = _rehabState.value.copy(isRecording = false)
@@ -1760,6 +1783,13 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private fun scoreRehabAttempt(recognized: String, words: List<WordConf> = emptyList()) {
         viewModelScope.launch {
             val target = rehabTarget
+            // 空字串（Vosk 沒聽到）或 Whisper 對靜音吐出來的固定幻覺句 → 當成沒有資料，
+            // 不打分也不寫日誌。理由見 [rehabNoSpeech]。
+            if (SpeechNoiseGuard.looksLikeSilenceHallucination(recognized, target)) {
+                Log.i("VoiceWeaverViewModel", "跟讀結果判定為未出聲／幻覺：\"$recognized\"")
+                rehabNoSpeech()
+                return@launch
+            }
             val eval = activeEngine.scoreRehab(target, recognized, words)
             _rehabState.value = _rehabState.value.copy(
                 lastRecognized = recognized,
