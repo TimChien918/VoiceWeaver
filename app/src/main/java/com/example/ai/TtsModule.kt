@@ -135,26 +135,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * GPT-SoVITS「一次生成 N 個版本，講錯了再換」：聲音克隆每次抽樣的抑揚頓挫都不一樣，
-     * 好壞全憑運氣，所以跟語句重組一樣——一次平行送 N 個合成請求，播第一個做好的，
-     * 「換一個」在已完成的版本間切換；還沒做好就顯示合成中，做好自動接著播。
-     * null＝該版位還在合成中或失敗；只有系統 TTS 沒有這種隨機性，維持單次 speak()。
-     */
-    private val _synthesisTakes = MutableStateFlow<List<File?>>(emptyList())
-    val synthesisTakes: StateFlow<List<File?>> = _synthesisTakes.asStateFlow()
-    private val _currentTakeIndex = MutableStateFlow(0)
-    val currentTakeIndex: StateFlow<Int> = _currentTakeIndex.asStateFlow()
-
-    /**
-     * 每個版位是「哪一個聲音」（例如 ElevenLabs／Azure 曉臻／家人的聲音）。
-     * 走雲端多供應商時三個版本是三種不同的聲音，使用者按「換一個聲音」才知道自己換到什麼。
-     */
-    private val _takeLabels = MutableStateFlow<List<String>>(emptyList())
-    val takeLabels: StateFlow<List<String>> = _takeLabels.asStateFlow()
-    // 3 個平行請求可能在不同 thread 幾乎同時完成，用 synchronizedSet 避免併發寫入漏更新。
-    private val failedTakeSlots = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
-    private var takesText: String = ""
     private var gptSovitEnabled: Boolean = false
     private var gptSovitVoiceMode: GptSovitVoiceMode = GptSovitVoiceMode.Auto
     private var gptSovitChineseVoiceUri: String = ""
@@ -171,8 +151,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     private var ttsEntries: List<TtsApiEntry> = emptyList()
     /** 使用者釘選的供應商 id（""＝完全交給 SmartApiRouter 自動排）。 */
     private var ttsPinnedId: String = ""
-    /** 「換一個聲音」用完一輪後，從排序清單的下一段再取一批，而不是重播被拒絕過的。 */
-    private var takePlanCursor: Int = 0
 
     val availablePiperVoices = listOf(
         PiperVoiceProfile("zh_TW-coqui-medium", "台灣本地女聲 (Coqui)", "zh_TW_coqui_medium.onnx", 78.4, "自然溫柔，發音清晰，適合日常溝通"),
@@ -365,7 +343,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     fun configureCloudTts(entries: List<TtsApiEntry>, pinnedId: String) {
         ttsEntries = entries
         ttsPinnedId = pinnedId
-        takePlanCursor = 0
     }
 
     /**
@@ -427,9 +404,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    /** 有沒有可用的雲端語音供應商（UI 用來決定要不要顯示「換一個聲音」）。 */
-    fun hasCloudVoices(): Boolean = cloudTtsPlan("測試").isNotEmpty()
-
     private fun langTagFor(text: String): String =
         if (text.any { it.code in 0x4E00..0x9FFF }) "zh-TW" else "en-US"
 
@@ -447,16 +421,13 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
-     * 依排序清單合成並播放，失敗自動換下一家。
+     * 依排序清單合成並播放，失敗自動換下一家；全部失敗才退回系統 TTS。
      *
      * @param plan 這次要照著試的供應商順序
-     * @param takeSlot 非 null＝存進該版位（多版本模式），null＝直接播
-     * @return 全部失敗時 false，呼叫端負責退回系統 TTS
      */
     private fun synthesizeViaPlan(
         plan: List<TtsApiEntry>,
         text: String,
-        takeSlot: Int?,
         onComplete: () -> Unit
     ) {
         if (plan.isEmpty()) { speakWithSystemTts(text, onComplete); return }
@@ -470,134 +441,24 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                 SmartApiRouter.recordSuccess(entry.id, System.currentTimeMillis() - start)
 
                 val ext = TtsAdapter.of(entry)?.fileExt ?: "mp3"
-                val out = File(context.cacheDir, "tts_take_${takeSlot ?: "last"}.$ext")
+                val out = File(context.cacheDir, "tts_cloud_last.$ext")
                 runCatching { out.writeBytes(audio) }
                     .onFailure { addLog("[語音] 寫檔失敗：${it.message}"); return@launch }
 
                 addLog("[語音] ${entry.label} 合成完成（${audio.size / 1024} KB）")
-                if (takeSlot == null) {
-                    _synthesisStatus.value = "✅ ${entry.label}，播放中"
-                    playSynthesizedAudio(out, onComplete)
-                } else {
-                    _takeLabels.update { labels ->
-                        if (takeSlot < labels.size) labels.toMutableList().apply { this[takeSlot] = entry.label }
-                        else labels
-                    }
-                    _synthesisTakes.update { current ->
-                        if (takeSlot < current.size) current.toMutableList().apply { this[takeSlot] = out } else current
-                    }
-                    if (takeSlot == _currentTakeIndex.value) {
-                        _synthesisStatus.value = "✅ ${entry.label}，播放中"
-                        playSynthesizedAudio(out, onComplete)
-                    } else onComplete()
-                }
+                _synthesisStatus.value = "✅ ${entry.label}，播放中"
+                playSynthesizedAudio(out, onComplete)
                 return@launch
             }
             // 全部雲端供應商都失敗 → 退回手機內建語音，至少要發得出聲音
             addLog("[語音] 雲端供應商全部失敗，改用手機內建語音")
-            if (takeSlot == null || takeSlot == _currentTakeIndex.value) {
-                _synthesisStatus.value = "⚠️ 雲端語音都連不上，改用手機內建語音"
-                speakWithSystemTts(text, onComplete)
-            } else {
-                markTakeFailed(takeSlot, text, onComplete)
-            }
+            _synthesisStatus.value = "⚠️ 雲端語音都連不上，改用手機內建語音"
+            speakWithSystemTts(text, onComplete)
         }
     }
 
     fun speak(text: String, onComplete: () -> Unit = {}) {
         speakInternal(text = text, forcedGptSovitMode = null, expressiveTest = false, onComplete = onComplete)
-    }
-
-    /**
-     * 一次合成 takeCount 個版本，「講出來不對就換一個」。有兩種版本的來源：
-     *
-     *  1. **多家雲端語音**（現在的主力）：每個版位配一家不同的供應商／聲音，
-     *     所以「換一個聲音」是真的換一個人講，不是同一個聲音再抽一次。
-     *  2. **GPT-SoVITS 聲音克隆**：同一個聲音平行抽樣多次——克隆的抑揚頓挫每次都不同，
-     *     好壞憑運氣，所以多抽幾次讓使用者挑。
-     *
-     * 兩者都沒有時退回單次 speak()（手機內建語音是決定性的，生多版本沒有意義）。
-     */
-    fun speakWithTakes(text: String, takeCount: Int = 3) {
-        val plan = cloudTtsPlan(text)
-        if (plan.size >= 2) {
-            takesText = text
-            failedTakeSlots.clear()
-            takePlanCursor = 0
-            val n = minOf(takeCount, plan.size)
-            _synthesisTakes.value = List(n) { null }
-            _takeLabels.value = List(n) { "" }
-            _currentTakeIndex.value = 0
-            // 版位 i 先試排序第 i 家；那家掛了就往後接手（所以每個版位都帶整條備援鏈）
-            for (i in 0 until n) {
-                synthesizeViaPlan(rotate(plan, i), text, takeSlot = i, onComplete = {})
-            }
-            return
-        }
-        // 只有一家雲端（或完全沒有）→ 沒有第二個聲音可換，就單純唸一次
-        if (!gptSovitEnabled) { speak(text); return }
-        takesText = text
-        failedTakeSlots.clear()
-        _synthesisTakes.value = List(takeCount) { null }
-        _takeLabels.value = List(takeCount) { "" }
-        _currentTakeIndex.value = 0
-        for (i in 0 until takeCount) {
-            speakInternal(text = text, forcedGptSovitMode = null, expressiveTest = false, takeSlot = i, onComplete = {})
-        }
-    }
-
-    /** 把清單旋轉 offset 格：讓每個版位有不同的首選，但備援鏈仍是完整的。 */
-    private fun <T> rotate(list: List<T>, offset: Int): List<T> {
-        if (list.isEmpty()) return list
-        val k = Math.floorMod(offset, list.size)
-        return list.drop(k) + list.take(k)
-    }
-
-    /**
-     * 「換一個」：切到下一個版位。已完成就立即播放；還在合成中就顯示等待中，做好會自動接著播。
-     * 三個都不滿意（已經在看最後一版）→ 不是繞回去重播被拒絕過的第一版，而是重新平行合成
-     * 全新一批版本（同一句文字）。
-     */
-    fun cycleNextTake() {
-        val takes = _synthesisTakes.value
-        if (takes.size <= 1) return
-        var next = _currentTakeIndex.value + 1
-        // 已知失敗的版位直接跳過，避免使用者卡在一個永遠不會完成的版本上。
-        while (next < takes.size && next in failedTakeSlots) next++
-        if (next >= takes.size) {
-            if (takesText.isBlank()) return
-            val plan = cloudTtsPlan(takesText)
-            if (plan.size > takes.size) {
-                // 雲端多供應商：重跑同樣幾家會得到一模一樣的音檔（雲端 TTS 是決定性的），
-                // 所以往後推一批**還沒聽過**的聲音，才叫「再換一批」。
-                takePlanCursor += takes.size
-                val n = minOf(takes.size, plan.size)
-                failedTakeSlots.clear()
-                _synthesisTakes.value = List(n) { null }
-                _takeLabels.value = List(n) { "" }
-                _currentTakeIndex.value = 0
-                _synthesisStatus.value = "🔁 換一批新的聲音…"
-                for (i in 0 until n) {
-                    synthesizeViaPlan(rotate(plan, takePlanCursor + i), takesText, takeSlot = i, onComplete = {})
-                }
-            } else {
-                addLog("[語音] ${takes.size} 個版本都不滿意，重新合成全新一批")
-                _synthesisStatus.value = "🔁 重新合成 ${takes.size} 個新版本…"
-                speakWithTakes(takesText, takes.size)
-            }
-            return
-        }
-        _currentTakeIndex.value = next
-        val file = takes[next]
-        if (file != null) {
-            val who = _takeLabels.value.getOrNull(next).orEmpty()
-            _synthesisStatus.value =
-                if (who.isNotBlank()) "✅ 換成「$who」（${next + 1}/${takes.size}）"
-                else "✅ 換播版本 ${next + 1}/${takes.size}"
-            playSynthesizedAudio(file) {}
-        } else {
-            _synthesisStatus.value = "⏳ 版本 ${next + 1}/${takes.size} 還在合成中，好了會自動播放…"
-        }
     }
 
     fun speakGptSovitTest(text: String, mode: GptSovitVoiceMode, onComplete: () -> Unit = {}) {
@@ -631,7 +492,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         text: String,
         forcedGptSovitMode: GptSovitVoiceMode?,
         expressiveTest: Boolean,
-        takeSlot: Int? = null,
         onComplete: () -> Unit = {}
     ) {
         // 手機內建 TTS 沒就緒不代表發不出聲音——雲端語音和 GPT-SoVITS 都不靠它
@@ -644,10 +504,10 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
         // 雲端語音優先於手機內建（自然度差很多），但仍讓 GPT-SoVITS 走它自己的克隆流程：
         // 使用者特地錄了家人的聲音，就不該被雲端通用嗓音蓋過去。
-        if (!gptSovitEnabled && takeSlot == null && !expressiveTest) {
+        if (!gptSovitEnabled && !expressiveTest) {
             val plan = cloudTtsPlan(text)
             if (plan.isNotEmpty()) {
-                synthesizeViaPlan(plan, text, takeSlot = null, onComplete = onComplete)
+                synthesizeViaPlan(plan, text, onComplete = onComplete)
                 return
             }
         }
@@ -658,7 +518,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             val modelDir = if (resolvedMode == GptSovitVoiceMode.English) gptSovitEnglishModelDirUri else gptSovitChineseModelDirUri
             addLog("[GPT-SoVITS] ${resolvedMode.displayName}：${if (sampleUri.isBlank()) "使用 Mac 端預設參考音檔槽位" else "使用自備樣本槽位"}")
             addLog("[GPT-SoVITS] ${resolvedMode.displayName}模型資料夾：${if (modelDir.isBlank()) "由 Mac server 目前載入模型決定" else "已指定"}")
-            if (tryGptSovitApiSynthesis(text, resolvedMode, sampleUri, expressiveTest, takeSlot, onComplete)) return
+            if (tryGptSovitApiSynthesis(text, resolvedMode, sampleUri, expressiveTest, onComplete)) return
             addLog("[GPT-SoVITS] 未送出 API 請求；已停止，避免改用 Android TTS")
             onComplete()
             return
@@ -691,7 +551,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         mode: GptSovitVoiceMode,
         refAudioPath: String,
         expressiveTest: Boolean,
-        takeSlot: Int? = null,
         onComplete: () -> Unit
     ): Boolean {
         val apiBaseUrl = gptSovitApiBaseUrl.ifBlank {
@@ -720,13 +579,13 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             if (!reachable && !expressiveTest) {
                 addLog("[GPT-SoVITS] 連不到伺服器（離線），改用 Android 本機 TTS")
                 _synthesisStatus.value = "⚠️ 語音伺服器離線，改用本機 TTS"
-                if (takeSlot != null) markTakeFailed(takeSlot, text, onComplete) else speakWithSystemTts(text, onComplete)
+                speakWithSystemTts(text, onComplete)
                 return@launch
             }
             if (!LocalSovitsHelper.hasModels()) {
                 addLog("[GPT-SoVITS] 電腦上沒有模型，已禁用 GPT-SoVITS，改用系統 TTS")
                 _synthesisStatus.value = "❌ 電腦上沒有語音模型（請在控制中心匯入）；本次改用系統 TTS"
-                if (takeSlot != null) markTakeFailed(takeSlot, text, onComplete) else speakWithSystemTts(text, onComplete)
+                speakWithSystemTts(text, onComplete)
                 return@launch
             }
             // ① 自動切換：確保 server 載入的模型語言 == 要講的語言（_ZH/_EN/_JA/_KO）。
@@ -757,24 +616,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             if (isZh && speakText != text) addLog("[GPT-SoVITS] 繁→簡：「$text」→「$speakText」")
             val promptRaw = (emoRef?.prompt?.ifBlank { null }) ?: activeVoice?.prompt ?: LocalSovitsHelper.promptFor(targetLang)
             val promptText = if (isZh) ChineseConverter.toSimplified(context, promptRaw) else promptRaw
-            sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, takeSlot, onComplete, originalText = text)
+            sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text)
         }
         return true
-    }
-
-    /** 某個 take 版位徹底失敗：記下來；若所有版位都已定案且沒有任何一版成功，才退而求其次用系統 TTS 唸一次。 */
-    private fun markTakeFailed(takeSlot: Int, text: String, onComplete: () -> Unit) {
-        failedTakeSlots.add(takeSlot)
-        val takes = _synthesisTakes.value
-        val allSettled = takes.indices.all { it in failedTakeSlots || takes[it] != null }
-        val anySucceeded = takes.any { it != null }
-        if (allSettled && !anySucceeded) {
-            addLog("[GPT-SoVITS] 所有版本合成皆失敗，改用 Android 本機 TTS")
-            _synthesisStatus.value = "⚠️ 語音合成全部失敗，改用本機 TTS"
-            speakWithSystemTts(text, onComplete)
-        } else {
-            onComplete()
-        }
     }
 
     /** 實際送出 /tts 合成請求並播放（已在背景 scope 內呼叫）。 */
@@ -785,7 +629,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         serverSidePath: String,
         promptText: String,
         expressiveTest: Boolean,
-        takeSlot: Int? = null,
         onComplete: () -> Unit,
         /** 失敗 fallback 給系統 TTS 用的原文（繁體），預設用 speakText。 */
         originalText: String = speakText
@@ -833,14 +676,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             hit.setLastModified(System.currentTimeMillis())   // LRU：用到就往後排
             addLog("[GPT-SoVITS] 快取命中，直接播放（${hit.length() / 1024} KB）")
             _synthesisStatus.value = "⚡ 這句已經合成過，直接播放"
-            if (takeSlot != null) {
-                _synthesisTakes.update { current ->
-                    if (takeSlot < current.size) current.toMutableList().apply { this[takeSlot] = hit } else current
-                }
-                if (takeSlot == _currentTakeIndex.value) playSynthesizedAudio(hit, onComplete) else onComplete()
-            } else {
-                playSynthesizedAudio(hit, onComplete)
-            }
+            playSynthesizedAudio(hit, onComplete)
             return
         }
 
@@ -856,10 +692,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             override fun onFailure(call: Call, e: IOException) {
                 _isSynthesizing.value = false
                 when {
-                    takeSlot != null -> {
-                        addLog("[GPT-SoVITS] 版本 ${takeSlot + 1} 合成失敗：${e.message}")
-                        markTakeFailed(takeSlot, originalText, onComplete)
-                    }
                     !expressiveTest -> {
                         addLog("[GPT-SoVITS] API 失敗：${e.message}；改用 Android 本機 TTS")
                         _synthesisStatus.value = "⚠️ 連不到語音伺服器，改用本機 TTS"
@@ -878,10 +710,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                 response.use {
                     if (!it.isSuccessful) {
                         when {
-                            takeSlot != null -> {
-                                addLog("[GPT-SoVITS] 版本 ${takeSlot + 1} 合成失敗：HTTP ${it.code}")
-                                markTakeFailed(takeSlot, originalText, onComplete)
-                            }
                             !expressiveTest -> {
                                 addLog("[GPT-SoVITS] API HTTP ${it.code}；改用 Android 本機 TTS")
                                 _synthesisStatus.value = "⚠️ 伺服器回 HTTP ${it.code}，改用本機 TTS"
@@ -898,10 +726,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                     val bytes = it.body?.bytes() ?: ByteArray(0)
                     if (bytes.isEmpty()) {
                         when {
-                            takeSlot != null -> {
-                                addLog("[GPT-SoVITS] 版本 ${takeSlot + 1} 合成失敗：回傳空音訊")
-                                markTakeFailed(takeSlot, originalText, onComplete)
-                            }
                             !expressiveTest -> {
                                 addLog("[GPT-SoVITS] API 回傳空音訊；改用 Android 本機 TTS")
                                 _synthesisStatus.value = "⚠️ 伺服器回傳空音訊，改用本機 TTS"
@@ -915,35 +739,15 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                         }
                         return
                     }
-                    if (takeSlot != null) {
-                        // 以參數雜湊命名，下次同樣的句子＋聲音就直接命中，不再重合成
-                        val out = writeSynthesizedAudio(cacheKey, bytes)
-                        if (out == null) {
-                            addLog("[GPT-SoVITS] 版本 ${takeSlot + 1} 音訊寫檔失敗")
-                            markTakeFailed(takeSlot, originalText, onComplete)
-                            return
-                        }
-                        _synthesisTakes.update { current ->
-                            if (takeSlot < current.size) current.toMutableList().apply { this[takeSlot] = out } else current
-                        }
-                        addLog("[GPT-SoVITS] 版本 ${takeSlot + 1}/${_synthesisTakes.value.size} 合成完成（${bytes.size / 1024} KB）")
-                        if (takeSlot == _currentTakeIndex.value) {
-                            _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
-                            playSynthesizedAudio(out, onComplete)
-                        } else {
-                            onComplete()
-                        }
+                    // 以參數雜湊命名做快取（固定檔名會每次覆蓋＝同一句再唸還要重合成一輪）
+                    val out = writeSynthesizedAudio(cacheKey, bytes)
+                    if (out == null) {
+                        addLog("[GPT-SoVITS] 音訊寫檔失敗，改用 Android 本機 TTS")
+                        _synthesisStatus.value = "⚠️ 音訊寫檔失敗，改用本機 TTS"
+                        speakWithSystemTts(originalText, onComplete)
                     } else {
-                        // 以參數雜湊命名做快取（固定檔名會每次覆蓋＝同一句再唸還要重合成一輪）
-                        val out = writeSynthesizedAudio(cacheKey, bytes)
-                        if (out == null) {
-                            addLog("[GPT-SoVITS] 音訊寫檔失敗，改用 Android 本機 TTS")
-                            _synthesisStatus.value = "⚠️ 音訊寫檔失敗，改用本機 TTS"
-                            speakWithSystemTts(originalText, onComplete)
-                        } else {
-                            _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
-                            playSynthesizedAudio(out, onComplete)
-                        }
+                        _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
+                        playSynthesizedAudio(out, onComplete)
                     }
                 }
             }

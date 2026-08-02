@@ -609,20 +609,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 朗讀前的風險閘門狀態。NeedConfirm = 醫療/疼痛需確認；Locked = 自傷/拒療鎖定。 */
     sealed class SpeakGate {
         object Idle : SpeakGate()
-        data class NeedConfirm(val text: String, val useTakes: Boolean = false) : SpeakGate()
+        data class NeedConfirm(val text: String) : SpeakGate()
         data class Locked(val reason: String) : SpeakGate()
     }
 
     private val _speakGate = MutableStateFlow<SpeakGate>(SpeakGate.Idle)
     val speakGate: StateFlow<SpeakGate> = _speakGate.asStateFlow()
-
-    // GPT-SoVITS「一次合成 3 個版本、講錯了再換」——只用在重組主卡的「唸出這句」，
-    // 直接把 TtsModule 的狀態透出給 UI，不需要另外包一層。
-    val synthesisTakes: StateFlow<List<java.io.File?>> = ttsModule.synthesisTakes
-    val currentTakeIndex: StateFlow<Int> = ttsModule.currentTakeIndex
-    /** 每個版位是「誰在講」（多家雲端語音時三個版本是三種不同的聲音）。 */
-    val takeLabels: StateFlow<List<String>> = ttsModule.takeLabels
-    fun cycleSpeechTake() = ttsModule.cycleNextTake()
 
     /** 行為數據彙總（報表頁顯示，治療師評估趨勢用）。lazy：settingsRepo 在下方才初始化。 */
     val behaviorMetrics: StateFlow<com.example.data.BehaviorMetrics> by lazy {
@@ -635,26 +627,24 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var firstSpeakRecorded = false
 
     /** 所有實際 TTS 出口（含反應時間指標）。不要直接呼 ttsModule.speak。 */
-    private fun doSpeak(text: String, useTakes: Boolean = false) {
+    private fun doSpeak(text: String) {
         if (!firstSpeakRecorded) {
             firstSpeakRecorded = true
             val latency = System.currentTimeMillis() - appOpenAtMs
             viewModelScope.launch { settingsRepo.recordFirstSpeakLatency(latency) }
         }
-        if (useTakes) ttsModule.speakWithTakes(text) else ttsModule.speak(text)
+        ttsModule.speak(text)
     }
 
     /**
      * 帶風險分級的朗讀請求：一般 → 直接發聲；醫療/疼痛 → 跳確認；
      * 自傷/拒絕治療 → 鎖定語音輸出僅顯示警示。
-     * useTakes：一次合成 3 個版本供「換一個聲音」（多家雲端＝三種聲音，GPT-SoVITS＝抽樣三次）；
-     * 只給重組主卡的主要朗讀按鈕用，其他地方單次朗讀就好，免得浪費額度。
      */
-    fun requestSpeak(text: String, useTakes: Boolean = false) {
+    fun requestSpeak(text: String) {
         when (com.example.safety.SafetyGuard.classifyRisk(text)) {
-            com.example.safety.SafetyGuard.RiskLevel.NORMAL -> doSpeak(text, useTakes)
+            com.example.safety.SafetyGuard.RiskLevel.NORMAL -> doSpeak(text)
             com.example.safety.SafetyGuard.RiskLevel.CONFIRM ->
-                _speakGate.value = SpeakGate.NeedConfirm(text, useTakes)
+                _speakGate.value = SpeakGate.NeedConfirm(text)
             com.example.safety.SafetyGuard.RiskLevel.LOCK -> {
                 if (com.example.safety.SafetyGuard.containsCrisisSignal(text)) {
                     // 關鍵字命中不代表就是本人求救——先問 AI「想自傷的是誰」，
@@ -666,9 +656,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                             com.example.safety.SafetyGuard.CrisisIntent.UNKNOWN -> {
                                 // 判不出來：通報家人但不鎖語音，讓他把話講出來
                                 triggerEmergencyReport(text, lockSpeech = false)
-                                doSpeak(text, useTakes)
+                                doSpeak(text)
                             }
-                            else -> doSpeak(text, useTakes)   // OTHER／NONE：正常唸
+                            else -> doSpeak(text)   // OTHER／NONE：正常唸
                         }
                     }
                 } else {
@@ -891,7 +881,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 風險確認對話框按「確認朗讀」。 */
     fun confirmGatedSpeak() {
-        (_speakGate.value as? SpeakGate.NeedConfirm)?.let { doSpeak(it.text, it.useTakes) }
+        (_speakGate.value as? SpeakGate.NeedConfirm)?.let { doSpeak(it.text) }
         _speakGate.value = SpeakGate.Idle
     }
 
