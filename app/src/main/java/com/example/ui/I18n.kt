@@ -480,6 +480,24 @@ object I18n {
             "Didn't hear anything — move closer to the mic and try again",
             "音声を検出できませんでした。マイクに近づいてもう一度お試しください",
             "소리가 들리지 않았어요. 마이크에 가까이서 다시 시도해 주세요"),
+        "低信心" to arrayOf("low confidence", "低信頼度", "낮은 신뢰도"),
+        // 重組結果卡的引擎來源標示
+        "電腦接手（本機/雲端備援待命）" to arrayOf(
+            "Computer took over (on-device/cloud on standby)",
+            "PC が処理（端末内／クラウドは待機）",
+            "PC가 처리 (기기 내/클라우드 대기)"),
+        "自我一致性 %d 取樣" to arrayOf(
+            "self-consistency, %d samples", "自己一貫性 %d サンプル", "자기일관성 %d 표본"),
+        "單次取樣（其餘取樣失敗）" to arrayOf(
+            "single sample (the others failed)", "1 回のみ（他のサンプルは失敗）", "1회 표본 (나머지는 실패)"),
+        "%s（%s／本地備援待命）" to arrayOf(
+            "%s (%s / on-device on standby)", "%s（%s／端末内は待機）", "%s (%s / 기기 내 대기)"),
+        "雲端 Whisper 轉寫" to arrayOf(
+            "cloud Whisper transcription", "クラウド Whisper 文字起こし", "클라우드 Whisper 전사"),
+        "直接聽音訊（%d 取樣，未經語音轉文字）" to arrayOf(
+            "listened to the audio directly (%d samples, no speech-to-text)",
+            "音声を直接聴取（%d サンプル、音声認識なし）",
+            "오디오를 직접 청취 (%d 표본, 음성 인식 없음)"),
         // 復健跟讀走雲端 Whisper 的錯誤訊息
         "連不上雲端語音辨識，請檢查網路後再試一次" to arrayOf(
             "Can't reach cloud speech recognition — check your connection and try again",

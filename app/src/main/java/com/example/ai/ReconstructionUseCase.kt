@@ -90,7 +90,7 @@ class ReconstructionUseCase(
             confidence = if (cleaned == fallbackMessage) 0.0
                          else if (distrusted) minOf(data.confidence, LOW_TRUST_CONFIDENCE)
                          else data.confidence,
-            engineUsed = if (distrusted) "${data.engineUsed} -> 低信心" else data.engineUsed,
+            engineUsed = if (distrusted) "${data.engineUsed} -> " + com.example.ui.I18n.tr("低信心") else data.engineUsed,
             inferenceTimeMs = elapsed
         )
     }

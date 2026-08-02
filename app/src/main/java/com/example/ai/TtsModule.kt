@@ -214,19 +214,45 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
+    /**
+     * 內建 TTS 該用哪個語系＝使用者正在看的介面語言。
+     *
+     * 重組出來的句子已經是介面語言了（見 CloudInferenceEngine 的輸出語言指令），
+     * 這裡若還寫死中文，英文介面的使用者會聽到中文語音硬唸英文句子。
+     */
+    private fun interfaceLocale(): Locale = when (com.example.ui.I18n.lang) {
+        com.example.data.AppLanguage.En -> Locale.US
+        com.example.data.AppLanguage.Ja -> Locale.JAPAN
+        com.example.data.AppLanguage.Ko -> Locale.KOREA
+        else -> Locale("zh", "TW")
+    }
+
+    /** 目前 TTS 引擎掛著的語系，避免每次朗讀都重設（設定語系要重挑語音，不便宜）。 */
+    private var appliedTtsLocale: Locale? = null
+
+    /**
+     * 把內建 TTS 切到介面語言。每次系統語音朗讀前呼叫——使用者可能中途改語言，
+     * 只在初始化設一次會讓改語言後的第一句仍用舊語音唸。
+     */
+    private fun applyInterfaceLocale(engine: TextToSpeech) {
+        val want = interfaceLocale()
+        if (appliedTtsLocale == want) return
+        val result = engine.setLanguage(want)
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            // 該語言沒語音包 → 退回中文，至少發得出聲音
+            Log.w("TtsModule", "裝置沒有 ${want.language} 語音包，退回中文")
+            engine.setLanguage(Locale("zh", "TW"))
+            selectBestVoice(engine, Locale("zh", "TW"))
+        } else {
+            selectBestVoice(engine, want)
+        }
+        appliedTtsLocale = want
+    }
+
     private fun configureLanguage(engine: TextToSpeech) {
         try {
-            // 語系：台灣中文優先（最貼近使用者口音），退而求其次一般中文。
-            val zhTW = Locale("zh", "TW")
-            val result = engine.setLanguage(zhTW)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                if (engine.setLanguage(Locale.TAIWAN) < TextToSpeech.LANG_AVAILABLE) {
-                    engine.setLanguage(Locale.CHINESE)
-                }
-            }
-
-            // 關鍵：主動挑選裝置上「最自然」的中文語音（神經/高品質），而非預設機械音。
-            selectBestVoice(engine)
+            // 語系跟著介面語言走；找不到對應語音包會自動退回中文。
+            applyInterfaceLocale(engine)
 
             // Apply speed and pitch defaults
             engine.setSpeechRate(_speechRate.value)
@@ -247,25 +273,27 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
      *   3. 台灣（TW）口音優先。
      * 找不到符合語言的就維持引擎預設，不致發不出聲。
      */
-    private fun selectBestVoice(engine: TextToSpeech) {
+    private fun selectBestVoice(engine: TextToSpeech, locale: Locale = interfaceLocale()) {
         try {
+            val want = locale.language.lowercase()
             val voices: Set<Voice> = engine.voices ?: return
             val candidates = voices.filter { v ->
                 val lang = runCatching { v.locale.language.lowercase() }.getOrDefault("")
-                // zh / cmn（部分引擎用 cmn 表中文官話）；排除尚未安裝的語音
-                (lang == "zh" || lang == "cmn") &&
+                // 中文有兩種寫法：zh 與 cmn（部分引擎用 cmn 表官話）；排除尚未安裝的語音
+                (lang == want || (want == "zh" && lang == "cmn")) &&
                     !v.features.orEmpty().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
             }
             if (candidates.isEmpty()) {
-                Log.i("TtsModule", "找不到中文語音，沿用引擎預設")
+                Log.i("TtsModule", "找不到 $want 語音，沿用引擎預設")
                 return
             }
             // 先偏好「離線可用」這組（保證沒網路也能講）；若整組都需網路才退而用網路語音。
             val offline = candidates.filter { !it.isNetworkConnectionRequired }
             val pool = if (offline.isNotEmpty()) offline else candidates
+            val wantCountry = locale.country.uppercase()
             val best = pool.maxWithOrNull(
                 compareBy<Voice>({ it.quality })                                   // 品質高優先
-                    .thenBy { if (it.locale.country.uppercase() == "TW") 1 else 0 } // 台灣口音優先
+                    .thenBy { if (it.locale.country.uppercase() == wantCountry) 1 else 0 } // 同國別口音優先
             )
             if (best != null) {
                 engine.voice = best
@@ -480,7 +508,10 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                     e.setLanguage(Locale("zh", "TW"))         // 該語言沒語音包 → 退回中文
                 }
                 e.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AphasiaAssistMultiLang")
-                if (prevVoice != null) runCatching { e.voice = prevVoice }   // 還原中文嗓音給下次
+                if (prevVoice != null) runCatching { e.voice = prevVoice }   // 還原原本嗓音給下次
+                // 這裡繞過 applyInterfaceLocale 直接改了語系，快取必須失效，
+                // 否則下一句會以為還掛著介面語言、不重設就用錯語音唸。
+                appliedTtsLocale = null
             }
         } catch (t: Throwable) {
             Log.e("TtsModule", "speakInLocale 失敗：${t.message}")
@@ -539,6 +570,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
         try {
             // Emit physical audio using native TTS Engine
+            tts?.let { applyInterfaceLocale(it) }
             tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AphasiaAssistTtsId")
         } catch (t: Throwable) {
             Log.e("TtsModule", "Exception during tts.speak: ${t.message}")
@@ -794,6 +826,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             return
         }
         try {
+            tts?.let { applyInterfaceLocale(it) }
             tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AphasiaAssistTtsId")
         } catch (t: Throwable) {
             Log.e("TtsModule", "Exception during tts.speak: ${t.message}")
@@ -819,6 +852,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         try {
             val locale = if (mode == GptSovitVoiceMode.English) Locale.US else Locale.CHINESE
             tts?.setLanguage(locale)
+            appliedTtsLocale = null   // 同上：繞過 applyInterfaceLocale 改語系，快取要失效
         } catch (t: Throwable) {
             Log.e("TtsModule", "Error switching TTS locale: ${t.message}")
         }

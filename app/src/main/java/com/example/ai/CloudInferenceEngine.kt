@@ -56,7 +56,7 @@ class HybridInferenceEngine(
                         originalText = vault.rawText,
                         reconstructedText = txt,
                         confidence = 0.9,
-                        engineUsed = "電腦接手（本機/雲端備援待命）",
+                        engineUsed = com.example.ui.I18n.tr("電腦接手（本機/雲端備援待命）"),
                         inferenceTimeMs = System.currentTimeMillis() - start
                     )
                 )
@@ -95,13 +95,14 @@ class HybridInferenceEngine(
 
             val ranked = rankBySelfConsistency(samples)
             val (selected, top) = ranked.first()
-            val consensusNote = if (samples.size > 1) "自我一致性 ${samples.size} 取樣" else "單次取樣（其餘取樣失敗）"
+            val consensusNote = if (samples.size > 1) com.example.ui.I18n.tr("自我一致性 %d 取樣").format(samples.size)
+                                else com.example.ui.I18n.tr("單次取樣（其餘取樣失敗）")
             Result.success(
                 ReconstructedData(
                     originalText = vault.rawText,
                     reconstructedText = top.text,
                     confidence = top.confidence,
-                    engineUsed = "${selected.label}（$consensusNote／本地備援待命）",
+                    engineUsed = com.example.ui.I18n.tr("%s（%s／本地備援待命）").format(selected.label, consensusNote),
                     inferenceTimeMs = System.currentTimeMillis() - start,
                     alternatives = ranked.map { it.second }
                 )
@@ -189,7 +190,7 @@ class HybridInferenceEngine(
                     ?: return Result.failure(IllegalStateException("雲端語音轉寫失敗"))
                 Log.i(TAG, "雲端 Whisper 轉寫結果：$heard")
                 return reconstructSentence(vault.copy(rawText = heard)).map { data ->
-                    data.copy(engineUsed = "${data.engineUsed}｜雲端 Whisper 轉寫")
+                    data.copy(engineUsed = "${data.engineUsed}｜" + com.example.ui.I18n.tr("雲端 Whisper 轉寫"))
                 }
             }
 
@@ -223,7 +224,7 @@ class HybridInferenceEngine(
                         Log.i(TAG, "原生音訊不可用，改用雲端 Whisper 轉寫：$heard")
                         val textVault = vault.copy(rawText = heard)
                         return reconstructSentence(textVault).map { data ->
-                            data.copy(engineUsed = "${data.engineUsed}｜雲端 Whisper 轉寫")
+                            data.copy(engineUsed = "${data.engineUsed}｜" + com.example.ui.I18n.tr("雲端 Whisper 轉寫"))
                         }
                     }
                 }
@@ -239,7 +240,7 @@ class HybridInferenceEngine(
                     originalText = "",
                     reconstructedText = top.text,
                     confidence = top.confidence,
-                    engineUsed = "${selected.label}·直接聽音訊（${samples.size} 取樣，未經語音轉文字）",
+                    engineUsed = "${selected.label}·" + com.example.ui.I18n.tr("直接聽音訊（%d 取樣，未經語音轉文字）").format(samples.size),
                     inferenceTimeMs = System.currentTimeMillis() - start,
                     alternatives = ranked.map { it.second }
                 )
@@ -315,7 +316,8 @@ class HybridInferenceEngine(
     private fun buildAudioReconstructPrompt(vault: GlobalTagsVault, audioB64: String) = CloudPrompt(
         system = """
             你是輔助失語症患者溝通的語言助理。附上的音訊是患者本人說的話。
-            請直接聽這段音訊，判斷他最可能想表達什麼，並重組成一句自然的繁體中文。
+            請直接聽這段音訊，判斷他最可能想表達什麼，並重組成一句自然的${com.example.ui.I18n.outputLanguageName()}。
+            （下面的說明是用中文寫的，那是給你看的指示，不是要你用中文作答。）
 
             這位患者有失語症／構音障礙，所以：
             - 發音可能不標準、字詞可能拉長或含糊、句子可能不完整、可能重複同一個字。
@@ -336,7 +338,9 @@ class HybridInferenceEngine(
               80-100：聽得很清楚、幾乎確定
               50-79 ：聽得出大概、給了合理推測（含糊發音多半落在這裡）
               1-49  ：幾乎聽不出來
-            只輸出 JSON：{"heard":"你實際聽到的音節或字（可含不確定處）","reconstructed":"完整繁體中文句子","confidence":0到100整數}
+            只輸出 JSON：{"heard":"你實際聽到的音節或字（可含不確定處）","reconstructed":"完整的${com.example.ui.I18n.outputLanguageName()}句子","confidence":0到100整數}
+
+            ${com.example.ui.I18n.outputLanguageDirective("reconstructed")}
         """.trimIndent(),
         user = buildString {
             appendLine("請聽附上的音訊。")
@@ -424,6 +428,8 @@ class HybridInferenceEngine(
             - 若有金額（如 NT$100），請依場景自然嵌入（例如「總共 100 元」）。
             - 若有強烈意圖（救命、找家人），語氣要清楚但不誇張。
             - 不要憑空加入沒在圖卡中的物品或行為。
+
+            ${com.example.ui.I18n.outputLanguageDirective("回覆")}
         """.trimIndent(),
         user = """
             場景：${location.ifBlank { "未指定" }}
@@ -632,6 +638,11 @@ class HybridInferenceEngine(
                 你是輔助失語症患者溝通的語言助理。
                 請使用碎詞、逐字信心度、GPS 場景與相機物件，重組患者最可能想表達的句子。
 
+                【輸出語言】重組出來的句子一律用${com.example.ui.I18n.outputLanguageName()}。
+                使用者打什麼語言的碎詞不重要——他看到的介面是${com.example.ui.I18n.outputLanguageName()}，
+                唸出去的話就必須是${com.example.ui.I18n.outputLanguageName()}。
+                下面的說明與範例是用中文寫的，那只是給你看的指示，不是要你用中文作答。
+
                 【最重要的原則：貼著碎詞走，不要腦補新內容】
                 句子裡每個實詞（名詞、動詞、形容詞）都必須能對應回碎詞本身，或明確對應到給定的
                 地點／物件情境標籤；你只能補上讓句子成立所需的「語法零件」——代名詞（我、你）、
@@ -647,7 +658,7 @@ class HybridInferenceEngine(
                 但仍然不可以加入任何候選裡都沒有出現的新內容。
 
                 輸入中的問句或疑問詞是硬約束，必須保留其語意；例如「什麼時候」、「在哪裡」、「可以嗎」、「要等多久」不可刪掉。
-                若碎詞同時包含需求與問句，請用一句自然中文同時表達，例如「我口渴了，請給我一杯水；我想知道什麼時候可以休息。」
+                若碎詞同時包含需求與問句，請用一句自然的話同時表達，例如「我口渴了，請給我一杯水；我想知道什麼時候可以休息。」
 
                 【範例】（示範「貼著碎詞」與「同音修正」的界線；照這個力道做）：
                 碎詞「藥...頭...痛」＋地點=藥局 → {"reconstructed":"我頭痛，需要買藥"}（只補語法零件）
@@ -676,6 +687,8 @@ class HybridInferenceEngine(
                 每一句都必須遵守上面「貼著碎詞走、不腦補」的規則。第一句放你最有把握的。
                 reasoning 一定要壓在 20 字以內。它只是給你自己想的草稿、不會顯示給病人；
                 寫太長會把輸出塞爆，導致後面真正要用的 candidates 被截掉。
+
+                ${com.example.ui.I18n.outputLanguageDirective("candidates[].text")}
             """.trimIndent(),
             user = buildString {
                 appendLine("碎詞：${vault.rawText}")
