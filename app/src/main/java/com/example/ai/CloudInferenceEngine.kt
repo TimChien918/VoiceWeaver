@@ -594,12 +594,18 @@ class HybridInferenceEngine(
                 目標句：$target
                 患者說出的：${recognized.ifBlank { "（未偵測到聲音）" }}$confInfo
 
-                評分細則：
+                評分細則（滿分 100，三項加權後就是最後分數）：
                 • 語意完整性（50%）：核心意思有沒有傳達？關鍵詞說到了嗎？即使用詞稍異但意思相同可給高分。
                 • 流暢性（30%）：有無重複、結巴？語氣是否連貫自然？信心度低的字可能發音不清。
                 • 語氣語調（20%）：語氣是否符合句型（問句/請求/感謝）？
 
-                只回傳 JSON：{"score":整數, "feedback":"一句${com.example.ui.I18n.outputLanguageName()}鼓勵或指引（20字以內）", "wrongChars":["說得不準或漏掉的字或詞"]}
+                分數刻度（務必用 0-100，不是 1-5 也不是 0-10）：
+                90-100＝幾乎完全正確；70-89＝意思到位但有小瑕疵；
+                40-69＝說出部分關鍵詞；1-39＝幾乎聽不出目標句；0＝完全沒說出東西。
+
+                只回傳 JSON：{"score":0到100的整數, "feedback":"一句${com.example.ui.I18n.outputLanguageName()}鼓勵或指引（20字以內）", "wrongChars":["說得不準或漏掉的字或詞"]}
+
+                ${com.example.ui.I18n.outputLanguageDirective("feedback")}
             """.trimIndent(),
             temperature = 0.15,   // 評分求穩定：低溫讓同樣表現得到一致分數
             maxTokens = 150

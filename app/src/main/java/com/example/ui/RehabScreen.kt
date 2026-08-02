@@ -515,7 +515,8 @@ private fun PracticeCard(
             Text(
                 rehab.target,
                 fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                color = Color.White, lineHeight = 28.sp
+                // 不可以寫死 Color.White：簡約風是白底卡片，寫死就是白字白底＝整句看不見。
+                color = textLight, lineHeight = 28.sp
             )
             // 目標句維持中文（要唸的就是它）；非中文介面補一行語意註解給照護者看。
             com.example.data.AphasiaPracticeI18n.gloss(rehab.target)?.let { gloss ->

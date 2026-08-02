@@ -20,11 +20,24 @@ import java.io.IOException
  * 這些真正帶著意義的線索全被丟掉——後面的 LLM 只能對著壞掉的文字硬猜。
  * 讓模型直接「聽」原始音訊可以保留這些資訊。
  *
- * 格式選擇：AAC_ADTS（裸 AAC 串流，mimeType audio/aac）＋16kHz 單聲道。
- * 不用 MPEG_4 容器，因為那是 audio/mp4，不在 Gemini 接受的音訊格式清單內；
- * 16kHz 單聲道對語音足夠，檔案也小（Gemini inline 上限 20MB）。
+ * 格式要看「誰要聽這段音訊」，兩邊接受的容器不一樣，用錯會被打回票：
+ * - [Format.AAC_ADTS]：裸 AAC 串流（audio/aac）。Gemini 的 inline 音訊只收
+ *   wav/mp3/aiff/aac/ogg/flac，**不收 audio/mp4**，所以原生音訊理解走這個。
+ * - [Format.M4A]：MPEG-4 容器（audio/mp4）。Whisper 轉寫端點只收
+ *   [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm]，**不收裸 .aac**——
+ *   實測 Groq 直接回 HTTP 400 file must be one of the following types。
+ *
+ * 兩者都是 16kHz 單聲道 AAC 編碼，差別只在外面那層容器。
  */
 class AudioRecorderManager(private val context: Context) {
+
+    /** 錄音容器。選錯會被服務端以「不支援的格式」擋掉，見類別註解。 */
+    enum class Format(val ext: String) {
+        /** 裸 AAC 串流；給 Gemini 原生音訊理解。 */
+        AAC_ADTS("aac"),
+        /** MPEG-4 容器；給 Whisper 轉寫端點。 */
+        M4A("m4a")
+    }
 
     private var mediaRecorder: MediaRecorder? = null
     private var currentOutputFile: File? = null
@@ -34,7 +47,7 @@ class AudioRecorderManager(private val context: Context) {
      * 動態啟動錄音
      * @return 如果錄音順利啟動，回傳該暫存檔案的完整路徑實體，否則回傳 null。
      */
-    suspend fun startRecording(): String? = withContext(Dispatchers.IO) {
+    suspend fun startRecording(format: Format = Format.AAC_ADTS): String? = withContext(Dispatchers.IO) {
         if (!hasAudioPermission()) {
             Log.e("AudioRecorderManager", "RECORD_AUDIO permission is missing!")
             return@withContext null
@@ -47,7 +60,7 @@ class AudioRecorderManager(private val context: Context) {
 
         try {
             // 建立高安全性之 cache 緩存暫存檔
-            val fileName = "aphasia_voice_${System.currentTimeMillis()}.aac"
+            val fileName = "aphasia_voice_${System.currentTimeMillis()}.${format.ext}"
             val tempFile = File(context.cacheDir, fileName)
             currentOutputFile = tempFile
 
@@ -63,7 +76,12 @@ class AudioRecorderManager(private val context: Context) {
                 // VOICE_RECOGNITION：套用系統的語音前處理（降噪／AGC），
                 // 比 MIC 更適合近距離人聲，對含糊的發音幫助明顯。
                 setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
-                setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
+                setOutputFormat(
+                    when (format) {
+                        Format.AAC_ADTS -> MediaRecorder.OutputFormat.AAC_ADTS
+                        Format.M4A -> MediaRecorder.OutputFormat.MPEG_4
+                    }
+                )
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setAudioChannels(1)
                 setAudioEncodingBitRate(32000)

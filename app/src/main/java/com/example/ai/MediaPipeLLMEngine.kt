@@ -147,16 +147,19 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
         appendLine(
             "你是失語症語言治療師，評估患者口語跟讀。不要用字元差異，要看語意完整(50%)、流暢(30%)、語氣(20%)。" +
             "每次評估都是獨立事件：只依據本次的目標句與患者語音判分，不參考、不比較、不延續任何先前的評估或分數（下面的範例只是輸出格式示範）。" +
-            "只輸出 JSON：{\"score\":0到100整數,\"feedback\":\"20字內鼓勵\",\"wrongChars\":[\"說不準的字\"]}<|im_end|>"
+            // 評語是給使用者讀的，要跟著介面語言；few-shot 也一起換，
+            // 否則模型會照抄範例的中文（實測英文介面拿到「非常好，保持下去！」）。
+            "只輸出 JSON：{\"score\":0到100整數,\"feedback\":\"20字內的${com.example.ui.I18n.outputLanguageName()}鼓勵\",\"wrongChars\":[\"說不準的字或詞\"]}<|im_end|>"
         )
         appendLine("<|im_start|>user")
         appendLine("目標句：我想喝水")
         appendLine("患者說出：我要水<|im_end|>")
         appendLine("<|im_start|>assistant")
-        appendLine("{\"score\":85,\"feedback\":\"意思很清楚，很好！\",\"wrongChars\":[\"想\"]}<|im_end|>")
+        appendLine("{\"score\":85,\"feedback\":\"${com.example.ui.I18n.tr("意思很清楚，很好！")}\",\"wrongChars\":[\"想\"]}<|im_end|>")
         appendLine("<|im_start|>user")
         appendLine("目標句：$target")
-        appendLine("患者說出：${recognized.ifBlank { "（未偵測到聲音）" }}$conf<|im_end|>")
+        appendLine("患者說出：${recognized.ifBlank { "（未偵測到聲音）" }}$conf")
+        appendLine(com.example.ui.I18n.outputLanguageDirective("feedback") + "<|im_end|>")
         append("<|im_start|>assistant\n")
     }
 

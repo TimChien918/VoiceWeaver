@@ -33,6 +33,21 @@ object I18n {
         else           -> "繁體中文"
     }
 
+    /**
+     * 給 LLM 的「輸出語言」硬性指令，**用目標語言本身寫**。
+     *
+     * 為什麼不能只靠 [outputLanguageName]：提示詞主體是中文，模型看到夾在中文
+     * 句子裡的「用英文回答」很容易整段跟著中文走——實測英文介面的跟讀評語仍然
+     * 回「非常好，繼續加油！」。用該語言自己的祈使句寫，模型才會照做。
+     * 放在提示詞最後一行（recency）效果最穩。
+     */
+    fun outputLanguageDirective(field: String): String = when (lang) {
+        AppLanguage.En -> "IMPORTANT: the \"$field\" value MUST be written in English."
+        AppLanguage.Ja -> "重要：「$field」の値は必ず日本語で書いてください。"
+        AppLanguage.Ko -> "중요: \"$field\" 값은 반드시 한국어로 작성하세요."
+        else           -> "重要：「$field」的內容必須用繁體中文書寫。"
+    }
+
     /** 取翻譯；繁中或查無 → 回原文。 */
     fun tr(zh: String): String {
         if (lang == AppLanguage.ZhTW) return zh
@@ -458,6 +473,9 @@ object I18n {
             "GPT-SoVITS API address", "GPT-SoVITS API アドレス", "GPT-SoVITS API 주소"),
         "http://電腦IP:9880" to arrayOf(
             "http://<computer IP>:9880", "http://<PC の IP>:9880", "http://<컴퓨터 IP>:9880"),
+        // 裝置端評分提示詞的 few-shot 範例評語（要跟著介面語言，模型會照抄範例的語言）
+        "意思很清楚，很好！" to arrayOf(
+            "Very clear meaning — nice work!", "意味がはっきり伝わっています、いいですね！", "의미가 아주 분명해요, 잘했어요!"),
         // 復健跟讀走雲端 Whisper 的錯誤訊息
         "連不上雲端語音辨識，請檢查網路後再試一次" to arrayOf(
             "Can't reach cloud speech recognition — check your connection and try again",

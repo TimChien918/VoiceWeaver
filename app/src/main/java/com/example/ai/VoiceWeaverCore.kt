@@ -1700,7 +1700,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         sttMode = SttMode.REHAB
         viewModelScope.launch(Dispatchers.Main) {
             if (rehabCanUseCloudStt()) {
-                val path = audioRecorder.startRecording()
+                // 一定要 M4A：Whisper 端點不收裸 .aac（Groq 直接回 400），見 AudioRecorderManager。
+                val path = audioRecorder.startRecording(AudioRecorderManager.Format.M4A)
                 if (path != null) {
                     rehabAudioPath = path
                     _rehabCloudStt.value = SttState.Listening
