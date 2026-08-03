@@ -27,7 +27,14 @@ SCOPES = [
 FOLDER_MIME = "application/vnd.google-apps.folder"
 ROOT_FOLDER = "VoiceWeaver"                          # Drive 上曲庫根資料夾名
 LANG_DIRS = {"ZH", "EN", "JA", "KO"}
-_APP_DIR = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+def _app_support_dir():
+    # 跨平台 App 資料夾：Windows→%LOCALAPPDATA%\VoiceWeaver，macOS→~/Library/Application Support/VoiceWeaver
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "VoiceWeaver")
+    return os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+
+_APP_DIR = _app_support_dir()
 
 # Firebase Web API Key 依設計是公開識別碼（網頁版 config.js 本來就明文內嵌），
 # 安全性靠 Auth + Firestore 規則，不是靠藏這把 key。放預設值讓安裝即可用。

@@ -39,6 +39,8 @@ $addData = @(
   "$GS\image_gen_server.py;backend",
   "$GS\text_infer_server.py;backend",
   "$GS\sync_voice_models.py;backend",
+  "$GS\emotion_models.py;backend",        # 情緒感知（api_v2 /models 與控制程式共用）
+  "$GS\drive_uploader.py;backend",        # 曲庫上傳使用者自己的 Google Drive（OAuth，純 urllib）
   "$GS\GPT_SoVITS\configs;backend\GPT_SoVITS\configs"
 )
 $args = @(
@@ -48,14 +50,27 @@ $args = @(
   '--distpath',$Dist,
   '--workpath',"$env:TEMP\pyi_build",
   '--specpath',"$env:TEMP\pyi_build",
+  '--paths',$GS,                          # 讓 hidden-import 找得到 emotion_models / drive_uploader
   # qrcode 在「掃描連線」功能裡才 import（try/except 內），PyInstaller 靜態分析可能漏掉 → 強制收進來
   '--collect-all','qrcode',
+  # 情緒感知 / Google Drive 曲庫上傳：控制程式在 try/except 內 import，強制收進凍結檔
+  '--hidden-import','emotion_models',
+  '--hidden-import','drive_uploader',
+  # Google Drive 曲庫上傳需要的 google 套件——控制程式在 exe 內用「凍結的 Python」跑，
+  # 無法從 AI 環境(3.10)借用套件，必須把 google 套件本體收進 exe(3.12)，否則會顯示「缺 google 套件」。
+  '--collect-all','googleapiclient',
+  '--collect-all','google_auth_oauthlib',
+  '--collect-all','google',               # google.auth / google.oauth2 / protobuf 等命名空間
   '--noupx'
 )
 # 內嵌版本/產品資訊：未簽章 exe 仍可能被 SmartScreen 攔，但「其他資訊」會顯示
 # 「VoiceWeaver 語音中心」產品名而非空白檔名，看起來正常許多（詳見 README_WINDOWS.md）。
 $verFile = Join-Path $WinDir 'version_info.txt'
 if (Test-Path $verFile) { $args += @('--version-file', $verFile) }
+# Google Drive OAuth 用戶端（桌面版 client_secret 非機密，內建進 App 讓「安裝即可用」）。
+# 放 exe 根目錄；控制程式啟動時 _provision_client_secret() 會複製到 %LOCALAPPDATA%\VoiceWeaver。
+$gcs = Join-Path $GS 'google_client_secret.json'
+if (Test-Path $gcs) { $addData += "$gcs;." }
 foreach ($d in $addData) { $args += @('--add-data', $d) }
 $args += "$GS\voice_center_app.py"
 
