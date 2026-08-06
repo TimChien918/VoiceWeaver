@@ -186,6 +186,8 @@ object OffloadManager {
         val plan = computePlan(m)
         lastPlan = plan
         computerHost = if (m.reachable) hostOf(gptSovitBase) else null
+        // 順手刷新音訊伺服器狀態，讓 UI 的同步旗標不會一直是開 App 當下的舊值
+        if (m.reachable) runCatching { audioServerReady(gptSovitBase) }
         Log.i(TAG, "tier=${plan.tier} voice=${plan.voice} image=${plan.image} text=${plan.text} (${m.speedLabel})")
         return plan
     }
@@ -224,6 +226,87 @@ object OffloadManager {
             }
         }.getOrNull()
     }
+
+    /**
+     * 電腦端音訊理解伺服器(9883)是否備妥。
+     *
+     * 跟 9882 分開問，因為它是獨立行程、模型又大（E4B 8-bit 約 8.5GB），
+     * 常見狀況是「文字伺服器在跑、音訊的還在載入或根本沒開」。
+     * loading=true 時回 false——寧可這次走雲端，也不要讓病人乾等模型載完。
+     */
+    suspend fun audioServerReady(gptSovitBase: String): Boolean = withContext(Dispatchers.IO) {
+        val host = hostOf(gptSovitBase) ?: return@withContext false
+        val ok = runCatching {
+            val req = Request.Builder().url("http://$host:$AUDIO_PORT/health").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.code != 200) return@use false
+                val o = JSONObject(resp.body?.string().orEmpty())
+                o.optBoolean("ready", false)
+            }
+        }.getOrDefault(false)
+        audioServerReadyCached = ok
+        ok
+    }
+
+    /**
+     * 上一次健康檢查的結果。
+     *
+     * UI 決定要不要顯示「直接說給 AI 聽」時是在 Compose 裡同步取值，沒辦法 await
+     * 一個網路請求，所以只能看快取。代價是剛開 App 那一下還是舊值——由
+     * [probeAndPlan] 順手刷新，實務上打開設定或按過一次就會校正。
+     */
+    @Volatile var audioServerReadyCached: Boolean = false
+        private set
+
+    /**
+     * 把「直接聽音訊」交給電腦端(9883/understand)——免金鑰、語音不出區網。
+     *
+     * 回傳模型的原始輸出（JSON 字串，格式與雲端那條路一致，交給同一支 parseCoT 解析）；
+     * 任何失敗回 null，由呼叫端決定要不要退回雲端。
+     */
+    suspend fun computerUnderstandAudio(
+        gptSovitBase: String,
+        audioBase64: String,
+        mime: String,
+        system: String,
+        user: String,
+    ): String? = withContext(Dispatchers.IO) {
+        val host = hostOf(gptSovitBase) ?: return@withContext null
+        val payload = JSONObject()
+            .put("audio_base64", audioBase64)
+            .put("mime", mime)
+            .put("system", system)
+            .put("user", user)
+            .toString()
+        val req = Request.Builder()
+            .url("http://$host:$AUDIO_PORT/understand")
+            .post(payload.toRequestBody(JSON_MEDIA))
+            .build()
+        // 本機推論在 M 系列 Mac 上約 4～11 秒，但冷啟動或同時在合成語音時會更久，
+        // 所以用比文字重組寬鬆得多的逾時。
+        val audioClient = client.newBuilder()
+            .readTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(150, TimeUnit.SECONDS)
+            .build()
+        runCatching {
+            audioClient.newCall(req).execute().use { resp ->
+                val body = resp.body?.string().orEmpty()
+                if (resp.code != 200) {
+                    DiagnosticLog.w(
+                        DiagnosticLog.Cat.STT, "電腦端音訊理解 HTTP ${resp.code}",
+                        body.take(300)
+                    )
+                    return@use null
+                }
+                JSONObject(body).optString("text").trim().ifBlank { null }
+            }
+        }.onFailure {
+            DiagnosticLog.w(DiagnosticLog.Cat.STT, "電腦端音訊理解連線失敗", it.message)
+        }.getOrNull()
+    }
+
+    /** 電腦端音訊理解伺服器的埠（audio_infer_server.py）。 */
+    const val AUDIO_PORT = 9883
 
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 }

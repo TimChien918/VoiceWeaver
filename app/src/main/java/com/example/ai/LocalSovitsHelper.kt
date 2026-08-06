@@ -226,18 +226,44 @@ object LocalSovitsHelper {
     private val LABEL_TO_CANON = EMOTION_ALIASES.flatMap { (c, al) -> al.map { it to c } }.toMap()
     fun canonEmotion(label: String?): String = LABEL_TO_CANON[(label ?: "").trim()] ?: (label ?: "").trim().ifBlank { NEUTRAL }
 
+    // 中英兩份都要有：這裡吃的是「要唸出去的句子」，語言跟著介面走。
+    // 只放中文的話，英文模式下每一句都命中不了任何關鍵字 → 永遠判成中立 →
+    // 情緒參考音形同虛設，使用者會覺得「換情緒沒反應」。
     private val EMOTION_KEYWORDS = mapOf(
         "开心" to listOf("開心","开心","高興","高兴","快樂","快乐","太好","好耶","謝謝","谢谢","感謝","感谢","喜歡","喜欢","愛你","爱你","棒","讚","赞","哈哈","耶","幸福","舒服"),
         "难过" to listOf("難過","难过","傷心","伤心","想哭","好累","不想","唉","失望","孤單","孤单","難受","难受","委屈","痛"),
         "恐惧" to listOf("害怕","好怕","救命","危險","危险","不敢","恐怖","嚇","吓","緊張","紧张","求救"),
         "吃惊" to listOf("什麼","什么","怎麼會","怎么会","天啊","居然","竟然","哇","真的假的","不會吧","不会吧","太扯","驚","惊"),
     )
+
+    /**
+     * 英文關鍵字。用整字比對（見 [containsWordEn]）——不這樣做的話
+     * "sad" 會命中 "saddle"、"ill" 會命中 "still"，情緒就亂跳。
+     */
+    private val EMOTION_KEYWORDS_EN = mapOf(
+        "开心" to listOf("happy","glad","great","thanks","thank","love","like","good","nice",
+                        "wonderful","excited","fun","haha","yay","better","comfortable"),
+        "难过" to listOf("sad","sorry","tired","exhausted","lonely","alone","cry","crying",
+                        "hurt","hurts","pain","painful","ache","upset","disappointed","miss"),
+        "恐惧" to listOf("afraid","scared","fear","help","emergency","danger","dangerous",
+                        "nervous","worried","panic","cant","cannot"),
+        "吃惊" to listOf("what","really","wow","surprised","suddenly","unexpected","seriously","how"),
+    )
+
+    private fun containsWordEn(haystack: String, word: String): Boolean =
+        Regex("(?<![a-z])" + Regex.escape(word) + "(?![a-z])").containsMatchIn(haystack)
     /** 從要唸的文字自動判情緒；沒把握回中立（？→吃惊、！→开心）。 */
     fun detectEmotion(text: String?): String {
         val t = text ?: ""
+        val lower = t.lowercase()
         var best = NEUTRAL; var score = 0
         for ((emo, kws) in EMOTION_KEYWORDS) {
             val c = kws.count { t.contains(it) }
+            if (c > score) { best = emo; score = c }
+        }
+        // 英文另算一輪，取兩邊命中數較高者。中英混排的句子兩邊都會被掃到。
+        for ((emo, kws) in EMOTION_KEYWORDS_EN) {
+            val c = kws.count { containsWordEn(lower, it) }
             if (c > score) { best = emo; score = c }
         }
         if (score == 0) {
@@ -470,15 +496,26 @@ object LocalSovitsHelper {
                     }
                 }.getOrElse { it.message ?: "連線失敗" }
             }
+            // 切換失敗時呼叫端只會沉默地「沿用目前模型」，但參考音卻已經換成新角色的——
+            // 權重與參考音錯配正是合成出怪聲音的主因之一，所以失敗一定要留下紀錄。
             call("/set_sovits_weights", voice.sovitsWeights)?.let {
+                DiagnosticLog.e(
+                    DiagnosticLog.Cat.NET, "SoVITS 權重切換失敗",
+                    "目標=${voice.displayLabel} 權重=${voice.sovitsWeights} 原因=$it"
+                )
                 return@withContext Result.failure(Exception("SoVITS 權重切換失敗：$it"))
             }
             call("/set_gpt_weights", voice.gptWeights)?.let {
+                DiagnosticLog.e(
+                    DiagnosticLog.Cat.NET, "GPT 權重切換失敗",
+                    "目標=${voice.displayLabel} 權重=${voice.gptWeights} 原因=$it"
+                )
                 return@withContext Result.failure(Exception("GPT 權重切換失敗：$it"))
             }
             currentModel = voice
             if (voice.lang == VoiceLang.ZH) lastZhCharacter = voice.character
             Log.i(TAG, "已切換 server 模型 → ${voice.displayLabel}")
+            DiagnosticLog.i(DiagnosticLog.Cat.NET, "已切換伺服器模型", "→ ${voice.displayLabel}")
             Result.success(voice.displayLabel)
         }
 
@@ -575,18 +612,55 @@ object LocalSovitsHelper {
     val PROMPT_EN: String get() = (voicesFor(VoiceLang.EN).firstOrNull() ?: currentZhVoice())?.prompt.orEmpty()
 
     /**
-     * 把手機端路徑（`file://`、`content://`、`/storage/...`）翻成 Mac 上實際存在的路徑。
-     * SoVITS server 在 Mac 上跑，任何手機檔案路徑它都讀不到 — 一律改用 Mac 端預設槽位，
-     * 避免 server 直接回 400。非手機路徑視為使用者自訂的 server-side path，原樣放行。
+     * 這個路徑合成伺服器讀得到嗎？讀不到就回一句「為什麼不行」，null 代表可用。
+     *
+     * 以前這裡是 translateRefAudioPathForServer()：碰到手機路徑就默默換成 Mac 端預設參考音。
+     * 那個作法本身就是 bug——換掉了音檔卻沒換對應的逐字稿，合成出來會走音並帶雜音。
+     * 現在只負責判斷「能不能用」，不能用就讓呼叫端整組退回伺服器給的成對值。
      */
-    fun translateRefAudioPathForServer(rawPath: String, isEnglish: Boolean): String {
-        val isPhonePath = rawPath.startsWith("file:") ||
-            rawPath.startsWith("content:") ||
-            rawPath.startsWith("/storage/") ||
-            rawPath.startsWith("/sdcard/") ||
-            rawPath.startsWith("/data/")
-        return if (isPhonePath) {
-            if (isEnglish) MAC_REF_EN_PATH else MAC_REF_ZH_PATH
-        } else rawPath
+    fun unusableRefReason(rawPath: String): String? = when {
+        rawPath.isBlank() -> "路徑是空的"
+        // 手機本機路徑：合成在電腦上跑，它看不到手機的檔案系統
+        rawPath.startsWith("file:") || rawPath.startsWith("content:") ||
+            rawPath.startsWith("/storage/") || rawPath.startsWith("/sdcard/") ||
+            rawPath.startsWith("/data/") -> "這是手機上的路徑，電腦端讀不到"
+        // 換過電腦卻沿用舊設定的典型情況：手機裡還存著上一台 Windows 的 C:\Users\...，
+        // 送到 Mac/Linux 伺服器一定 404，過去只會得到一個沒頭沒尾的 HTTP 400。
+        Regex("""^[A-Za-z]:[\\/]""").containsMatchIn(rawPath) ->
+            "這是 Windows 路徑，目前的伺服器不是 Windows"
+        rawPath.startsWith("\\\\") -> "這是 Windows 網路芳鄰路徑，伺服器讀不到"
+        else -> null
+    }
+
+    /**
+     * 找出某個參考音檔對應的逐字稿。
+     *
+     * 兩個來源，順序有意義：
+     *  1. 伺服器 `/models` 回報的 emotions／預設 ref——最權威，逐字稿是電腦端給的
+     *  2. 檔名慣例 `【情緒】逐字稿.wav`——曲庫就是這樣命名的，路徑沒登記在 /models 時還撈得回來
+     *
+     * 找不到就回 null。**寧可不用這支參考音，也不要配一份不相干的逐字稿**——
+     * 逐字稿對不上會讓 GPT-SoVITS 合成出走音、亂入雜音的結果（而且 v3/v4 不接受空逐字稿）。
+     */
+    fun promptForRefPath(rawPath: String, voice: MacRefVoice?): String? {
+        fun fileNameOf(p: String) = p.substringAfterLast('/').substringAfterLast('\\')
+        val target = fileNameOf(rawPath)
+        if (target.isBlank()) return null
+
+        val known = buildList {
+            voice?.let { v ->
+                addAll(v.emotions.values)
+                if (v.refPath.isNotBlank()) add(EmotionRef(v.refPath, v.prompt))
+            }
+            VOICES.forEach { v ->
+                addAll(v.emotions.values)
+                if (v.refPath.isNotBlank()) add(EmotionRef(v.refPath, v.prompt))
+            }
+        }
+        known.firstOrNull { fileNameOf(it.ref) == target && it.prompt.isNotBlank() }?.let { return it.prompt }
+
+        // 檔名慣例：【情緒】逐字稿.wav
+        val fromName = target.substringAfter('】', "").removeSuffix(".wav").trim()
+        return fromName.ifBlank { null }
     }
 }

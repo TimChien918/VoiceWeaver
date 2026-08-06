@@ -20,6 +20,8 @@ core = "1.6.1"
 runner = "1.6.2"
 coilCompose = "2.7.0"
 retrofit = "2.12.0"
+# ── Edge AI 與向量檢索（失語症溝通引擎）──
+tensorflowLite = "2.17.0"
 converterMoshi = "2.12.0"
 kotlinxCoroutinesAndroid = "1.10.2"
 kotlinxCoroutinesCore = "1.10.2"
@@ -98,6 +100,10 @@ firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
 mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeTasksGenai" }
 mediapipe-tasks-vision = { group = "com.google.mediapipe", name = "tasks-vision", version.ref = "mediapipeTasksVision" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
+# TensorFlow Lite：語音嵌入模型推論（MFCC 是純 DSP，自行實作；TFLite 用於學習型特徵）
+tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version.ref = "tensorflowLite" }
+# ObjectBox：裝置端向量檢索（Local RAG）
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

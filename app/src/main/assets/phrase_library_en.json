@@ -1,0 +1,36 @@
+[
+  { "id": "water",       "category": "Basic needs", "keyword": "need water",      "sentence": "I need some water, please." },
+  { "id": "food",        "category": "Basic needs", "keyword": "need food",       "sentence": "I'm hungry. I'd like something to eat." },
+  { "id": "bathroom",    "category": "Basic needs", "keyword": "bathroom",        "sentence": "I need to go to the bathroom." },
+  { "id": "rest",        "category": "Basic needs", "keyword": "want rest",       "sentence": "I'm tired. I need to rest." },
+  { "id": "cold",        "category": "Basic needs", "keyword": "too cold",        "sentence": "I'm cold. Could I have a blanket?" },
+  { "id": "hot",         "category": "Basic needs", "keyword": "too hot",         "sentence": "I'm too warm. Could you turn the heat down?" },
+  { "id": "sit",         "category": "Basic needs", "keyword": "sit down",        "sentence": "I need to sit down." },
+
+  { "id": "pain",        "category": "Medical",     "keyword": "in pain",         "sentence": "I'm in pain." },
+  { "id": "head",        "category": "Medical",     "keyword": "head hurts",      "sentence": "My head hurts." },
+  { "id": "chest",       "category": "Medical",     "keyword": "chest hurts",     "sentence": "My chest hurts. This is urgent." },
+  { "id": "medication",  "category": "Medical",     "keyword": "my medication",   "sentence": "I need my medication." },
+  { "id": "doctor",      "category": "Medical",     "keyword": "the doctor",      "sentence": "I need to see the doctor." },
+  { "id": "nurse",       "category": "Medical",     "keyword": "the nurse",       "sentence": "Could you call the nurse, please?" },
+  { "id": "dizzy",       "category": "Medical",     "keyword": "feel dizzy",      "sentence": "I feel dizzy." },
+  { "id": "breathe",     "category": "Medical",     "keyword": "cant breathe",    "sentence": "I'm having trouble breathing. This is urgent." },
+
+  { "id": "help",        "category": "Help",        "keyword": "need help",       "sentence": "I need help, please." },
+  { "id": "wait",        "category": "Help",        "keyword": "please wait",     "sentence": "Please wait. I need a moment." },
+  { "id": "again",       "category": "Help",        "keyword": "say again",       "sentence": "Could you say that again, please?" },
+  { "id": "slower",      "category": "Help",        "keyword": "speak slower",    "sentence": "Could you speak more slowly, please?" },
+  { "id": "write",       "category": "Help",        "keyword": "write it",        "sentence": "Could you write that down for me?" },
+  { "id": "understand",  "category": "Help",        "keyword": "dont understand", "sentence": "I don't understand. Can you explain it another way?" },
+
+  { "id": "family",      "category": "People",      "keyword": "call family",     "sentence": "Please call my family." },
+  { "id": "home",        "category": "People",      "keyword": "go home",         "sentence": "I want to go home." },
+  { "id": "alone",       "category": "People",      "keyword": "leave me",        "sentence": "I'd like to be alone for a while." },
+  { "id": "stay",        "category": "People",      "keyword": "please stay",     "sentence": "Please stay with me." },
+
+  { "id": "yes",         "category": "Answers",     "keyword": "yes please",      "sentence": "Yes, please." },
+  { "id": "no",          "category": "Answers",     "keyword": "no thank you",    "sentence": "No, thank you." },
+  { "id": "thanks",      "category": "Answers",     "keyword": "thank you",       "sentence": "Thank you very much." },
+  { "id": "dontknow",    "category": "Answers",     "keyword": "dont know",       "sentence": "I don't know." },
+  { "id": "finished",    "category": "Answers",     "keyword": "all done",        "sentence": "I'm finished, thank you." }
+]

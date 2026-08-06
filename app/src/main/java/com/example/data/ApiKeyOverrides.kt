@@ -30,6 +30,12 @@ object ApiKeyOverrides {
 
     // 多供應商文字 LLM 清單（給 HybridInferenceEngine 同步讀取，免協程）
     @Volatile var llmApis: List<LlmApiEntry> = emptyList()
+
+    /**
+     * 語音辨識供應商。空清單＝使用者沒設，轉寫會退回 LLM 內建的端點。
+     * 那個退路必須留著：既有使用者升級後不該突然沒有轉寫可用。
+     */
+    @Volatile var sttApis: List<SttApiEntry> = emptyList()
     @Volatile var llmSelectedId: String = ""
 
     /** 使用者覆蓋優先、空則退回 fallback（也擋掉 YOUR_ 佔位）。 */
@@ -59,6 +65,7 @@ object ApiKeyOverrides {
         cohereEndpoint = s.llmCohereEndpoint
         cohereModel = s.llmCohereModel
         llmApis = LlmApiStore.decode(s.llmApis)
+        sttApis = SttApiStore.decode(s.sttApis)
         llmSelectedId = s.llmApiSelectedId
     }
 }

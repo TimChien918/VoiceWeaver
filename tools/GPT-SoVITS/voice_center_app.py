@@ -469,7 +469,17 @@ SERVICES = [
     ("9880", "語音合成 (GPT-SoVITS)",  "api_v2.py",           ["-a", _BIND, "-p", "9880", "-c", VOICE_CFG], True),
     ("9881", "本機生圖 (SD-Turbo)",     "image_gen_server.py", [], False),
     ("9882", "文字推論 (Qwen)",          "text_infer_server.py",[], False),
+    ("9883", "音訊理解 (Gemma 4)",       "audio_infer_server.py",[], False),
 ]
+
+# 音訊理解跑在自己的 venv：mlx-vlm 會拉一整套自己的 numpy/transformers，
+# 裝進 gpt-sovits-env 有很高機率弄壞語音合成，所以刻意分開。
+AUDIO_VENV_PY = os.path.join(os.path.dirname(ROOT), "audio-understand-env", "bin", "python")
+
+# USB 轉接（adb reverse）要涵蓋的埠，一律從 SERVICES 推導。
+# 以前這份清單在兩個地方各寫死一次 ("9880","9881","9882")，結果新增 9883 之後
+# 手機重連就只會重建舊的三個，音訊理解永遠連不上、還很難看出為什麼。
+REVERSE_PORTS = tuple(svc[0] for svc in SERVICES)
 
 # ── 視覺設計 ─────────────────────────────────────────────────────────────
 FONT_UI   = "Microsoft JhengHei UI" if IS_WIN else "PingFang TC"
@@ -571,6 +581,12 @@ I18N = {
     "svc.9880": {"zh-TW":"語音合成 (GPT-SoVITS)", "en":"Voice synthesis (GPT-SoVITS)", "ja":"音声合成 (GPT-SoVITS)", "ko":"음성 합성 (GPT-SoVITS)"},
     "svc.9881": {"zh-TW":"本機生圖 (SD-Turbo)", "en":"Local image gen (SD-Turbo)", "ja":"ローカル画像生成 (SD-Turbo)", "ko":"로컬 이미지 생성 (SD-Turbo)"},
     "svc.9882": {"zh-TW":"文字推論 (Qwen)", "en":"Text inference (Qwen)", "ja":"テキスト推論 (Qwen)", "ko":"텍스트 추론 (Qwen)"},
+    "svc.needAudioEnv": {
+        "zh-TW":"需先建立音訊環境：終端機執行 tools/GPT-SoVITS/start_audio_infer.sh 會顯示建立指令",
+        "en":"Audio env missing: run tools/GPT-SoVITS/start_audio_infer.sh for setup instructions",
+        "ja":"音声環境が未作成：tools/GPT-SoVITS/start_audio_infer.sh を実行して手順を確認",
+        "ko":"오디오 환경 없음: tools/GPT-SoVITS/start_audio_infer.sh 실행해 설치 안내 확인"},
+    "svc.9883": {"zh-TW":"音訊理解 (Gemma 4)", "en":"Audio understanding (Gemma 4)", "ja":"音声理解 (Gemma 4)", "ko":"오디오 이해 (Gemma 4)"},
     # 服務狀態 / 按鈕（{port} 會被代入）
     "svc.running": {"zh-TW":"執行中 · 埠 {port}", "en":"Running · port {port}", "ja":"実行中 · ポート {port}", "ko":"실행 중 · 포트 {port}"},
     "svc.loading": {"zh-TW":"啟動中…", "en":"Starting…", "ja":"起動中…", "ko":"시작 중…"},
@@ -1394,6 +1410,7 @@ class App:
                         "current": cur.get("name", ""), "lang": cur.get("lang", ""),
                         # 電腦端三項運算的即時可用性（給網頁顯示「誰由電腦跑」）
                         "voice": port_up(9880), "image": port_up(9881), "text": port_up(9882),
+                        "audio": port_up(9883),
                     })
                 if self.path.startswith("/voices"):
                     # 角色清單＝雲端曲庫（本機只是快取），帶 downloaded 讓 UI 標示
@@ -2965,7 +2982,7 @@ class App:
                                      timeout=8, **POPEN_KW).stdout
                 serials = [l.split("\t")[0] for l in out.splitlines()[1:] if "\tdevice" in l]
                 for s in serials:
-                    for pp in ("9880","9881","9882"):
+                    for pp in REVERSE_PORTS:
                         subprocess.run([self.adb,"-s",s,"reverse",f"tcp:{pp}",f"tcp:{pp}"],
                                        capture_output=True, timeout=8, **POPEN_KW)
                 ok = bool(serials)
@@ -3004,6 +3021,9 @@ class App:
         if port == "9880":
             return [py, script_path, "-a", _BIND, "-p", "9880",
                     "-c", os.path.join(ROOT, VOICE_CFG)]
+        if port == "9883":
+            # 這支不能用 gpt-sovits-env 的 python，見 AUDIO_VENV_PY 註解
+            return [AUDIO_VENV_PY, script_path] + row["args"]
         return [py, script_path] + row["args"]
 
     def start(self, port):
@@ -3020,6 +3040,10 @@ class App:
         if row["needs"] and not have_voice_models():
             row["sticky"] = True
             row["status"].config(text=self.t("svc.needModel"), fg=C_AMBER); return
+        if port == "9883" and not os.path.isfile(AUDIO_VENV_PY):
+            # 缺的是「另一個 venv」而不是模型，訊息要講得出下一步怎麼做
+            row["sticky"] = True
+            row["status"].config(text=self.t("svc.needAudioEnv"), fg=C_AMBER); return
         try:
             cmd = self._build_cmd(port)
             # 限制 torch 執行緒 + 低優先權 → 語音/生圖服務啟動時不會把電腦吃到當機
@@ -3082,7 +3106,7 @@ class App:
                                      text=True, timeout=6, **POPEN_KW).stdout
                 serials = [l.split("\t")[0] for l in out.splitlines()[1:] if "\tdevice" in l]
                 for s in serials:
-                    for pp in ("9880","9881","9882"):
+                    for pp in REVERSE_PORTS:
                         subprocess.run([self.adb,"-s",s,"reverse",f"tcp:{pp}",f"tcp:{pp}"],
                                        capture_output=True, timeout=6, **POPEN_KW)
             except Exception: pass

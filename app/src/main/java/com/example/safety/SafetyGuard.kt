@@ -46,17 +46,35 @@ object SafetyGuard {
 
     /**
      * 預設貼在所有 LLM 呼叫的 system prompt 最前面。
-     * 沒有英文的「DO NOT」式硬指令——對失語症場景而言，用中文寫死規則對中文模型最穩。
+     *
+     * 用英文寫：模型對英文硬指令的遵從度較好，而且提示詞主體現在也全面英文化了，
+     * 中英夾雜反而會讓模型在語言之間搖擺（見 [com.example.ui.I18n.outputLanguageDirective] 的註解）。
+     *
+     * **這裡刻意不再指定輸出語言。** 舊版第 4 條寫死「輸出永遠是繁體中文」，
+     * 而這段文字黏在每一次 LLM 呼叫的最前面——等於每次都在跟各處的
+     * outputLanguageDirective 對打，英文介面拿到中文回應有一部分就是這樣來的。
+     * 輸出語言由各個 prompt 自己負責，這裡只管安全。
+     *
+     * `get()` 而不是常數：專線的說法要跟著介面語言。
      */
-    val DEFENSIVE_SYSTEM_PROMPT: String = """
-你是醫療輔助溝通系統，使用者為失語症患者。請遵守以下硬性規定：
-1) 絕對不可生成「自殺、自殘、想死、結束生命、你不會好了、放棄治療」等負面或鼓勵放棄的字眼。
-2) 若「使用者本人」表達自傷、絕望，請改以「我聽到了，建議聯絡家屬或撥打 1925 安心專線」回應。
-   但若使用者是在替「別人」求救或描述他人處境（例如「我朋友想自殺，快叫救護車」），
-   必須忠實重組成能對外求救的句子，不可以替換成上面那句安撫語——
-   使用者講不出話，這是他唯一的求救管道，擋下來會害另一個人叫不到救護車。
-3) 不可給出具體藥物劑量、自行用藥建議；遇到醫療問題請建議聯絡醫師。
-4) 語氣維持平靜、溫和、簡短。輸出永遠是繁體中文，除非使用者明確切換語言。
+    val DEFENSIVE_SYSTEM_PROMPT: String get() = """
+You are an assistive communication device for a person with aphasia. These rules are absolute:
+
+1) Never generate wording that encourages self-harm or giving up — "kill yourself", "want to die",
+   "end your life", "you won't get better", "stop treatment", and the like.
+
+2) If the USER THEMSELVES expresses self-harm or hopelessness, respond instead with:
+   "${com.example.ui.I18n.tr("我聽到了，建議聯絡家屬或撥打 1925 安心專線")}"
+   BUT if the user is calling for help for SOMEONE ELSE, or describing another person's situation
+   (e.g. "my friend wants to kill himself, call an ambulance"), you MUST faithfully rebuild it into
+   a sentence that can summon help. Do NOT replace it with the calming line above — this person
+   cannot speak, this is their only channel, and blocking it means someone else does not get an
+   ambulance.
+
+3) Never give specific drug dosages or self-medication advice. For medical questions, advise
+   contacting a doctor.
+
+4) Keep the tone calm, gentle, and short.
 """.trimIndent()
 
     /** 攔截器：對任何要送進 LLM、TTS、或落地到 Room 的文字呼叫一次。 */
@@ -132,23 +150,31 @@ data class CrisisAction(
     val longitude: Double?,
     val poiTag: String
 ) {
-    /** 組 Telegram HTML 訊息：第一行紅字「緊急」、含 Google Maps 連結。 */
+    /**
+     * 組 Telegram HTML 訊息：第一行紅字「緊急」、含 Google Maps 連結。
+     *
+     * 跟著介面語言。照顧者與使用者共用同一台裝置，介面語言是目前唯一能拿到的線索——
+     * 一封讀不懂的求救訊息等同沒發。
+     */
     fun toTelegramMessage(): String {
+        val tr = com.example.ui.I18n::tr
         val locLine = if (latitude != null && longitude != null) {
             "📍 <a href=\"https://maps.google.com/?q=$latitude,$longitude\">$latitude, $longitude</a>"
         } else {
-            "📍 位置未知（GPS 權限未授予或定位失敗）"
+            tr("📍 位置未知（GPS 權限未授予或定位失敗）")
         }
-        val poiLine = if (poiTag.isNotBlank()) "🏷 附近：$poiTag" else ""
+        val poiLine = if (poiTag.isNotBlank()) "${tr("🏷 附近")}：$poiTag" else ""
+        // 時間格式刻意固定用 Locale.TAIWAN：這個 pattern 只有數字欄位，
+        // 但改用 getDefault() 會讓某些地區（例如泰國）換成佛曆，收到的人會看不懂日期。
         val time = java.text.SimpleDateFormat(
             "yyyy-MM-dd HH:mm:ss",
             java.util.Locale.TAIWAN
         ).format(java.util.Date())
         return buildString {
-            appendLine("<b>🆘 VoiceWeaver 緊急通報</b>")
-            appendLine("使用者輸入觸發危機關鍵字，請立即聯絡。")
+            appendLine("<b>${tr("🆘 VoiceWeaver 緊急通報")}</b>")
+            appendLine(tr("使用者輸入觸發危機關鍵字，請立即聯絡。"))
             appendLine()
-            appendLine("🗣 輸入：${userText.take(120)}")
+            appendLine("${tr("🗣 輸入")}：${userText.take(120)}")
             appendLine(locLine)
             if (poiLine.isNotEmpty()) appendLine(poiLine)
             appendLine("🕒 $time")

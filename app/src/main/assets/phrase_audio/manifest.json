@@ -1,0 +1,152 @@
+[
+  {
+    "id": "water",
+    "file": "water.wav",
+    "text": "I need some water, please."
+  },
+  {
+    "id": "food",
+    "file": "food.wav",
+    "text": "I'm hungry. I'd like something to eat."
+  },
+  {
+    "id": "bathroom",
+    "file": "bathroom.wav",
+    "text": "I need to go to the bathroom."
+  },
+  {
+    "id": "rest",
+    "file": "rest.wav",
+    "text": "I'm tired. I need to rest."
+  },
+  {
+    "id": "cold",
+    "file": "cold.wav",
+    "text": "I'm cold. Could I have a blanket?"
+  },
+  {
+    "id": "hot",
+    "file": "hot.wav",
+    "text": "I'm too warm. Could you turn the heat down?"
+  },
+  {
+    "id": "sit",
+    "file": "sit.wav",
+    "text": "I need to sit down."
+  },
+  {
+    "id": "pain",
+    "file": "pain.wav",
+    "text": "I'm in pain."
+  },
+  {
+    "id": "head",
+    "file": "head.wav",
+    "text": "My head hurts."
+  },
+  {
+    "id": "chest",
+    "file": "chest.wav",
+    "text": "My chest hurts. This is urgent."
+  },
+  {
+    "id": "medication",
+    "file": "medication.wav",
+    "text": "I need my medication."
+  },
+  {
+    "id": "doctor",
+    "file": "doctor.wav",
+    "text": "I need to see the doctor."
+  },
+  {
+    "id": "nurse",
+    "file": "nurse.wav",
+    "text": "Could you call the nurse, please?"
+  },
+  {
+    "id": "dizzy",
+    "file": "dizzy.wav",
+    "text": "I feel dizzy."
+  },
+  {
+    "id": "breathe",
+    "file": "breathe.wav",
+    "text": "I'm having trouble breathing. This is urgent."
+  },
+  {
+    "id": "help",
+    "file": "help.wav",
+    "text": "I need help, please."
+  },
+  {
+    "id": "wait",
+    "file": "wait.wav",
+    "text": "Please wait. I need a moment."
+  },
+  {
+    "id": "again",
+    "file": "again.wav",
+    "text": "Could you say that again, please?"
+  },
+  {
+    "id": "slower",
+    "file": "slower.wav",
+    "text": "Could you speak more slowly, please?"
+  },
+  {
+    "id": "write",
+    "file": "write.wav",
+    "text": "Could you write that down for me?"
+  },
+  {
+    "id": "understand",
+    "file": "understand.wav",
+    "text": "I don't understand. Can you explain it another way?"
+  },
+  {
+    "id": "family",
+    "file": "family.wav",
+    "text": "Please call my family."
+  },
+  {
+    "id": "home",
+    "file": "home.wav",
+    "text": "I want to go home."
+  },
+  {
+    "id": "alone",
+    "file": "alone.wav",
+    "text": "I'd like to be alone for a while."
+  },
+  {
+    "id": "stay",
+    "file": "stay.wav",
+    "text": "Please stay with me."
+  },
+  {
+    "id": "yes",
+    "file": "yes.wav",
+    "text": "Yes, please."
+  },
+  {
+    "id": "no",
+    "file": "no.wav",
+    "text": "No, thank you."
+  },
+  {
+    "id": "thanks",
+    "file": "thanks.wav",
+    "text": "Thank you very much."
+  },
+  {
+    "id": "dontknow",
+    "file": "dontknow.wav",
+    "text": "I don't know."
+  },
+  {
+    "id": "finished",
+    "file": "finished.wav",
+    "text": "I'm finished, thank you."
+  }
+]

@@ -239,10 +239,12 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         if (appliedTtsLocale == want) return
         val result = engine.setLanguage(want)
         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            // 該語言沒語音包 → 退回中文，至少發得出聲音
-            Log.w("TtsModule", "裝置沒有 ${want.language} 語音包，退回中文")
-            engine.setLanguage(Locale("zh", "TW"))
-            selectBestVoice(engine, Locale("zh", "TW"))
+            // 該語言沒語音包 → 退回英文，至少發得出聲音。
+            // 以前寫死退回中文，但本 App 以英語使用者為主，而且英文語音包幾乎每台
+            // Android 都有；退回中文只會讓英語使用者聽到一段唸不出來的中文語音。
+            Log.w("TtsModule", "裝置沒有 ${want.language} 語音包，退回英文")
+            engine.setLanguage(Locale.US)
+            selectBestVoice(engine, Locale.US)
         } else {
             selectBestVoice(engine, want)
         }
@@ -637,17 +639,73 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                 addLog("[GPT-SoVITS] 情緒：$emotion${if (manualEmotionOverride.isNotBlank()) "（手動）" else "（自動）"} → ${emoRef?.ref?.substringAfterLast('/')}")
                 _synthesisStatus.value = "🎭 情緒：$emotion"
             }
-            val defaultRef = emoRef?.ref?.ifBlank { null } ?: activeVoice?.refPath ?: LocalSovitsHelper.refPathFor(targetLang)
-            val effectiveRefAudioPath = refAudioPath.ifBlank {
-                addLog("[GPT-SoVITS] 參考音檔：$defaultRef")
-                defaultRef
+            // ③ 決定「要用哪支參考音」——關鍵是音檔與逐字稿**必須是同一支音檔的一對**。
+            //
+            // 這裡以前是分開算的：音檔被「自備樣本槽位」蓋過去，逐字稿卻還是照拿情緒挑出來的那份。
+            // 結果送出去的是 A 的聲音配 B 的稿子，GPT-SoVITS 只能硬合，出來就是走音加雜音。
+            // 現在整組一起決定、一起退回，任何情況都不會只換其中一邊。
+            val emotionPair = emoRef ?: LocalSovitsHelper.EmotionRef(
+                activeVoice?.refPath ?: LocalSovitsHelper.refPathFor(targetLang),
+                activeVoice?.prompt ?: LocalSovitsHelper.promptFor(targetLang)
+            )
+            val chosen: LocalSovitsHelper.EmotionRef
+            val chosenSource: String
+            if (refAudioPath.isBlank()) {
+                chosen = emotionPair
+                chosenSource = "情緒自動挑選"
+            } else {
+                val unusable = LocalSovitsHelper.unusableRefReason(refAudioPath)
+                val ownPrompt = if (unusable == null)
+                    LocalSovitsHelper.promptForRefPath(refAudioPath, activeVoice) else null
+                when {
+                    unusable != null -> {
+                        // 例如手機裡還存著上一台 Windows 的 C:\Users\...，送出去只會換來 HTTP 400
+                        DiagnosticLog.w(
+                            DiagnosticLog.Cat.TTS, "自備樣本槽位無法使用，改用情緒參考音",
+                            "槽位=$refAudioPath 原因=$unusable"
+                        )
+                        chosen = emotionPair
+                        chosenSource = "自備樣本不可用→情緒挑選"
+                    }
+                    ownPrompt.isNullOrBlank() -> {
+                        // 配不出逐字稿就別用它。留空也不行——SoVITS v3/v4 遇到空 prompt_text 會直接報錯。
+                        DiagnosticLog.w(
+                            DiagnosticLog.Cat.TTS, "自備樣本找不到對應逐字稿，改用情緒參考音",
+                            "槽位=$refAudioPath"
+                        )
+                        chosen = emotionPair
+                        chosenSource = "自備樣本無逐字稿→情緒挑選"
+                    }
+                    else -> {
+                        chosen = LocalSovitsHelper.EmotionRef(refAudioPath, ownPrompt)
+                        chosenSource = "自備樣本槽位"
+                    }
+                }
             }
-            val serverSidePath = LocalSovitsHelper.translateRefAudioPathForServer(effectiveRefAudioPath, !isZh)
-            // ③ 只有中文模型（簡體訓練）才把繁體轉簡體；英/日/韓不轉。
+            val serverSidePath = chosen.ref
+            val promptRaw = chosen.prompt
+
+            // ④ 只有中文模型（簡體訓練）才把繁體轉簡體；英/日/韓不轉。
             val speakText = if (isZh) ChineseConverter.toSimplified(context, text) else text
             if (isZh && speakText != text) addLog("[GPT-SoVITS] 繁→簡：「$text」→「$speakText」")
-            val promptRaw = (emoRef?.prompt?.ifBlank { null }) ?: activeVoice?.prompt ?: LocalSovitsHelper.promptFor(targetLang)
             val promptText = if (isZh) ChineseConverter.toSimplified(context, promptRaw) else promptRaw
+
+            // 配對結果印在同一行。以前音檔與逐字稿分別印在不同行，肉眼根本對不起來——
+            // 那正是這個 bug 躲過去的原因。順便留一道事後檢查，萬一又被拆散能立刻看見。
+            val refFileName = serverSidePath.substringAfterLast('/').substringAfterLast('\\')
+            val transcriptInFile = refFileName.substringAfter('】', "").removeSuffix(".wav")
+            val pairLooksWrong = transcriptInFile.isNotBlank() && promptRaw.isNotBlank() &&
+                !transcriptInFile.startsWith(promptRaw.take(8)) &&
+                !promptRaw.startsWith(transcriptInFile.take(8))
+            val pairDetail = "情緒=$emotion 參考音=$refFileName 逐字稿=「$promptRaw」 來源=$chosenSource"
+            if (pairLooksWrong) {
+                DiagnosticLog.e(
+                    DiagnosticLog.Cat.TTS,
+                    "參考音與逐字稿對不上——合成結果會走音並出現雜音", pairDetail
+                )
+            } else {
+                DiagnosticLog.i(DiagnosticLog.Cat.TTS, "參考音／逐字稿配對", pairDetail)
+            }
             sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text)
         }
         return true
@@ -741,6 +799,14 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                 _isSynthesizing.value = false   // 拿到回應＝合成階段結束（之後是播放）
                 response.use {
                     if (!it.isSuccessful) {
+                        // 伺服器回的錯誤內容以前整包丟掉，只留一個狀態碼。實際上 400 幾乎都是
+                        // 「參考音路徑在伺服器上不存在」——例如手機裡還存著上一台 Windows 電腦的
+                        // C:\Users\... 路徑。把路徑和伺服器原文一起記下來才看得出是這種情況。
+                        val errBody = runCatching { it.body?.string().orEmpty() }.getOrDefault("")
+                        DiagnosticLog.e(
+                            DiagnosticLog.Cat.NET, "GPT-SoVITS 合成失敗 HTTP ${it.code}",
+                            "ref_audio_path=$serverSidePath  伺服器回應=${errBody.take(300)}"
+                        )
                         when {
                             !expressiveTest -> {
                                 addLog("[GPT-SoVITS] API HTTP ${it.code}；改用 Android 本機 TTS")
@@ -860,6 +926,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
     private fun addLog(message: String) {
         Log.i("TtsModule", message)   // 同步進 logcat，方便實機除錯（合成流程、繁→簡、錯誤）
+        // 再寫一份到本地檔案：_piperSynthesisLog 只活在記憶體、而且沒有任何畫面在讀它，
+        // App 一關就沒了。使用者手上出問題時要有東西可以回頭查。
+        DiagnosticLog.i(DiagnosticLog.Cat.TTS, message)
         val currentLogs = _piperSynthesisLog.value.toMutableList()
         currentLogs.add(message)
         _piperSynthesisLog.value = currentLogs

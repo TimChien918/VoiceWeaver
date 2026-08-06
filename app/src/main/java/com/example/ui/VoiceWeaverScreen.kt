@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.heightIn
@@ -756,15 +757,20 @@ fun VoiceWeaverScreen(
 
                                 Button(
                                     onClick = { viewModel.toggleStt() },
-                                    enabled = sttState !is SttState.Processing && sttState !is SttState.Preparing,
+                                    // 這顆只管語音轉文字，狀態也只看 sttState。
+                                    //
+                                    // 以前這裡還會看 isListeningDirect——那是「一顆按鈕兩用」時代的殘留：
+                                    // 按下面的「直接說給 AI 聽」，這顆也會跟著變紅變成「停止」，
+                                    // 畫面上看起來兩個模式同時在錄音，實際上只是這顆在顯示別人的狀態。
+                                    // 兩條路各自獨立，狀態就不該互相顯示。
+                                    //
+                                    // 麥克風只有一支，所以「直接聽」錄音中就把這顆鎖起來——
+                                    // 獨立不等於可以同時開兩個錄音搶同一支麥克風。
+                                    enabled = sttState !is SttState.Processing &&
+                                        sttState !is SttState.Preparing &&
+                                        !isListeningDirect,
                                     colors = ButtonDefaults.buttonColors(
-                                        // 有雲端音訊能力時這顆會走「直接讓 AI 聽」，錄音中是 isListeningDirect
-                                        // 而不是 sttState.Listening——兩個都要看，否則錄音中按鈕看起來沒反應。
-                                        containerColor = when {
-                                            isListeningDirect -> dangerRose
-                                            sttState is SttState.Listening -> dangerRose
-                                            else -> neonCyan
-                                        },
+                                        containerColor = if (sttState is SttState.Listening) dangerRose else neonCyan,
                                         contentColor = Color.White,
                                         disabledContainerColor = textMuted.copy(alpha = 0.20f),
                                         disabledContentColor = textMuted
@@ -774,7 +780,6 @@ fun VoiceWeaverScreen(
                                 ) {
                                     Text(
                                         text = when {
-                                            isListeningDirect -> stringResource(R.string.main_stt_btn_stop)
                                             sttState is SttState.Listening -> stringResource(R.string.main_stt_btn_stop)
                                             sttState is SttState.Processing -> stringResource(R.string.main_stt_btn_processing)
                                             sttState is SttState.Preparing -> stringResource(R.string.main_stt_btn_preparing)
@@ -798,9 +803,13 @@ fun VoiceWeaverScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = { viewModel.toggleDirectAudioUnderstanding() },
+                                    // 同上，反向也鎖：語音轉文字正在錄的時候不讓這條也開始搶麥克風
+                                    enabled = isListeningDirect || sttState is SttState.Idle || sttState is SttState.Error,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isListeningDirect) dangerRose else neonGreen,
-                                        contentColor = Color.White
+                                        contentColor = Color.White,
+                                        disabledContainerColor = textMuted.copy(alpha = 0.20f),
+                                        disabledContentColor = textMuted
                                     ),
                                     shape = RoundedCornerShape(10.dp),
                                     elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp),
@@ -963,6 +972,7 @@ fun VoiceWeaverScreen(
                         ) {
                             Text(I18n.tr("用圖卡說話 → 到「圖卡」分頁"), fontSize = 13.sp, color = neonCyan)
                         }
+
                     }
                 }
             }

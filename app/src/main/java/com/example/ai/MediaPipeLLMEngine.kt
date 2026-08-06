@@ -141,24 +141,46 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
         parseRehabEval(raw) ?: super.scoreRehab(target, recognized, words)
     }
 
+    /**
+     * 介面是不是中文。
+     *
+     * 決定 few-shot 範例要用哪個語言寫。對 1.5B 這種小模型，**範例的語言比指令
+     * 更能決定輸出語言**——指令寫「用英文回答」但範例是中文時，實測它照抄中文。
+     * 指令本身一律英文（模型對英文指令的遵從度較好），只有範例跟著介面走。
+     */
+    private fun uiIsChinese() = com.example.ui.I18n.lang == com.example.data.AppLanguage.ZhTW
+
     private fun buildRehabEvalPrompt(target: String, recognized: String, words: List<WordConf>) = buildString {
-        val conf = if (words.isNotEmpty()) "（信心：${words.joinToString(" ") { "${it.word}${(it.conf*100).toInt()}%" }}）" else ""
+        val conf = if (words.isNotEmpty())
+            " (confidence: ${words.joinToString(" ") { "${it.word}${(it.conf*100).toInt()}%" }})" else ""
         appendLine("<|im_start|>system")
         appendLine(
-            "你是失語症語言治療師，評估患者口語跟讀。不要用字元差異，要看語意完整(50%)、流暢(30%)、語氣(20%)。" +
-            "每次評估都是獨立事件：只依據本次的目標句與患者語音判分，不參考、不比較、不延續任何先前的評估或分數（下面的範例只是輸出格式示範）。" +
-            // 評語是給使用者讀的，要跟著介面語言；few-shot 也一起換，
-            // 否則模型會照抄範例的中文（實測英文介面拿到「非常好，保持下去！」）。
-            "只輸出 JSON：{\"score\":0到100整數,\"feedback\":\"20字內的${com.example.ui.I18n.outputLanguageName()}鼓勵\",\"wrongChars\":[\"說不準的字或詞\"]}<|im_end|>"
+            "You are a speech-language therapist scoring how a person with aphasia repeated a " +
+            "target sentence. Do not score by character difference. Weight: meaning conveyed 50%, " +
+            "fluency 30%, prosody 20%. " +
+            "Every evaluation is standalone: score only this attempt against this target. Do not " +
+            "refer to, compare with, or continue any earlier evaluation or score (the example " +
+            "below is only a format demonstration). " +
+            "Output JSON only: {\"score\":0-100 integer,\"feedback\":\"under 20 words, encouraging, " +
+            "in ${com.example.ui.I18n.outputLanguageNameEn()}\",\"wrongChars\":[\"words that were inaccurate\"]}<|im_end|>"
         )
+        // few-shot 跟著介面語言：模型會照抄範例的語言，範例留中文的話
+        // 英文介面實測拿到「非常好，保持下去！」
         appendLine("<|im_start|>user")
-        appendLine("目標句：我想喝水")
-        appendLine("患者說出：我要水<|im_end|>")
-        appendLine("<|im_start|>assistant")
-        appendLine("{\"score\":85,\"feedback\":\"${com.example.ui.I18n.tr("意思很清楚，很好！")}\",\"wrongChars\":[\"想\"]}<|im_end|>")
+        if (uiIsChinese()) {
+            appendLine("Target: 我想喝水")
+            appendLine("They said: 我要水<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("{\"score\":85,\"feedback\":\"意思很清楚，很好！\",\"wrongChars\":[\"想\"]}<|im_end|>")
+        } else {
+            appendLine("Target: I would like some water")
+            appendLine("They said: I want water<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("{\"score\":85,\"feedback\":\"${com.example.ui.I18n.tr("意思很清楚，很好！")}\",\"wrongChars\":[\"would like\"]}<|im_end|>")
+        }
         appendLine("<|im_start|>user")
-        appendLine("目標句：$target")
-        appendLine("患者說出：${recognized.ifBlank { "（未偵測到聲音）" }}$conf")
+        appendLine("Target: $target")
+        appendLine("They said: ${recognized.ifBlank { "(no speech detected)" }}$conf")
         appendLine(com.example.ui.I18n.outputLanguageDirective("feedback") + "<|im_end|>")
         append("<|im_start|>assistant\n")
     }
@@ -180,38 +202,61 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
     private fun buildAacPrompt(items: List<com.example.data.AacItem>, location: String) = buildString {
         appendLine("<|im_start|>system")
         appendLine(
-            "你是失語症患者的溝通助理。使用者透過圖卡點選一串元素，請組合成一句**自然口語、有禮貌**的" + com.example.ui.I18n.outputLanguageName() + "。" +
-            "規則：只輸出一句、不解釋、不要引號；金額自然嵌入；不憑空加入未提到的物品。<|im_end|>"
+            "You help a person with aphasia say what they mean. They tapped a sequence of picture " +
+            "cards. Combine them into ONE natural, spoken, polite sentence in " +
+            com.example.ui.I18n.outputLanguageNameEn() + ". " +
+            "Rules: output one sentence only, no explanation, no quotation marks; fold any amount " +
+            "in naturally; never add an object that is not on the cards.<|im_end|>"
         )
         appendLine("<|im_start|>user")
-        appendLine("場景：客廳")
-        appendLine("圖卡序列：水 → NT\$50<|im_end|>")
-        appendLine("<|im_start|>assistant")
-        appendLine("麻煩給我一杯水，五十元。<|im_end|>")
+        if (uiIsChinese()) {
+            appendLine("Setting: 客廳")
+            appendLine("Cards: 水 -> NT\$50<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("麻煩給我一杯水，五十元。<|im_end|>")
+        } else {
+            appendLine("Setting: living room")
+            appendLine("Cards: water -> NT\$50<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("Could I have a glass of water, please? That's fifty dollars.<|im_end|>")
+        }
         appendLine("<|im_start|>user")
-        appendLine("場景：${location.ifBlank { "未指定" }}")
-        appendLine("圖卡序列：${items.joinToString(" → ") { it.label }}<|im_end|>")
+        appendLine("Setting: ${location.ifBlank { "unspecified" }}")
+        appendLine("Cards: ${items.joinToString(" -> ") { it.label }}<|im_end|>")
         append("<|im_start|>assistant\n")
     }
 
     private fun buildSuggestPrompt(avgScore: Double, location: String, recent: List<String>) = buildString {
         appendLine("<|im_start|>system")
         appendLine(
-            "你是失語症語言治療助理。依患者狀況產出 3 句適合「跟讀練習」的繁體中文短句。" +
-            "難度規則：分數<60→1-4字短詞；60-79→5-8字短句；≥80→9-15字完整情境句。" +
-            "句子要日常實用、避開重複「已練過」、貼合「當前場景」。" +
-            "只輸出 JSON：{\"sentences\":[\"...\",\"...\",\"...\"],\"level\":\"easy|medium|hard\"}，不要其他文字。<|im_end|>"
+            "You are a speech rehabilitation assistant for people with aphasia. Produce 3 short " +
+            "sentences in " + com.example.ui.I18n.outputLanguageNameEn() + " for the person to read aloud. " +
+            "Difficulty: score<60 -> 1-4 characters (or 1-2 words); 60-79 -> 5-8 characters " +
+            "(or 3-5 words); >=80 -> 9-15 characters (or 6-10 words). " +
+            "Sentences must be everyday and useful, must not repeat anything already practised, " +
+            "and should fit the current setting. " +
+            "Output JSON only: {\"sentences\":[\"...\",\"...\",\"...\"],\"level\":\"easy|medium|hard\"}, " +
+            "nothing else.<|im_end|>"
         )
         appendLine("<|im_start|>user")
-        appendLine("最近平均分：72")
-        appendLine("當前場景：客廳")
-        appendLine("已練過：[\"我想喝水\"]<|im_end|>")
-        appendLine("<|im_start|>assistant")
-        appendLine("{\"sentences\":[\"幫我倒杯茶\",\"我想看電視\",\"請拿遙控器\"],\"level\":\"medium\"}<|im_end|>")
+        if (uiIsChinese()) {
+            appendLine("Recent average: 72")
+            appendLine("Setting: 客廳")
+            appendLine("Already practised: [\"我想喝水\"]<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("{\"sentences\":[\"幫我倒杯茶\",\"我想看電視\",\"請拿遙控器\"],\"level\":\"medium\"}<|im_end|>")
+        } else {
+            appendLine("Recent average: 72")
+            appendLine("Setting: living room")
+            appendLine("Already practised: [\"I would like some water\"]<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("{\"sentences\":[\"Please pour me some tea\",\"I want to watch TV\",\"Pass me the remote\"],\"level\":\"medium\"}<|im_end|>")
+        }
         appendLine("<|im_start|>user")
-        appendLine("最近平均分：${avgScore.toInt()}")
-        appendLine("當前場景：${location.ifBlank { "未指定" }}")
-        appendLine("已練過：${recent.take(5)}")
+        appendLine("Recent average: ${avgScore.toInt()}")
+        appendLine("Setting: ${location.ifBlank { "unspecified" }}")
+        appendLine("Already practised: ${recent.take(5)}")
+        appendLine(com.example.ui.I18n.outputLanguageDirective("sentences[]"))
         append("<|im_end|>\n<|im_start|>assistant\n")
     }
 
@@ -278,6 +323,25 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
      *
      * @return 模型原始輸出字串；引擎初始化失敗或推理異常時回傳 null（由呼叫端決定 fallback）
      */
+    /**
+     * 通用文字補完，ChatML 格式。給 `com.example.aphasia` 那棵新樹用。
+     *
+     * 與 [reconstructSentence] 分開：那支綁死了 GlobalTagsVault 與中文 prompt，
+     * 新樹要的是「我自己給 system/user，你只管跑模型」。
+     *
+     * @return null 表示模型還沒就緒或這次生成失敗
+     */
+    suspend fun complete(system: String, user: String, temperature: Float = 0.3f): String? {
+        val prompt = buildString {
+            appendLine("<|im_start|>system")
+            appendLine("$system<|im_end|>")
+            appendLine("<|im_start|>user")
+            appendLine("$user<|im_end|>")
+            append("<|im_start|>assistant\n")
+        }
+        return runLlmSession(prompt, temperature, topK = 40, seed = 0)
+    }
+
     private suspend fun runLlmSession(
         prompt: String,
         temperature: Float,
@@ -312,36 +376,55 @@ class MediaPipeLLMEngine(private val context: Context) : InferenceEngine {
      * 供 ReconstructionUseCase 的 <0.40 fallback 真正生效（短碎詞給合理猜測、標低把握而非藏掉）。
      */
     private fun buildChatPrompt(vault: GlobalTagsVault) = buildString {
+        val outLang = com.example.ui.I18n.outputLanguageNameEn()
         appendLine("<|im_start|>system")
         appendLine(
-            "你是輔助失語症患者溝通的語言助理。使用者碎詞來自語音辨識，部分字附信心度(%)；" +
-            "信心低的字很可能聽錯，請依地點與周邊物件推測修正。" +
-            "碎詞很短甚至只有一個字（例如「十」「水」「痛」）時，仍要給最可能的日常說法，不要因為短就拒答：" +
-            "例如「十」→「我要十個」或「現在十點」、「水」→「我想喝水」、「痛」→「我這裡會痛」。" +
-            "請只輸出一個 JSON 物件，格式：" +
-            "{\"reasoning\":\"簡短分析\",\"reconstructed\":\"完整繁體中文句子\",\"confidence\":0到100的整數}。" +
-            "confidence 標準：清楚可確定給80-100；短或有歧義但你給了合理常見猜測給50-79（單字碎詞多半在此）；" +
-            "真的無意義才給1-49。不要一律保守。不要輸出 JSON 以外的任何文字。<|im_end|>"
+            "You help a person with aphasia say what they mean. The fragments come from speech " +
+            "recognition; some words carry a confidence percentage. Low-confidence words were " +
+            "probably misheard — correct them using the location and the objects in view. " +
+            "Stay on the fragments: every content word must trace back to a fragment or to a " +
+            "given tag. Add only the grammatical glue a sentence needs. Do not invent a new " +
+            "event, time, person, or question. " +
+            "When the fragments are very short — even one word like \"ten\", \"water\", \"hurt\" — " +
+            "still give the most likely everyday reading instead of refusing: " +
+            "\"ten\" -> \"I want ten.\", \"water\" -> \"I want water.\", \"hurt\" -> \"It hurts here.\" " +
+            "Output exactly one JSON object: " +
+            "{\"reasoning\":\"brief\",\"reconstructed\":\"one complete sentence in " + outLang + "\",\"confidence\":0-100 integer}. " +
+            "Confidence: 80-100 clear and near certain; 50-79 short or ambiguous but you gave a " +
+            "reasonable common reading (single-word fragments usually land here); 1-49 genuinely " +
+            "meaningless. Do not be uniformly cautious. Output nothing outside the JSON.<|im_end|>"
         )
+        // few-shot 跟著介面語言。小模型會直接照抄範例的語言。
+        // 範例本身也刻意收斂：舊版的示範是「渴 水 倒」→「在客廳，我覺得口渴了，
+        // 可以幫我倒杯水嗎？」，等於在教模型加戲，而那正是使用者回報的問題。
         appendLine("<|im_start|>user")
-        appendLine("碎詞：渴 水 倒")
-        appendLine("逐字信心：渴(91%) 水(58%) 倒(83%)")
-        appendLine("地點：客廳 (家)<|im_end|>")
-        appendLine("<|im_start|>assistant")
-        appendLine("{\"reasoning\":\"碎詞與口渴、倒水有關，地點客廳\",\"reconstructed\":\"在客廳，我覺得口渴了，可以幫我倒杯水嗎？\",\"confidence\":88}<|im_end|>")
-        appendLine("<|im_start|>user")
-        appendLine("碎詞：${vault.rawText}")
-        if (vault.sttWords.isNotEmpty()) {
-            appendLine("逐字信心：${formatConfidence(vault.sttWords)}")
+        if (com.example.ui.I18n.lang == com.example.data.AppLanguage.ZhTW) {
+            appendLine("Fragments: 渴 水 倒")
+            appendLine("Confidence: 渴(91%) 水(58%) 倒(83%)")
+            appendLine("Location: 客廳 (家)<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("{\"reasoning\":\"口渴、倒水\",\"reconstructed\":\"可以幫我倒杯水嗎？\",\"confidence\":88}<|im_end|>")
+        } else {
+            appendLine("Fragments: thirsty water pour")
+            appendLine("Confidence: thirsty(91%) water(58%) pour(83%)")
+            appendLine("Location: living room (home)<|im_end|>")
+            appendLine("<|im_start|>assistant")
+            appendLine("{\"reasoning\":\"thirst, pouring water\",\"reconstructed\":\"Could you pour me some water?\",\"confidence\":88}<|im_end|>")
         }
-        appendLine("地點：${vault.locationTag}")
+        appendLine("<|im_start|>user")
+        appendLine("Fragments: ${vault.rawText}")
+        if (vault.sttWords.isNotEmpty()) {
+            appendLine("Confidence: ${formatConfidence(vault.sttWords)}")
+        }
+        appendLine("Location: ${vault.locationTag}")
         if (vault.visionTags.isNotEmpty()) {
-            appendLine("周邊物件：${vault.visionTags.joinToString("、")}")
+            appendLine("Objects in view: ${vault.visionTags.joinToString(", ")}")
         }
         val cands = com.example.data.AphasiaPractice.reconstructionCandidates(vault.rawText, vault.visionTags)
         if (cands.isNotEmpty()) {
-            appendLine("常用表達參考（語意接近時優先採用其說法，勿硬套）：${cands.joinToString("／")}")
+            appendLine("Common phrasings (prefer these wordings when the meaning genuinely matches; never force a fit): ${cands.joinToString(" / ")}")
         }
+        appendLine(com.example.ui.I18n.outputLanguageDirective("reconstructed"))
         append("<|im_end|>")
         append("\n<|im_start|>assistant\n")
     }

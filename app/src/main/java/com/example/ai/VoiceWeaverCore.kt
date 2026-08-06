@@ -499,16 +499,32 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private var rehabTarget = ""
 
     // STT（Vosk）— 依 sttMode 將辨識結果導向「碎詞輸入」或「復健評分」
-    private val sttManager = SpeechToTextManager(application) { text, words, alternatives ->
+    private val sttManager = SpeechToTextManager(application) { text, words, alternatives, utterance ->
+        DiagnosticLog.i(
+            DiagnosticLog.Cat.STT, "Vosk 辨識結果",
+            "模式=$sttMode 文字=「$text」 逐字信心=${words.joinToString(" ") { "${it.word}(${(it.conf * 100).toInt()}%)" }} " +
+                "其他候選=${alternatives.joinToString(" / ").ifBlank { "無" }}"
+        )
         when (sttMode) {
             SttMode.NORMAL -> {
-                val current = _globalTagsVault.value.rawText
-                val appended = if (current.isEmpty()) text else "$current $text"
-                _globalTagsVault.value = _globalTagsVault.value.copy(
-                    rawText = appended,
-                    sttWords = words,
-                    sttAlternatives = alternatives
-                )
+                // 先過聲學捷徑，再談文字。
+                //
+                // 使用者設定過「講到 need water 就說整句」時，他按哪一顆按鈕都該生效——
+                // 之前只有「AI 直接聽」接了捷徑，走語音轉文字就完全沒反應，
+                // 而使用者根本分不出這兩顆按鈕在內部走的是不同的路。
+                //
+                // 放在文字處理之前：捷徑命中就不需要 Vosk 的結果，也不需要 LLM 重組。
+                // 這條路離線、免額度、延遲最低。
+                viewModelScope.launch {
+                    if (utterance != null && matchAcousticShortcut(utterance)) return@launch
+                    val current = _globalTagsVault.value.rawText
+                    val appended = if (current.isEmpty()) text else "$current $text"
+                    _globalTagsVault.value = _globalTagsVault.value.copy(
+                        rawText = appended,
+                        sttWords = words,
+                        sttAlternatives = alternatives
+                    )
+                }
             }
             SttMode.REHAB -> {
                 // 復健評分要的是「病人實際唸出來的樣子」，用最佳解即可，不看其他候選。
@@ -893,6 +909,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      */
     fun chooseCandidate(index: Int, text: String) {
         viewModelScope.launch { settingsRepo.recordCandidateChoice(index == 0) }
+        // 使用者挑哪一句就是在說「我要的是這個說法」。以前這個資訊只被記成
+        // 一個成功率數字就丟掉，下次講同樣的意思還是可能要再挑一次。
+        PhraseAdoptionRanker.recordAdopted(getApplication(), text)
         rememberUtterance(text)
         // 只合成一份：使用者要的是「先在三個句子裡挑一個，再針對那一句合成」，
         // 而不是同一句合成三種聲音再挑。平行三份會讓等待時間變成三倍。
@@ -1157,6 +1176,37 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 給外部畫面（StoryTrainingScreen / 其他）只讀取用的目前生效 LLM 引擎 */
     val currentEngine: InferenceEngine get() = activeEngine
 
+    /**
+     * 失語症溝通引擎（`com.example.aphasia`）的物件圖。
+     *
+     * 掛在這裡而不是在 MainActivity 建：它要用到 [ttsModule] 與 [activeEngine]，
+     * 兩者都是 ViewModel 私有的，而且會隨設定變更被重建——放在 Composition 裡
+     * 會拿到過期的引用。
+     *
+     * lazy：使用者沒進到那個畫面就不該為它開資料庫、配置音訊緩衝區。
+     */
+    val aphasiaGraph: com.example.aphasia.di.AphasiaGraph by lazy {
+        com.example.aphasia.di.AphasiaGraph(
+            context = getApplication(),
+            tts = ttsModule,
+            // 每次取用都重讀 activeEngine：使用者在設定裡換供應商後會重建引擎，
+            // 快取住的話那些改動要重開 App 才生效。
+            cloudEngine = {
+                if (::activeEngine.isInitialized) activeEngine as? HybridInferenceEngine else null
+            },
+            onDeviceEngine = {
+                if (::activeEngine.isInitialized) {
+                    activeEngine.localFallback() as? MediaPipeLLMEngine
+                } else null
+            },
+            // 只有使用者明確選了「只用本機」才本機優先。裝置端的 Qwen2.5-1.5B
+            // 在破碎輸入的重組上明顯弱於雲端模型，預設本機優先等於偷偷降低品質；
+            // 這個取捨該由使用者決定，不該由程式替他決定。
+            preferOnDevice = { settings.value.cloudProvider == CloudProvider.LocalOnly },
+            shortcutSensitivity = { settings.value.shortcutSensitivity },
+        )
+    }
+
     init {
         detectHardwareAndInitialize()
         // 背景定期量測「電腦接手計畫」：開機先測一次，之後每 25 秒輕量重測（socket+小封包，幾乎不耗電）。
@@ -1292,7 +1342,17 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun createConfiguredEngine(tier: DeviceTier): InferenceEngine {
         val local = InferenceEngineFactory.createEngine(tier, getApplication())
-        return HybridInferenceEngine.wrapIfNeeded(getApplication(), settings.value.cloudProvider, local)
+        val engine = HybridInferenceEngine.wrapIfNeeded(getApplication(), settings.value.cloudProvider, local)
+        // 電腦端音訊理解(9883)跟語音合成(9880)在同一台機器，共用同一個位址設定
+        (engine as? HybridInferenceEngine)?.let { h ->
+            h.sovitsBaseUrl = settings.value.gptSovitApiBaseUrl.ifBlank { LocalSovitsHelper.DEFAULT_LOCAL_URL }
+            h.audioUnderstandingPreference = when (settings.value.audioUnderstandSource) {
+                com.example.data.AudioUnderstandSource.Auto -> AudioUnderstandPreference.Auto
+                com.example.data.AudioUnderstandSource.LocalOnly -> AudioUnderstandPreference.LocalOnly
+                com.example.data.AudioUnderstandSource.CloudOnly -> AudioUnderstandPreference.CloudOnly
+            }
+        }
+        return engine
     }
 
     private fun InferenceEngine.localFallback(): InferenceEngine =
@@ -1448,9 +1508,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      */
     fun toggleStt() {
         viewModelScope.launch(Dispatchers.Main) {
-            // 已經在錄「直接聽」的音 → 交給那條路自己收尾（再按一下＝說完了）
+            // 「直接聽」正在錄音時不受理——麥克風只有一支，而且這兩條路是獨立的模式，
+            // 不該由這顆按鈕去替另一條收尾（UI 上此時這顆已經是停用狀態，這裡是第二道防線）。
             if (_isListeningDirect.value) {
-                toggleDirectAudioUnderstanding()
+                DiagnosticLog.w(DiagnosticLog.Cat.STT, "「直接聽」錄音中，忽略語音轉文字的按鍵")
                 return@launch
             }
             when (sttManager.sttState.value) {
@@ -1458,8 +1519,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 is SttState.Processing -> {}   // 辨識結算中，忽略
                 is SttState.Preparing -> {}    // 模型準備中，忽略
                 else -> {
-                    if (sttMode == SttMode.NORMAL && canUnderstandAudio()) toggleDirectAudioUnderstanding()
-                    else sttManager.startListening()
+                    // 這顆就是語音轉文字，按下去只會做語音轉文字。
+                    //
+                    // 以前這裡會在「有雲端音訊能力」時自作主張改跑 toggleDirectAudioUnderstanding()，
+                    // 於是畫面上明明有兩顆分開的按鈕，按哪一顆都跑同一條路；再加上直接聽失敗時
+                    // 又倒回 Vosk，兩個模式互相蓋來蓋去，出問題時根本分不出是哪條路壞的。
+                    // 兩條路各自獨立：使用者按哪顆就跑哪條，失敗就講失敗。
+                    DiagnosticLog.i(DiagnosticLog.Cat.STT, "使用者選擇「語音轉文字」（Vosk）")
+                    sttManager.startListening()
                 }
             }
         }
@@ -1469,7 +1536,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // 一般 STT 是拿正常語音訓練的，把失語症患者的構音壓成文字時會丟掉語調、
     // 停頓、語音錯誤這些帶意義的線索。這條路把錄音整段交給模型自己聽。
 
+    /**
+     * 舊的 AAC 錄音器。「AI 直接聽」已改走 PCM（見 [toggleDirectAudioUnderstanding]），
+     * 這支留給仍然需要壓縮檔的地方（復健跟讀的雲端轉寫）。
+     */
     private val audioRecorder = AudioRecorderManager(application)
+
+    /** 「AI 直接聽」的錄音上限。 */
+    private val DIRECT_MAX_RECORD_MS = 8_000L
 
     /** 是否正在錄「給 AI 直接聽」的音訊。 */
     private val _isListeningDirect = MutableStateFlow(false)
@@ -1483,49 +1557,184 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 按一下開始錄、再按一下停止並直接送模型理解。
      * 失敗（沒金鑰／網路／模型不支援）時自動退回原本的 Vosk STT 流程，不讓使用者卡住。
      */
-    fun toggleDirectAudioUnderstanding() {
-        viewModelScope.launch {
-            if (_isListeningDirect.value) {
-                _isListeningDirect.value = false
-                val path = audioRecorder.stopRecording()
-                if (path == null) {
-                    _reconstructionState.value = ReconstructionUiState.Error(com.example.ui.I18n.tr("錄音失敗，請再試一次"))
-                    return@launch
-                }
-                _reconstructionState.value = ReconstructionUiState.Loading
-                val file = java.io.File(path)
-                val result = activeEngine.reconstructFromAudio(file, _globalTagsVault.value)
-                runCatching { file.delete() }   // 語音是敏感資料，理解完立刻刪掉，不留在裝置上
+    /** 錄音中的即時音量（0..1），給按鈕畫波形用。 */
+    val directAmplitude: StateFlow<Float> =
+        aphasiaGraph.audioCapture.liveAmplitude
+            .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), 0f)
 
-                result.onSuccess { data ->
-                    _reconstructionState.value = ReconstructionUiState.Success(data)
-                    if (settings.value.aacIntentImageEnabled) generateIntentImage(data.reconstructedText)
-                    else clearIntentImage()
-                    val rec = SpeechRecord(
-                        originalInput     = com.example.ui.I18n.tr("（語音直接理解）"),
-                        reconstructedText = data.reconstructedText,
-                        confidence        = "${"%.0f".format(data.confidence * 100)}%",
-                        locationTag       = _globalTagsVault.value.locationTag,
-                        visionTag         = _globalTagsVault.value.visionTags.joinToString("、"),
-                        timestamp         = data.timestamp
-                    )
-                    repository.insert(rec)
-                    CloudSync.pushHistory(rec.originalInput, rec.reconstructedText, rec.timestamp)
-                }.onFailure { e ->
-                    // 音訊路徑不通就回到 STT，不是死路
-                    Log.w("VoiceWeaverViewModel", "音訊理解失敗，改用語音轉文字：${e.message}")
-                    _reconstructionState.value = ReconstructionUiState.Idle
-                    sttManager.startListening()
-                }
-            } else {
-                val started = audioRecorder.startRecording()
-                if (started == null) {
-                    _reconstructionState.value = ReconstructionUiState.Error(com.example.ui.I18n.tr("無法開始錄音，請確認麥克風權限"))
-                    return@launch
-                }
-                _isListeningDirect.value = true
+    private val directStopRequested = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var directRecordJob: kotlinx.coroutines.Job? = null
+
+    fun toggleDirectAudioUnderstanding() {
+        if (_isListeningDirect.value) { directStopRequested.set(true); return }
+        if (!aphasiaGraph.audioCapture.hasPermission()) {
+            _reconstructionState.value =
+                ReconstructionUiState.Error(com.example.ui.I18n.tr("無法開始錄音，請確認麥克風權限"))
+            return
+        }
+        directStopRequested.set(false)
+        _isListeningDirect.value = true
+
+        directRecordJob = viewModelScope.launch {
+            // 改用 PCM16 錄音（不再走 MediaRecorder→AAC）。
+            //
+            // 兩個理由：
+            // 1. 聲學捷徑比對要看未壓縮的波形——MFCC 看的正是有損編碼會丟掉的頻譜細節。
+            // 2. 登錄樣板時走的是同一支 AudioCaptureManager，兩邊編碼路徑一致，
+            //    DTW 才是在比「發音差異」而不是「編碼差異」。
+            val recorded = aphasiaGraph.audioFeatureRepository
+                .recordUntil(DIRECT_MAX_RECORD_MS) { directStopRequested.get() }
+            _isListeningDirect.value = false
+
+            val utterance = recorded.getOrElse { e ->
+                DiagnosticLog.e(DiagnosticLog.Cat.STT, "PCM 錄音失敗", t = e)
+                _reconstructionState.value =
+                    ReconstructionUiState.Error(com.example.ui.I18n.tr("錄音失敗，請再試一次"))
+                return@launch
+            }
+
+            val durMs = utterance.durationMs
+            val peak = utterance.peakAmplitude
+
+            // 沒出聲就不要送。模型對著靜音／環境噪音會很有自信地編出一整句話
+            // （實測「我什麼都沒說」拿到「我要喝水」95%），而這個 App 的使用者
+            // 「想說但發不出聲音」本來就是常態，不是例外——回一句他沒講過的話
+            // 再讓他按下去唸出來，比什麼都不做糟糕得多。
+            // SpeechNoiseGuard 用的是 MediaRecorder 的 0..32767 刻度，
+            // PCM 這邊是正規化過的 0..1，要換算才比得對——不換算的話
+            // 任何錄音都會被判成「太安靜」，功能整個不會動。
+            val peak16 = (peak * 32767f).toInt()
+            if (SpeechNoiseGuard.isTooShort(durMs) || SpeechNoiseGuard.isTooQuiet(peak16)) {
+                DiagnosticLog.w(
+                    DiagnosticLog.Cat.STT, "錄音沒有偵測到說話聲，未送出",
+                    "峰值=$peak16(門檻${SpeechNoiseGuard.MIN_PEAK_AMPLITUDE}) " +
+                        "長度=${durMs}ms(門檻${SpeechNoiseGuard.MIN_DURATION_MS})"
+                )
+                _reconstructionState.value = ReconstructionUiState.Error(
+                    com.example.ui.I18n.tr("沒有聽到聲音，請再說一次（或把手機拿近一點）")
+                )
+                return@launch
+            }
+
+            // ── 第一關：聲學捷徑（離線、免額度、不上網）──────────────────
+            // 使用者設定過的觸發詞先比一次。命中就直接說出整句，
+            // 完全不經過語音轉文字也不經過 LLM——這是最快也最可靠的一條路，
+            // 所以放在最前面。
+            if (matchAcousticShortcut(utterance)) return@launch
+
+            // ── 第二關：交給音訊模型直接聽 ────────────────────────────────
+            val wav = com.example.aphasia.data.acoustic.WavWriter.write(
+                utterance,
+                java.io.File(getApplication<android.app.Application>().cacheDir, "direct_${System.currentTimeMillis()}.wav"),
+            )
+            val recordedKb = wav.length() / 1024
+
+            _reconstructionState.value = ReconstructionUiState.Loading
+            DiagnosticLog.i(
+                DiagnosticLog.Cat.STT, "使用者選擇「AI 直接聽」，送出錄音",
+                "大小=${recordedKb}KB 峰值=$peak 長度=${durMs}ms 格式=wav"
+            )
+            val result = activeEngine.reconstructFromAudio(wav, _globalTagsVault.value)
+            runCatching { wav.delete() }   // 語音是敏感資料，理解完立刻刪掉，不留在裝置上
+
+            result.onSuccess { data ->
+                DiagnosticLog.i(
+                    DiagnosticLog.Cat.STT, "「AI 直接聽」完成",
+                    "引擎=${data.engineUsed} 候選=${data.alternatives.size} " +
+                        "信心=${(data.confidence * 100).toInt()}% 句子=「${data.reconstructedText}」"
+                )
+                _reconstructionState.value = ReconstructionUiState.Success(data)
+                if (settings.value.aacIntentImageEnabled) generateIntentImage(data.reconstructedText)
+                else clearIntentImage()
+                val rec = SpeechRecord(
+                    originalInput     = com.example.ui.I18n.tr("（語音直接理解）"),
+                    reconstructedText = data.reconstructedText,
+                    confidence        = "${"%.0f".format(data.confidence * 100)}%",
+                    locationTag       = _globalTagsVault.value.locationTag,
+                    visionTag         = _globalTagsVault.value.visionTags.joinToString("、"),
+                    timestamp         = data.timestamp
+                )
+                repository.insert(rec)
+                CloudSync.pushHistory(rec.originalInput, rec.reconstructedText, rec.timestamp)
+            }.onFailure { e ->
+                // 「AI 直接聽」失敗就是失敗，不再自動改跑語音轉文字。
+                //
+                // 以前這裡會靜靜改用 Vosk STT，理由是「不要讓使用者卡住」，但實際效果相反：
+                // 使用者明明選了直接聽，卻拿到一個經過轉文字的結果，畫面完全沒提，
+                // 連「為什麼變成這樣」都無從查起。
+                Log.w("VoiceWeaverViewModel", "音訊理解失敗：${e.message}")
+                DiagnosticLog.e(
+                    DiagnosticLog.Cat.STT, "「AI 直接聽」失敗（不自動降級）",
+                    "錄音=${recordedKb}KB", e
+                )
+                val raw = e.message.orEmpty()
+                _reconstructionState.value = ReconstructionUiState.Error(
+                    when {
+                        "429" in raw -> com.example.ui.I18n.tr(
+                            "AI 額度已用完，暫時無法直接聽（稍後再試，或在設定裡換一組金鑰／供應商）。可以先用上面的「用說的，不用打字」。")
+                        "401" in raw || "403" in raw -> com.example.ui.I18n.tr(
+                            "AI 金鑰無效或沒有權限，請到設定檢查 API 金鑰。")
+                        "404" in raw -> com.example.ui.I18n.tr(
+                            "找不到這個 AI 模型，請到設定確認模型名稱。")
+                        "timeout" in raw.lowercase() || "timed out" in raw.lowercase() ->
+                            com.example.ui.I18n.tr("AI 回應逾時，請確認網路後再試一次。")
+                        else -> com.example.ui.I18n.tr("「AI 直接聽」失敗：%s")
+                            .format(raw.take(120).ifBlank { com.example.ui.I18n.tr("未知錯誤") })
+                    }
+                )
             }
         }
+    }
+
+    /**
+     * 比對使用者設定過的聲學捷徑（設定 →「我的專屬發音」）。
+     *
+     * 命中就直接說出整句並回 true，呼叫端不必再往下走。
+     * 歧義時**不猜**——誤觸發（替使用者說錯話）比多問一次危險得多，
+     * 所以退回讓後面的流程處理，使用者仍然拿得到候選句可以挑。
+     *
+     * @return true 表示已經處理完這次發聲
+     */
+    private suspend fun matchAcousticShortcut(
+        utterance: com.example.aphasia.domain.model.Utterance
+    ): Boolean {
+        val result = runCatching { aphasiaGraph.templateRepository.match(utterance) }
+            .onFailure { DiagnosticLog.e(DiagnosticLog.Cat.STT, "聲學捷徑比對失敗，改走原流程", t = it) }
+            .getOrNull() ?: return false
+
+        val hit = result as? com.example.aphasia.domain.model.MatchResult.Hit ?: return false
+
+        DiagnosticLog.i(
+            DiagnosticLog.Cat.STT, "聲學捷徑命中「${hit.template.keyword}」",
+            "距離=%.3f margin=%.3f 句子=「${hit.template.spokenPhrase}」".format(hit.distance, hit.margin)
+        )
+        _reconstructionState.value = ReconstructionUiState.Success(
+            ReconstructedData(
+                originalText = hit.template.keyword,
+                reconstructedText = hit.template.spokenPhrase,
+                confidence = 1.0,
+                engineUsed = com.example.ui.I18n.tr("我的專屬發音（離線）"),
+                inferenceTimeMs = 0,
+            )
+        )
+        // 先試預先合成好的音檔。
+        //
+        // 句庫那 30 句是固定的，音檔已經用 GPT-SoVITS 產好放進 assets——
+        // 直接播是離線、零延遲、不吃 API 額度的，而現場合成要十幾秒
+        // 而且需要電腦端伺服器開著。自訂的句子沒有預合成檔，會落到下面的 TTS。
+        val phraseId = runCatching { aphasiaGraph.phraseIdFor(hit.template.keyword) }.getOrNull()
+        if (aphasiaGraph.prebuiltAudio.play(phraseId)) {
+            DiagnosticLog.i(DiagnosticLog.Cat.TTS, "播出預合成音檔", "id=$phraseId")
+            return true
+        }
+
+        // 直接發聲，不走 requestSpeak 的風險分級。
+        //
+        // 分級是為了擋「模型生成的句子」——那可能出現使用者沒想說的內容。
+        // 捷徑的句子是使用者／照顧者在設定裡自己訂的，而且是他主動觸發的，
+        // 中間再跳一個確認框等於毀掉這條路唯一的價值（快）。
+        doSpeak(hit.template.spokenPhrase)
+        return true
     }
 
     // ─── TTS ─────────────────────────────────────────────────────────────────
@@ -2159,6 +2368,65 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 生圖視窗開啟時呼叫：清單為空就自動遷移種入，避免 UI 沒有任何可選項。 */
     fun ensureImageApisSeeded() = viewModelScope.launch { currentImageApis() }
 
+    // ─── 語音辨識供應商清單 ─────────────────────────────────────────────
+    //
+    // 跟文字／生圖同一套模式。獨立成一份清單的理由見 com.example.data.SttApi：
+    // 重組要語意能力、轉寫要對含糊發音的容錯，很少是同一家最好。
+
+    val sttApisFlow: StateFlow<List<com.example.data.SttApiEntry>> =
+        settings.map { com.example.data.SttApiStore.decode(it.sttApis) }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private suspend fun currentSttApis(): List<com.example.data.SttApiEntry> =
+        com.example.data.SttApiStore.decode(settingsRepo.settings.first().sttApis)
+
+    fun addSttApi(provider: com.example.data.SttProvider) = viewModelScope.launch {
+        apiListMutex.withLock {
+            val list = currentSttApis().toMutableList()
+            val sameCount = list.count { it.provider == provider }
+            list.add(
+                com.example.data.SttApiEntry(
+                    id = "stt-${System.currentTimeMillis()}",
+                    provider = provider,
+                    name = provider.displayName + if (sameCount > 0) " ${sameCount + 1}" else "",
+                )
+            )
+            settingsRepo.setSttApis(com.example.data.SttApiStore.encode(list))
+        }
+    }
+
+    fun updateSttApi(entry: com.example.data.SttApiEntry) = viewModelScope.launch {
+        apiListMutex.withLock {
+            val list = currentSttApis().map { if (it.id == entry.id) entry else it }
+            settingsRepo.setSttApis(com.example.data.SttApiStore.encode(list))
+        }
+    }
+
+    fun deleteSttApi(id: String) = viewModelScope.launch {
+        apiListMutex.withLock {
+            settingsRepo.setSttApis(
+                com.example.data.SttApiStore.encode(currentSttApis().filter { it.id != id })
+            )
+        }
+    }
+
+    /**
+     * 往上／往下移一位。
+     *
+     * 順序就是實際的嘗試順序，所以這不是排版偏好而是功能設定——
+     * 使用者要能把「最會聽懂我的那一家」排到第一個。
+     */
+    fun moveSttApi(id: String, up: Boolean) = viewModelScope.launch {
+        apiListMutex.withLock {
+            val list = currentSttApis().toMutableList()
+            val i = list.indexOfFirst { it.id == id }
+            val j = if (up) i - 1 else i + 1
+            if (i < 0 || j !in list.indices) return@withLock
+            list[i] = list[j].also { list[j] = list[i] }
+            settingsRepo.setSttApis(com.example.data.SttApiStore.encode(list))
+        }
+    }
+
     // ─── 文字 LLM 多供應商清單（與生圖同模式：可加多筆、自動備援）───
     val llmApisFlow: StateFlow<List<LlmApiEntry>> =
         settings.map { LlmApiStore.decode(it.llmApis) }
@@ -2289,6 +2557,24 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun setCloudProvider(provider: CloudProvider) = viewModelScope.launch {
         settingsRepo.setCloudProvider(provider)
         activeEngine = createConfiguredEngine(_deviceTier.value)
+    }
+
+    /** 「AI 直接聽」要用電腦本機還是雲端。改完立刻重建引擎，不必重開 App。 */
+    fun setAudioUnderstandSource(source: com.example.data.AudioUnderstandSource) = viewModelScope.launch {
+        settingsRepo.setAudioUnderstandSource(source)
+        activeEngine = createConfiguredEngine(_deviceTier.value)
+        DiagnosticLog.i(DiagnosticLog.Cat.UI, "切換音訊理解來源", source.name)
+    }
+
+    /**
+     * 主動探測電腦端音訊伺服器並回報狀態，給設定頁的「測試連線」用。
+     * 順帶更新 OffloadManager 的快取旗標，讓主畫面的按鈕顯示跟著校正。
+     */
+    suspend fun probeAudioServer(): Boolean {
+        val base = settings.value.gptSovitApiBaseUrl.ifBlank { LocalSovitsHelper.DEFAULT_LOCAL_URL }
+        val ok = OffloadManager.audioServerReady(base)
+        DiagnosticLog.i(DiagnosticLog.Cat.NET, "探測電腦端音訊伺服器", "位址=$base 就緒=$ok")
+        return ok
     }
 
     private fun startTelemetry() {
@@ -2437,8 +2723,20 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                     }
                 }
                 settingsRepo.recordInput(viaAac = false)
+                DiagnosticLog.i(
+                    DiagnosticLog.Cat.LLM, "開始文字重組",
+                    "碎詞=「${currentVault.rawText}」 STT候選=${currentVault.sttAlternatives.size} " +
+                        "地點=${currentVault.locationTag.ifBlank { "無" }} " +
+                        "物件=${currentVault.visionTags.joinToString("、").ifBlank { "無" }}"
+                )
                 val useCase = ReconstructionUseCase(activeEngine)
                 val data = useCase.execute(currentVault)
+                DiagnosticLog.i(
+                    DiagnosticLog.Cat.LLM, "文字重組完成",
+                    "引擎=${data.engineUsed} 候選=${data.alternatives.size} " +
+                        "信心=${(data.confidence * 100).toInt()}% 耗時=${data.inferenceTimeMs}ms " +
+                        "句子=「${data.reconstructedText}」"
+                )
                 _reconstructionState.value = ReconstructionUiState.Success(data)
                 // 動態專屬圖卡：重組句完成後，依語意背景生成對應圖片（開關開啟時）
                 if (settings.value.aacIntentImageEnabled) generateIntentImage(data.reconstructedText)

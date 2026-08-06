@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -151,26 +152,33 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
             // ── 句子預覽（總在最上 ── ──
             SentencePreview(items = state.sentence, p = p, onRemoveLast = { viewModel.aacRemoveLast() })
 
-            // ── 情境推薦（依當前定位）：點一下就接到句子 ──
-            contextHint?.let { hint ->
-                ContextHintRow(
-                    hint = hint,
-                    onPick = { viewModel.aacAppendItem(it) },
+            // 識字卡模式只留句子預覽，其餘全部收掉。
+            //
+            // 這個模式存在的理由就是「9 宮格的選項太多」；在它上面再擺
+            // 情境推薦、常用、搜尋列三排選項，等於把它要解的問題原封不動搬回來，
+            // 又把卡片的高度吃光——實測卡面只剩約 90dp，emoji 小到失去識別功能。
+            // 一次一張、而且要夠大，是這個模式唯一的價值。
+            if (!state.flashcardMode) {
+                // ── 情境推薦（依當前定位）：點一下就接到句子 ──
+                contextHint?.let { hint ->
+                    ContextHintRow(
+                        hint = hint,
+                        onPick = { viewModel.aacAppendItem(it) },
+                        p = p
+                    )
+                }
+                if (feedVisible) {
+                    FrequentFeedRow(items = feed, onPick = { viewModel.aacAppendItem(it) }, p = p)
+                }
+
+                AacSearchAndCategoryBar(
+                    selectedCategory = state.selectedCategory,
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onCategoryChange = { viewModel.aacSelectCategory(it) },
                     p = p
                 )
             }
-            if (feedVisible) {
-                FrequentFeedRow(items = feed, onPick = { viewModel.aacAppendItem(it) }, p = p)
-            }
-
-            AacSearchAndCategoryBar(
-                selectedCategory = state.selectedCategory,
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onCategoryChange = { viewModel.aacSelectCategory(it) },
-                p = p
-            )
-
         }
 
         val gridContent: @Composable () -> Unit = {
@@ -894,7 +902,7 @@ private fun FlashcardChrome(
 ) {
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // ── 卡面（佔大部分高度）──
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -904,21 +912,50 @@ private fun FlashcardChrome(
                 .padding(20.dp),
             contentAlignment = Alignment.Center
         ) {
+            // 字級跟著可用高度縮放，不能寫死。
+            //
+            // 這裡踩過的坑：emoji 原本固定 120sp、標籤 32sp，加起來要 ~230dp。
+            // 只要上方的 header 多一個區塊，
+            // 剩給卡面的高度就不夠，emoji 被切一半、標籤整個消失——
+            // 而「標籤消失」對識字卡模式是致命的，患者就是靠那行字確認選對東西。
+            //
+            // 改成依實際高度換算，任何 header 變動都不會再切到內容。
+            val cardH = maxHeight.value
+            // 已含使用者的字級設定（見 MyApplicationTheme 對 LocalDensity 的覆寫）
+            val fs = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
+            val showSub = !sublabel.isNullOrBlank() && cardH >= 260f
+
+            // 標籤是真正的文字，直接寫 sp 就會跟著使用者的字級設定放大。
+            // 上限換算回 dp 再綁卡片高度：字大到把 emoji 擠掉就本末倒置——
+            // 患者是先靠圖認出東西、再用字確認，兩者都不能消失。
+            val labelSp = (cardH * 0.12f).coerceIn(16f, cardH * 0.24f / fs)
+            val subSp = if (showSub) 13f else 0f
+            val gap = (cardH * 0.03f).coerceIn(4f, 16f)
+
+            // emoji 是圖不是字，不跟著字級設定放大——它已經是「填滿卡片」，
+            // 再放大只會溢出。除以 fs 抵銷 density 的縮放，維持固定實體大小。
+            // 0.78 是 emoji 字框高度換算到實際字身的經驗係數。
+            val reservedDp = labelSp * fs * 1.35f + subSp * fs * 1.5f + gap * 2f
+            val emojiSp = ((cardH - reservedDp) * 0.78f / fs).coerceIn(40f, 300f)
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(emoji, fontSize = 120.sp)
-                Spacer(Modifier.height(12.dp))
+                Text(emoji, fontSize = emojiSp.sp, lineHeight = emojiSp.sp)
+                Spacer(Modifier.height(gap.dp))
                 Text(
                     label,
-                    fontSize = 32.sp, fontWeight = FontWeight.Bold,
+                    fontSize = labelSp.sp, fontWeight = FontWeight.Bold,
                     color = p.textLight, textAlign = TextAlign.Center,
+                    lineHeight = (labelSp * 1.25f).sp,
                     maxLines = 2
                 )
-                if (!sublabel.isNullOrBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(sublabel, fontSize = 14.sp, color = p.textMuted, textAlign = TextAlign.Center)
+                // 空間真的很緊時才捨棄副標——它是輔助資訊，
+                // 而 emoji 與主標籤是「這張卡是什麼」的本體，不能被擠掉。
+                if (showSub) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(sublabel!!, fontSize = subSp.sp, color = p.textMuted, textAlign = TextAlign.Center, maxLines = 1)
                 }
             }
             Text(
@@ -1049,7 +1086,7 @@ private fun ItemFlashcard(
     if (hasCustomMoney && safeIndex == 0) {
         FlashcardChrome(
             p = p,
-            emoji = "✏️",
+                emoji = "✏️",
             label = I18n.tr("自訂金額"),
             sublabel = I18n.tr("按 ✓ 開啟數字鍵盤輸入"),
             progressText = "1/$totalCards",
@@ -1064,7 +1101,7 @@ private fun ItemFlashcard(
         val accent = if (item.isStrongIntent) p.dangerRose else p.neonCyan
         FlashcardChrome(
             p = p,
-            emoji = item.emoji,
+                emoji = item.emoji,
             label = AacI18n.label(item),
             sublabel = if (item.isStrongIntent) I18n.tr("緊急 — 按 ✓ 會立即播報") else null,
             progressText = "${safeIndex + 1}/$totalCards",

@@ -224,6 +224,105 @@ object CloudSync {
     }
 
     // ── 推送單筆歷史（與網頁 users/{uid}/history 同結構）──
+    // ── 專屬發音（聲學樣板）────────────────────────────────────────────
+    //
+    // 一筆一份文件（子集合），不是全部塞進 users/{uid} 那一份。
+    // 理由是錄音波形很佔空間：8 段錄音約 200KB，幾筆就會撞到 Firestore
+    // 單一文件 1MB 的上限，而那個失敗是整份寫入一起失敗——連文字設定都會存不進去。
+
+    /**
+     * 上傳一個聲學樣板。
+     *
+     * @param exemplarBlobB64 錄音的 MFCC 特徵（base64）。**連波形一起傳**，
+     *   所以換手機不必重錄——那是這個功能最花使用者力氣的部分（一句要錄 5 次）。
+     */
+    fun pushAcousticTemplate(
+        id: Long,
+        label: String,
+        keyword: String,
+        spokenPhrase: String,
+        matchMode: String,
+        rejectionThreshold: Float,
+        marginThreshold: Float,
+        exemplarBlobB64: String,
+        createdAt: Long,
+    ) {
+        val u = uid ?: return
+        val doc = hashMapOf<String, Any>(
+            "label" to label,
+            "keyword" to keyword,
+            "spokenPhrase" to spokenPhrase,
+            "matchMode" to matchMode,
+            "rejectionThreshold" to rejectionThreshold.toDouble(),
+            "marginThreshold" to marginThreshold.toDouble(),
+            "exemplarBlob" to exemplarBlobB64,
+            "createdAt" to createdAt,
+            "updatedAt" to System.currentTimeMillis(),
+        )
+        db.collection("users").document(u)
+            .collection("acousticTemplates").document(id.toString())
+            .set(doc, SetOptions.merge())
+            .addOnFailureListener { Log.w(TAG, "push acoustic template failed", it) }
+    }
+
+    fun deleteAcousticTemplate(id: Long) {
+        val u = uid ?: return
+        db.collection("users").document(u)
+            .collection("acousticTemplates").document(id.toString()).delete()
+            .addOnFailureListener { Log.w(TAG, "delete acoustic template failed", it) }
+    }
+
+    /** 雲端上的一筆樣板。[exemplarBlobB64] 為空＝只有文字設定（網頁版建的，還沒錄音）。 */
+    data class RemoteTemplate(
+        val remoteId: String,
+        val label: String,
+        val keyword: String,
+        val spokenPhrase: String,
+        val matchMode: String,
+        val rejectionThreshold: Float,
+        val marginThreshold: Float,
+        val exemplarBlobB64: String,
+        val createdAt: Long,
+    )
+
+    /**
+     * 拉回全部樣板。
+     *
+     * 網頁版只能建「文字設定」（瀏覽器沒有這套 DTW 比對），所以拉回來的項目
+     * 可能沒有錄音——那種要在手機上補錄才會生效。呼叫端據 [RemoteTemplate.exemplarBlobB64]
+     * 是否為空來決定。
+     */
+    fun pullAcousticTemplates(onResult: (List<RemoteTemplate>) -> Unit) {
+        val u = uid ?: return onResult(emptyList())
+        db.collection("users").document(u).collection("acousticTemplates")
+            .get(com.google.firebase.firestore.Source.SERVER)
+            .addOnSuccessListener { snap ->
+                onResult(
+                    snap.documents.mapNotNull { d ->
+                        val keyword = d.getString("keyword").orEmpty()
+                        val phrase = d.getString("spokenPhrase").orEmpty()
+                        // 少了任一個就沒有意義：不知道要聽什麼，或不知道要說什麼
+                        if (keyword.isBlank() || phrase.isBlank()) return@mapNotNull null
+                        RemoteTemplate(
+                            remoteId = d.id,
+                            label = d.getString("label").orEmpty().ifBlank { keyword },
+                            keyword = keyword,
+                            spokenPhrase = phrase,
+                            matchMode = d.getString("matchMode").orEmpty().ifBlank { "Keyword" },
+                            rejectionThreshold = (d.getDouble("rejectionThreshold") ?: 0.0).toFloat(),
+                            marginThreshold = (d.getDouble("marginThreshold") ?: 0.15).toFloat(),
+                            exemplarBlobB64 = d.getString("exemplarBlob").orEmpty(),
+                            createdAt = d.getLong("createdAt") ?: 0L,
+                        )
+                    }
+                )
+            }
+            .addOnFailureListener {
+                Log.w(TAG, "pull acoustic templates failed", it)
+                onResult(emptyList())
+            }
+    }
+
     fun pushHistory(original: String, reconstructed: String, ts: Long) {
         val u = uid ?: return
         val rec = hashMapOf<String, Any>(

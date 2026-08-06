@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PushPin
@@ -80,6 +82,7 @@ fun ApiKeysPanel(
     val imageApis by viewModel.imageApisFlow.collectAsState()
     val llmApis by viewModel.llmApisFlow.collectAsState()
     val ttsApis by viewModel.ttsApisFlow.collectAsState()
+    val sttApis by viewModel.sttApisFlow.collectAsState()
     LaunchedEffect(Unit) {
         viewModel.ensureImageApisSeeded()
         viewModel.ensureLlmApisSeeded()
@@ -195,6 +198,48 @@ fun ApiKeysPanel(
                 onPin = { viewModel.selectTtsApi(entry.id) },
                 onTest = { testingId = entry.id; viewModel.testTtsApi(entry) },
                 onDelete = { viewModel.deleteTtsApi(entry.id) },
+                p = p
+            )
+        }
+
+        Divider(p)
+
+        // ── 語音辨識：獨立成一區，不再跟文字 LLM 綁在一起 ──────────────
+        //
+        // 以前轉寫掛在文字 LLM 的內建端點上，等於「想換轉寫供應商就得連重組
+        // 的供應商一起換」。但重組要語意能力、轉寫要對含糊發音的容錯，
+        // 實務上很少是同一家最好——而轉寫品質直接決定整條流程能不能用。
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(I18n.tr("語音辨識"), fontSize = 13.sp, color = p.textMuted,
+                modifier = Modifier.weight(1f))
+            OutlinedButton(
+                onClick = { viewModel.addSttApi(com.example.data.SttProvider.GROQ) },
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF007AFF).copy(alpha = 0.5f)),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.heightIn(min = 34.dp)
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(I18n.tr("加入"), color = Color(0xFF007AFF), fontSize = 14.sp)
+            }
+        }
+        Text(
+            I18n.tr("由上往下試，第一個成功就用它。把最聽得懂你的那家排到最上面。留空＝沿用文字 LLM 附帶的轉寫。"),
+            fontSize = 13.sp, color = p.textMuted, lineHeight = 17.sp
+        )
+        sttApis.forEachIndexed { index, entry ->
+            SttApiRow(
+                entry = entry,
+                isFirst = index == 0,
+                isLast = index == sttApis.lastIndex,
+                onProvider = { viewModel.updateSttApi(entry.copy(provider = it, name = "", model = "", endpoint = "")) },
+                onKey = { viewModel.updateSttApi(entry.copy(key = it)) },
+                onModel = { viewModel.updateSttApi(entry.copy(model = it)) },
+                onToggle = { viewModel.updateSttApi(entry.copy(enabled = !entry.enabled)) },
+                onUp = { viewModel.moveSttApi(entry.id, up = true) },
+                onDown = { viewModel.moveSttApi(entry.id, up = false) },
+                onDelete = { viewModel.deleteSttApi(entry.id) },
                 p = p
             )
         }
@@ -633,3 +678,105 @@ private fun fieldColors(p: AppPalette) = OutlinedTextFieldDefaults.colors(
     focusedLabelColor = p.neonCyan, unfocusedLabelColor = p.textMuted, cursorColor = p.neonCyan,
     focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent
 )
+
+/**
+ * 語音辨識的一列。
+ *
+ * 跟生圖／文字那兩區的差別是這裡有「上下移動」而不是「設為使用中」——
+ * 轉寫是由上往下試到成功為止，順序本身就是設定，不是排版偏好。
+ */
+@Composable
+private fun SttApiRow(
+    entry: com.example.data.SttApiEntry,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onProvider: (com.example.data.SttProvider) -> Unit,
+    onKey: (String) -> Unit,
+    onModel: (String) -> Unit,
+    onToggle: () -> Unit,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+    onDelete: () -> Unit,
+    p: AppPalette
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            // 停用而不是刪除：換家測試時不必把金鑰重打一次
+            IconButton(onClick = onToggle, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    if (entry.enabled) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                    if (entry.enabled) I18n.tr("已啟用") else I18n.tr("已停用"),
+                    tint = if (entry.enabled) Color(0xFF34C759) else p.textMuted.copy(alpha = 0.5f),
+                    modifier = Modifier.size(21.dp)
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            SttProviderDropdown(entry.provider, onProvider, p, Modifier.weight(1f))
+            IconButton(onClick = onUp, enabled = !isFirst, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.KeyboardArrowUp, I18n.tr("往上移"),
+                    tint = if (isFirst) p.textMuted.copy(alpha = 0.3f) else p.textLight,
+                    modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onDown, enabled = !isLast, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.KeyboardArrowDown, I18n.tr("往下移"),
+                    tint = if (isLast) p.textMuted.copy(alpha = 0.3f) else p.textLight,
+                    modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.Delete, I18n.tr("刪除"),
+                    tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
+            }
+        }
+        if (entry.provider.needsKey) {
+            KeyField(I18n.tr("API 金鑰"), entry.key, onKey, p)
+        } else {
+            Text(I18n.tr("免金鑰，直接可用"), fontSize = 13.sp, color = Color(0xFF34C759),
+                modifier = Modifier.padding(start = 42.dp, bottom = 6.dp))
+        }
+        // 模型可改：同一家常有快/準兩種選擇，而哪個好用得看使用者的發音狀況
+        PlainField(I18n.tr("模型"), entry.model, onModel, p, hint = entry.provider.defaultModel)
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun SttProviderDropdown(
+    current: com.example.data.SttProvider,
+    onSelect: (com.example.data.SttProvider) -> Unit,
+    p: AppPalette,
+    modifier: Modifier = Modifier
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        OutlinedButton(
+            onClick = { open = true },
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, p.textMuted.copy(alpha = 0.35f)),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+        ) {
+            Text(I18n.tr(current.displayName), color = p.textLight, fontSize = 15.sp, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            Icon(Icons.Default.ExpandMore, null, tint = p.textMuted, modifier = Modifier.size(18.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            com.example.data.SttProvider.entries.forEach { prov ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "${I18n.tr(prov.displayName)}${if (!prov.needsKey) I18n.tr("（免金鑰）") else ""}",
+                            fontSize = 15.sp, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = p.textLight
+                        )
+                    },
+                    onClick = { onSelect(prov); open = false },
+                )
+            }
+        }
+    }
+}

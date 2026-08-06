@@ -113,11 +113,24 @@ class GeminiNanoEngine(private val context: Context) : InferenceEngine {
     companion object {
         private const val TAG = "GeminiNanoEngine"
 
-        private val SYSTEM_PROMPT = """
-            你是一位輔助失語症患者溝通的醫學語言助理（純離線模式）。
-            請結合 rawText（碎詞）、locationTag（地點）與 visionTags（環境物件），
-            以 Chain-of-Thought 分析意圖後，重組成繁體中文句子。
-            只輸出 JSON：{"reasoning":"推理","reconstructed":"重組句","confidence":85}
+        /**
+         * 這是 `val`（不是 `get()`），所以語言在建構時就固定了。
+         * 使用者中途換介面語言時要重建引擎才會生效——實務上換語言本來就會
+         * 重建，但這個相依性不寫下來很容易之後被誤改成常數。
+         */
+        private val SYSTEM_PROMPT: String get() = """
+            You help a person with aphasia say what they mean. You run fully offline.
+            Combine rawText (the fragments), locationTag, and visionTags (objects in view),
+            reason briefly about the intent, then rebuild it as one sentence in
+            ${com.example.ui.I18n.outputLanguageNameEn()}.
+
+            Stay on the fragments: every content word must trace back to rawText or to one of
+            the given tags. Add only the grammatical glue a sentence needs. Do not invent a new
+            event, time, person, or question.
+
+            Output JSON only: {"reasoning":"brief","reconstructed":"the sentence","confidence":85}
+
+            ${com.example.ui.I18n.outputLanguageDirective("reconstructed")}
         """.trimIndent()
 
         /**

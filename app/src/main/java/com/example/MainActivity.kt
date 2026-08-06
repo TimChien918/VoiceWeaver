@@ -72,6 +72,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 盡量早——App 剛啟動那幾行（引擎選了哪個、金鑰讀到沒）往往就是後面出問題的原因。
+        com.example.ai.DiagnosticLog.init(this)
+        com.example.ai.DiagnosticLog.i(
+            com.example.ai.DiagnosticLog.Cat.UI, "App 啟動",
+            "版本=${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE}) " +
+                "Android=${android.os.Build.VERSION.SDK_INT} 機型=${android.os.Build.MODEL}"
+        )
         enableEdgeToEdge()
         setContent {
             val viewModel: VoiceWeaverViewModel = viewModel()
@@ -233,6 +240,24 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             composable("aac") { AacScreen(viewModel = viewModel) }
+                            // ── 我的專屬發音（com.example.aphasia）──────────────
+                            // 從「設定 → 我的專屬發音」進來。刻意不放頂層分頁：
+                            // 這是一次性設定，設好之後就在主畫面的收音流程裡自動生效。
+                            composable("phrase_shortcuts") {
+                                val graph = viewModel.aphasiaGraph
+                                val vm: com.example.aphasia.presentation.settings.PhraseShortcutViewModel =
+                                    viewModel {
+                                        com.example.aphasia.presentation.settings.PhraseShortcutViewModel(
+                                            graph,
+                                            com.example.aphasia.data.local.PhraseLibrarySource(applicationContext),
+                                            viewModel.settingsRepository,
+                                        )
+                                    }
+                                com.example.aphasia.presentation.settings.PhraseShortcutScreen(
+                                    viewModel = vm,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
                             composable("history") {
                                 HistoryScreen(
                                     viewModel = viewModel,
@@ -243,6 +268,7 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(
                                     viewModel = viewModel,
                                     onAdvanced = { navController.go("settings_extended") },
+                                    onTeachSound = { navController.go("phrase_shortcuts") },
                                     onStartCalibration = {
                                         // 呼叫 EyeGestures JS 重置校準
                                         eyeGesturesWebViewRef?.evaluateJavascript("window.egRecalibrate && window.egRecalibrate();", null)

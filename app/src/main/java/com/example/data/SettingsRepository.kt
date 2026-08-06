@@ -46,6 +46,20 @@ enum class CloudProvider(val displayName: String) {
     Cohere("Cohere · Command-R")
 }
 
+/**
+ * 「AI 直接聽」要用誰的算力。
+ *
+ * 兩條路的取捨很實際：雲端（Gemini）品質好但免費額度很容易爆（一次直接聽會平行打
+ * 3 次 API，實測連續用幾次就 HTTP 429），而且語音必須離開裝置；電腦端本機模型
+ * （Gemma 4 E4B，跑在使用者自己的 Mac 上）不用金鑰、語音不出區網，但對含糊發音的
+ * 理解力目前未經真實病患語音驗證。所以預設 Auto，讓使用者能自己按情況鎖定。
+ */
+enum class AudioUnderstandSource(val displayName: String) {
+    Auto("自動（電腦就緒就用電腦，否則雲端）"),
+    LocalOnly("只用電腦本機（免金鑰、語音不外傳）"),
+    CloudOnly("只用雲端（品質優先）")
+}
+
 /** 眼動控制模式 */
 enum class EyeControlMode(val displayName: String) {
     GazeDwell("凝視停留"),
@@ -104,9 +118,12 @@ data class BehaviorMetrics(
 /** App 全域設定快照（單一資料源，UI 訂閱 [SettingsRepository.settings] 取得即時值）*/
 data class AppSettings(
     val theme: AppTheme = AppTheme.Tech,
-    val language: AppLanguage = AppLanguage.ZhTW,
+    /** 預設英文：這個 App 以英語使用者為主要對象。 */
+    val language: AppLanguage = AppLanguage.En,
     val powerMode: PowerMode = PowerMode.Balanced,
     val cloudProvider: CloudProvider = CloudProvider.Auto,
+    /** 「AI 直接聽」用誰的算力：自動／只用電腦本機／只用雲端。 */
+    val audioUnderstandSource: AudioUnderstandSource = AudioUnderstandSource.Auto,
     val ttsRate: Float = 0.85f,
     val fontScale: Float = 1.0f,
     val autoSaveRehab: Boolean = true,
@@ -149,6 +166,13 @@ data class AppSettings(
      * 同一服務商可建多筆（多把金鑰，可手動選 + 自動備援）。
      */
     val imageApis: String = "",
+    /**
+     * 語音辨識供應商清單（[SttApiStore] 的 JSON）。
+     *
+     * 跟文字 LLM 分開存：重組要語意能力、轉寫要對含糊發音的容錯，
+     * 很少是同一家最好。空字串＝沿用 LLM 內建的轉寫端點（向後相容）。
+     */
+    val sttApis: String = "",
     /** 目前生圖使用中的設定 id；空 = 用清單第一筆。 */
     val imageApiSelectedId: String = "",
     /** 文字 LLM API 清單（JSON）：每筆 {id, provider, name, endpoint, model, key}，由 [LlmApiStore] 編解碼。 */
@@ -201,6 +225,14 @@ data class AppSettings(
     val customAacItems: String = "",
     /** 鼻控靈敏度倍率（0.5~2.0，1.0=預設）。即時注入 nose_tracker.html。 */
     val noseSensitivity: Float = 1.0f,
+    /**
+     * 聲學捷徑的靈敏度倍率（乘在拒絕門檻上）。
+     *
+     * 1.0＝用登錄錄音自動校準出來的門檻。調高比較容易觸發但也比較容易說錯話，
+     * 調低相反。做成可調是因為每個人、每句話的發音穩定度差很多——
+     * 一個寫死的常數不可能同時適合所有人，而猜錯的代價由使用者承擔。
+     */
+    val shortcutSensitivity: Float = 1.0f,
     /** 高對比模式：純黑底 + 高彩文字，視力弱者用。 */
     val highContrast: Boolean = false,
     /** 每日復健提醒開關。 */
@@ -247,6 +279,7 @@ class SettingsRepository(private val context: Context) {
         val Language            = stringPreferencesKey("language")
         val PowerMode           = stringPreferencesKey("power_mode")
         val CloudProvider       = stringPreferencesKey("cloud_provider")
+        val AudioUnderstandSrc  = stringPreferencesKey("audio_understand_source")
         val TtsRate             = floatPreferencesKey("tts_rate")
         val FontScale           = floatPreferencesKey("font_scale")
         val AutoSave            = booleanPreferencesKey("auto_save_rehab")
@@ -291,6 +324,7 @@ class SettingsRepository(private val context: Context) {
         val LlmCohereEndpoint   = stringPreferencesKey("llm_cohere_endpoint")
         val LlmCohereModel      = stringPreferencesKey("llm_cohere_model")
         val ImageApis           = stringPreferencesKey("image_apis")
+        val SttApis             = stringPreferencesKey("stt_apis")
         val ImageApiSelectedId  = stringPreferencesKey("image_api_selected_id")
         val LlmApis             = stringPreferencesKey("llm_apis")
         val LlmApiSelectedId    = stringPreferencesKey("llm_api_selected_id")
@@ -316,6 +350,7 @@ class SettingsRepository(private val context: Context) {
         val FavoriteSentences   = stringPreferencesKey("favorite_sentences")
         val CustomAacItems      = stringPreferencesKey("custom_aac_items")
         val NoseSensitivity     = floatPreferencesKey("nose_sensitivity")
+        val ShortcutSensitivity = floatPreferencesKey("shortcut_sensitivity")
         val HighContrast        = booleanPreferencesKey("high_contrast")
         val DailyReminderEnabled= booleanPreferencesKey("daily_reminder_enabled")
         val DailyReminderHour   = androidx.datastore.preferences.core.intPreferencesKey("daily_reminder_hour")
@@ -328,9 +363,10 @@ class SettingsRepository(private val context: Context) {
 
     private fun Preferences.toSettings() = AppSettings(
         theme         = runCatching { AppTheme.valueOf(this[Keys.Theme] ?: AppTheme.Tech.name) }.getOrDefault(AppTheme.Tech),
-        language      = runCatching { AppLanguage.valueOf(this[Keys.Language] ?: AppLanguage.ZhTW.name) }.getOrDefault(AppLanguage.ZhTW),
+        language      = runCatching { AppLanguage.valueOf(this[Keys.Language] ?: AppLanguage.En.name) }.getOrDefault(AppLanguage.En),
         powerMode     = runCatching { PowerMode.valueOf(this[Keys.PowerMode] ?: PowerMode.Balanced.name) }.getOrDefault(PowerMode.Balanced),
         cloudProvider = runCatching { CloudProvider.valueOf(this[Keys.CloudProvider] ?: CloudProvider.Auto.name) }.getOrDefault(CloudProvider.Auto),
+        audioUnderstandSource = runCatching { AudioUnderstandSource.valueOf(this[Keys.AudioUnderstandSrc] ?: AudioUnderstandSource.Auto.name) }.getOrDefault(AudioUnderstandSource.Auto),
         ttsRate       = this[Keys.TtsRate] ?: 0.85f,
         fontScale     = this[Keys.FontScale] ?: 1.0f,
         autoSaveRehab = this[Keys.AutoSave] ?: true,
@@ -361,6 +397,7 @@ class SettingsRepository(private val context: Context) {
         customApiModel = this[Keys.CustomApiModel] ?: AppSettings.DEFAULT_CUSTOM_API_MODEL,
         customApiKey = this[Keys.CustomApiKey] ?: "",
         imageApis = this[Keys.ImageApis] ?: "",
+        sttApis = this[Keys.SttApis] ?: "",
         imageApiSelectedId = this[Keys.ImageApiSelectedId] ?: "",
         llmApis = this[Keys.LlmApis] ?: "",
         llmApiSelectedId = this[Keys.LlmApiSelectedId] ?: "",
@@ -392,6 +429,7 @@ class SettingsRepository(private val context: Context) {
         favoriteSentences  = this[Keys.FavoriteSentences] ?: "",
         customAacItems     = this[Keys.CustomAacItems] ?: "",
         noseSensitivity    = this[Keys.NoseSensitivity] ?: 1.0f,
+        shortcutSensitivity= this[Keys.ShortcutSensitivity] ?: 1.0f,
         highContrast       = this[Keys.HighContrast] ?: false,
         dailyReminderEnabled = this[Keys.DailyReminderEnabled] ?: false,
         dailyReminderHour  = this[Keys.DailyReminderHour] ?: 19,
@@ -404,6 +442,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setLanguage(lang: AppLanguage)       = update { it[Keys.Language] = lang.name }
     suspend fun setPowerMode(mode: PowerMode)        = update { it[Keys.PowerMode] = mode.name }
     suspend fun setCloudProvider(p: CloudProvider)   = update { it[Keys.CloudProvider] = p.name }
+    suspend fun setAudioUnderstandSource(s: AudioUnderstandSource) = update { it[Keys.AudioUnderstandSrc] = s.name }
     suspend fun setTtsRate(rate: Float)              = update { it[Keys.TtsRate] = rate.coerceIn(0.5f, 1.5f) }
     suspend fun setFontScale(scale: Float)           = update { it[Keys.FontScale] = scale.coerceIn(0.8f, 1.8f) }
     suspend fun setAutoSaveRehab(on: Boolean)        = update { it[Keys.AutoSave] = on }
@@ -434,6 +473,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCustomApiModel(v: String) = update { it[Keys.CustomApiModel] = v.trim() }
     suspend fun setCustomApiKey(v: String) = update { it[Keys.CustomApiKey] = v.trim() }
     suspend fun setImageApis(json: String) = update { it[Keys.ImageApis] = json }
+    suspend fun setSttApis(json: String) = update { it[Keys.SttApis] = json }
     suspend fun setImageApiSelectedId(id: String) = update { it[Keys.ImageApiSelectedId] = id }
     suspend fun setLlmApis(json: String) = update { it[Keys.LlmApis] = json }
     suspend fun setLlmApiSelectedId(id: String) = update { it[Keys.LlmApiSelectedId] = id }
@@ -495,6 +535,10 @@ class SettingsRepository(private val context: Context) {
         it[Keys.DailyReminderEnabled] = enabled
         it[Keys.DailyReminderHour] = hour.coerceIn(0, 23)
     }
+
+    /** @see AppSettings.shortcutSensitivity */
+    suspend fun setShortcutSensitivity(v: Float) =
+        update { it[Keys.ShortcutSensitivity] = v.coerceIn(0.7f, 1.8f) }
     suspend fun setReportPushFrequency(freq: String) = update { it[Keys.ReportPushFrequency] = freq }
     suspend fun setLinkedComputerId(id: String) = update { it[Keys.LinkedComputerId] = id.trim() }
     suspend fun setCurrentLocationTag(tag: String) = update { it[Keys.CurrentLocationTag] = tag }  // 問題10：保存地點

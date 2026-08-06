@@ -68,7 +68,9 @@ import java.io.File
 fun SettingsScreen(
     viewModel: VoiceWeaverViewModel,
     onAdvanced: () -> Unit = {},
-    onStartCalibration: () -> Unit = {}
+    onStartCalibration: () -> Unit = {},
+    /** 開啟「教一個聲音」（聲學樣板登錄）。 */
+    onTeachSound: () -> Unit = {}
 ) {
     val settings by viewModel.settings.collectAsState()
     val deviceRam by viewModel.deviceRam.collectAsState()
@@ -134,6 +136,17 @@ fun SettingsScreen(
                 onUseCurrentGpsAsHome = { viewModel.useCurrentGpsAsHome() },
                 embedded = true
             )
+        }
+    }
+    // 診斷日誌：出問題時唯一的現場紀錄。刻意不藏在「輕度模式」後面——
+    // 照護者回報問題時要能自己匯出，不該需要我們教他改設定或接電腦。
+    var showDiagnostics by remember { mutableStateOf(false) }
+    if (showDiagnostics) {
+        FloatingPanel(
+            title = I18n.tr("診斷日誌"), icon = Icons.Default.BugReport,
+            onDismiss = { showDiagnostics = false }
+        ) {
+            DiagnosticLogPanel(p = p)
         }
     }
     // 角色語音與雲端曲庫（獨立子頁，iOS 風整頁）——不是開發者工具，是日常會用的真實功能
@@ -208,6 +221,7 @@ fun SettingsScreen(
                 onDownloadDefault = { viewModel.startModelDownload() },
                 onCancelDownload = { viewModel.cancelModelDownload() },
                 onCloudProviderChange = { viewModel.setCloudProvider(it) },
+                onAudioSourceChange = { viewModel.setAudioUnderstandSource(it) },
                 p = p.iosReadable
             )
         }
@@ -296,6 +310,21 @@ fun SettingsScreen(
                 }
             }
 
+            // 「教一個聲音」放在頂層而不是收進子頁：這是重度失語症使用者最需要、
+            // 也最需要照顧者代為設定的功能。埋在三層之下等於沒有。
+            item {
+                Section(title = I18n.tr("我的專屬發音"), icon = Icons.Default.RecordVoiceOver, p = p) {
+                    // value 是給「輕度」這種短值用的（右對齊、17sp、不換行）。
+                    // 塞一整句說明進去會把 label 擠掉——說明放在 Section 的
+                    // footer 或子畫面裡，不要放這裡。
+                    AdvancedEntryRow(
+                        label = I18n.tr("設定觸發詞與句子"),
+                        onClick = onTeachSound, p = p,
+                        icon = Icons.Filled.Mic, iconTint = IosCategory.Green
+                    )
+                }
+            }
+
             // 雲端帳號狀態／登入登出已搬到右上角頭像選單（Chrome 風），不再佔頂層一張卡。
 
             // 中度/重度模式隱藏複雜設定，照護者可用「輕度」模式設定
@@ -334,6 +363,10 @@ fun SettingsScreen(
                             icon = Icons.Filled.Mic, iconTint = IosCategory.Pink
                         )
                     }
+                    AdvancedEntryRow(
+                        label = I18n.tr("診斷日誌"), onClick = { showDiagnostics = true }, p = p,
+                        icon = Icons.Filled.BugReport, iconTint = IosCategory.Orange
+                    )
                 }
             }
 
@@ -533,6 +566,7 @@ private fun PerformanceSettingsPanel(
     onDownloadDefault: () -> Unit,
     onCancelDownload: () -> Unit,
     onCloudProviderChange: (CloudProvider) -> Unit,
+    onAudioSourceChange: (com.example.data.AudioUnderstandSource) -> Unit,
     p: com.example.ui.theme.AppPalette
 ) {
     Section(title = stringResource(R.string.section_power), icon = Icons.Default.BatteryChargingFull, p = p) {
@@ -576,6 +610,39 @@ private fun PerformanceSettingsPanel(
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.cloud_note),
+            fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
+        )
+    }
+
+    // 「AI 直接聽」是獨立的一項選擇，跟上面的文字 LLM 不是同一件事：
+    // 上面決定「句子怎麼重組」，這裡決定「誰來聽這段錄音」。
+    Section(title = I18n.tr("AI 直接聽（不轉文字）"), icon = Icons.Default.Hearing, p = p) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.example.data.AudioUnderstandSource.values().forEach { src ->
+                ChoiceRow(
+                    label = when (src) {
+                        com.example.data.AudioUnderstandSource.Auto -> I18n.tr("自動")
+                        com.example.data.AudioUnderstandSource.LocalOnly -> I18n.tr("只用電腦本機")
+                        com.example.data.AudioUnderstandSource.CloudOnly -> I18n.tr("只用雲端")
+                    },
+                    sub = when (src) {
+                        com.example.data.AudioUnderstandSource.Auto ->
+                            I18n.tr("電腦端就緒就用電腦，否則用雲端。")
+                        com.example.data.AudioUnderstandSource.LocalOnly ->
+                            I18n.tr("免金鑰、不會用掉雲端額度，語音不離開你的區網。電腦沒開就會直接告訴你，不偷偷改用雲端。")
+                        com.example.data.AudioUnderstandSource.CloudOnly ->
+                            I18n.tr("品質優先。注意：免費額度容易用完（每次會打 3 次 API）。")
+                    },
+                    selected = settings.audioUnderstandSource == src,
+                    onClick = { onAudioSourceChange(src) },
+                    p = p,
+                    icon = Icons.Filled.Hearing, iconTint = IosCategory.Teal
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            I18n.tr("電腦本機需要在電腦上執行「音訊理解伺服器」（tools/GPT-SoVITS/start_audio_infer.sh，埠 9883）。"),
             fontSize = 10.sp, color = p.textMuted, lineHeight = 14.sp
         )
     }
@@ -2148,20 +2215,25 @@ private fun tierColor(tier: DeviceTier, p: com.example.ui.theme.AppPalette) = wh
 }
 
 // ─── iOS「設定」風格配色（蘋果設計美學，淺色 / 深色兩套，隨主題切換）───
-private data class IosScheme(
+/**
+ * iOS 風配色。`internal` 而非 `private`：`com.example.aphasia` 底下的
+ * 「我的專屬發音」是從設定進去的子畫面，必須跟這裡用同一套色，
+ * 否則同一個流程裡會出現兩套色盤（實測看起來很雜）。
+ */
+internal data class IosScheme(
     val bg: Color, val card: Color, val label: Color, val secondary: Color,
     val separator: Color, val blue: Color, val green: Color, val red: Color,
     val orange: Color, val chevron: Color
 )
 
-private val IosDarkScheme = IosScheme(
+internal val IosDarkScheme = IosScheme(
     bg = Color(0xFF000000), card = Color(0xFF1C1C1E), label = Color(0xFFFFFFFF),
     secondary = Color(0xFF98989F), separator = Color(0xFF38383A),
     blue = Color(0xFF0A84FF), green = Color(0xFF30D158), red = Color(0xFFFF453A),
     orange = Color(0xFFFF9F0A), chevron = Color(0xFF5B5B60)
 )
 
-private val IosLightScheme = IosScheme(
+internal val IosLightScheme = IosScheme(
     bg = Color(0xFFF2F2F7), card = Color(0xFFFFFFFF), label = Color(0xFF000000),
     secondary = Color(0xFF6C6C70), separator = Color(0xFFC6C6C8),
     blue = Color(0xFF007AFF), green = Color(0xFF34C759), red = Color(0xFFFF3B30),
@@ -2172,7 +2244,114 @@ private val IosLightScheme = IosScheme(
  * 分類圖示色彩對照（延伸 Apple 系統色板，語意固定不隨淺/深色主題切換——
  * 色塊本身是實色背景＋白色圖示，在白卡或黑卡上都夠對比）。
  */
-private object IosCategory {
+/**
+ * 診斷日誌檢視器。
+ *
+ * 存在的理由很具體：先前查「唸出來的聲音很怪」時，App 內其實已經有一份合成日誌
+ * （TtsModule 的 _piperSynthesisLog），但沒有任何畫面在讀它，只活在記憶體裡，
+ * 結果只能插 USB 抓 logcat，還因為猜錯 tag 白繞一圈。現在一律落地成檔案，
+ * 並且讓使用者自己就能看、能分享——回報問題時不必再依賴我們手上有沒有那支手機。
+ */
+@Composable
+private fun DiagnosticLogPanel(p: com.example.ui.theme.AppPalette) {
+    val c = currentIosScheme()
+    val context = LocalContext.current
+    val lines by com.example.ai.DiagnosticLog.recent.collectAsState()
+    // 只看得到失敗與降級——出問題時九成只需要這些
+    var onlyProblems by remember { mutableStateOf(false) }
+    val shown = remember(lines, onlyProblems) {
+        if (onlyProblems) lines.filter { " E [" in it || " W [" in it } else lines
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        Text(
+            I18n.tr("每一次語音辨識、句子重組、語音合成都會記錄在手機本機。回報問題時請按「分享」把它傳出來。"),
+            fontSize = 12.sp, color = c.secondary,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            OutlinedButton(
+                onClick = {
+                    val text = com.example.ai.DiagnosticLog.dumpText()
+                    context.startActivity(
+                        android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "VoiceWeaver 診斷日誌")
+                                putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            }, I18n.tr("分享診斷日誌")
+                        )
+                    )
+                },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Share, null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(I18n.tr("分享"), fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { onlyProblems = !onlyProblems },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    if (onlyProblems) I18n.tr("顯示全部") else I18n.tr("只看問題"),
+                    fontSize = 12.sp
+                )
+            }
+            OutlinedButton(
+                onClick = { com.example.ai.DiagnosticLog.clear() },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(I18n.tr("清除"), fontSize = 12.sp, color = IosCategory.Red)
+            }
+        }
+
+        if (shown.isEmpty()) {
+            Text(
+                I18n.tr("目前沒有紀錄。操作一次語音或朗讀之後回來看。"),
+                fontSize = 12.sp, color = c.secondary,
+                modifier = Modifier.padding(12.dp)
+            )
+        } else {
+            // 新的在最上面：出問題後打開就直接看到剛剛發生的事，不必捲到底
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                shown.asReversed().forEach { line ->
+                    val tint = when {
+                        " E [" in line -> IosCategory.Red
+                        " W [" in line -> IosCategory.Orange
+                        else -> c.secondary
+                    }
+                    Text(
+                        line,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp,
+                        color = tint,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                    )
+                }
+            }
+        }
+
+        Text(
+            I18n.tr("檔案位置：Android/data/…/files/diagnostics/（保留 7 天）"),
+            fontSize = 10.sp, color = c.secondary,
+            modifier = Modifier.padding(12.dp)
+        )
+    }
+}
+
+internal object IosCategory {
     val Blue = Color(0xFF007AFF)
     val Green = Color(0xFF34C759)
     val Red = Color(0xFFFF3B30)
@@ -2218,7 +2397,7 @@ private fun IconChip(
  * 兩邊都靠同一個來源，不會出現「深卡配黑字」的不一致。
  */
 @Composable
-private fun currentIosScheme(): IosScheme {
+internal fun currentIosScheme(): IosScheme {
     val bg = LocalAppPalette.current.darkBg
     val lum = bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f
     return if (lum > 0.5f) IosLightScheme else IosDarkScheme

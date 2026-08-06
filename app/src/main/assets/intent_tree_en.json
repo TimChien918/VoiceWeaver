@@ -1,0 +1,108 @@
+[
+  {
+    "id": "body",
+    "label": "My body",
+    "fragment": "",
+    "icon": "body",
+    "children": [
+      { "id": "body.pain", "label": "Pain", "fragment": "pain", "icon": "pain",
+        "children": [
+          { "id": "body.pain.head", "label": "Head", "fragment": "head", "icon": "head" },
+          { "id": "body.pain.chest", "label": "Chest", "fragment": "chest", "icon": "chest" },
+          { "id": "body.pain.stomach", "label": "Stomach", "fragment": "stomach", "icon": "stomach" },
+          { "id": "body.pain.back", "label": "Back", "fragment": "back", "icon": "back" },
+          { "id": "body.pain.leg", "label": "Leg", "fragment": "leg", "icon": "leg" },
+          { "id": "body.pain.arm", "label": "Arm", "fragment": "arm", "icon": "arm" }
+        ]
+      },
+      { "id": "body.tired", "label": "Tired", "fragment": "tired", "icon": "tired" },
+      { "id": "body.cold", "label": "Cold", "fragment": "cold", "icon": "cold" },
+      { "id": "body.hot", "label": "Hot", "fragment": "hot", "icon": "hot" },
+      { "id": "body.dizzy", "label": "Dizzy", "fragment": "dizzy", "icon": "dizzy" },
+      { "id": "body.medication", "label": "Medication", "fragment": "medication", "icon": "pill" }
+    ]
+  },
+  {
+    "id": "need",
+    "label": "I need",
+    "fragment": "",
+    "icon": "need",
+    "children": [
+      { "id": "need.water", "label": "Water", "fragment": "water", "icon": "water" },
+      { "id": "need.food", "label": "Food", "fragment": "food", "icon": "food" },
+      { "id": "need.bathroom", "label": "Bathroom", "fragment": "bathroom", "icon": "bathroom" },
+      { "id": "need.help", "label": "Help", "fragment": "help", "icon": "help" },
+      { "id": "need.rest", "label": "Rest", "fragment": "rest", "icon": "bed" },
+      { "id": "need.glasses", "label": "Glasses", "fragment": "glasses", "icon": "glasses" },
+      { "id": "need.phone", "label": "Phone", "fragment": "phone", "icon": "phone" }
+    ]
+  },
+  {
+    "id": "people",
+    "label": "People",
+    "fragment": "",
+    "icon": "people",
+    "children": [
+      { "id": "people.doctor", "label": "Doctor", "fragment": "doctor", "icon": "doctor" },
+      { "id": "people.nurse", "label": "Nurse", "fragment": "nurse", "icon": "nurse" },
+      { "id": "people.family", "label": "Family", "fragment": "family", "icon": "family" },
+      { "id": "people.therapist", "label": "Therapist", "fragment": "therapist", "icon": "therapist" },
+      { "id": "people.friend", "label": "Friend", "fragment": "friend", "icon": "friend" }
+    ]
+  },
+  {
+    "id": "place",
+    "label": "Places",
+    "fragment": "",
+    "icon": "place",
+    "children": [
+      { "id": "place.home", "label": "Home", "fragment": "home", "icon": "home" },
+      { "id": "place.hospital", "label": "Hospital", "fragment": "hospital", "icon": "hospital" },
+      { "id": "place.outside", "label": "Outside", "fragment": "outside", "icon": "outside" },
+      { "id": "place.kitchen", "label": "Kitchen", "fragment": "kitchen", "icon": "kitchen" },
+      { "id": "place.bedroom", "label": "Bedroom", "fragment": "bedroom", "icon": "bedroom" }
+    ]
+  },
+  {
+    "id": "feel",
+    "label": "I feel",
+    "fragment": "",
+    "icon": "feel",
+    "children": [
+      { "id": "feel.happy", "label": "Happy", "fragment": "happy", "icon": "happy" },
+      { "id": "feel.sad", "label": "Sad", "fragment": "sad", "icon": "sad" },
+      { "id": "feel.scared", "label": "Scared", "fragment": "scared", "icon": "scared" },
+      { "id": "feel.angry", "label": "Angry", "fragment": "angry", "icon": "angry" },
+      { "id": "feel.confused", "label": "Confused", "fragment": "confused", "icon": "confused" },
+      { "id": "feel.lonely", "label": "Lonely", "fragment": "lonely", "icon": "lonely" }
+    ]
+  },
+  {
+    "id": "time",
+    "label": "When",
+    "fragment": "",
+    "icon": "time",
+    "children": [
+      { "id": "time.now", "label": "Now", "fragment": "now", "icon": "now" },
+      { "id": "time.later", "label": "Later", "fragment": "later", "icon": "later" },
+      { "id": "time.morning", "label": "Morning", "fragment": "morning", "icon": "morning" },
+      { "id": "time.night", "label": "Night", "fragment": "night", "icon": "night" },
+      { "id": "time.today", "label": "Today", "fragment": "today", "icon": "today" },
+      { "id": "time.tomorrow", "label": "Tomorrow", "fragment": "tomorrow", "icon": "tomorrow" }
+    ]
+  },
+  {
+    "id": "answer",
+    "label": "Answers",
+    "fragment": "",
+    "icon": "answer",
+    "children": [
+      { "id": "answer.yes", "label": "Yes", "fragment": "yes", "icon": "yes" },
+      { "id": "answer.no", "label": "No", "fragment": "no", "icon": "no" },
+      { "id": "answer.maybe", "label": "Maybe", "fragment": "maybe", "icon": "maybe" },
+      { "id": "answer.dontknow", "label": "I don't know", "fragment": "don't know", "icon": "unknown" },
+      { "id": "answer.wait", "label": "Wait", "fragment": "wait", "icon": "wait" },
+      { "id": "answer.again", "label": "Say it again", "fragment": "again", "icon": "again" }
+    ]
+  }
+]

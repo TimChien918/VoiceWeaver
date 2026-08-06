@@ -18,7 +18,8 @@ import com.example.data.AppLanguage
  *       不可進這張表，否則功能會壞。
  */
 object I18n {
-    @Volatile var lang: AppLanguage = AppLanguage.ZhTW
+    /** 預設英文；LocaleProvider 會在設定載入後覆寫。 */
+    @Volatile var lang: AppLanguage = AppLanguage.En
 
     /**
      * 給 LLM 提示詞用的「輸出語言」名稱。
@@ -34,12 +35,27 @@ object I18n {
     }
 
     /**
+     * 目標語言的**英文**名稱。
+     *
+     * prompt 主體已經全面英文化（見 CloudInferenceEngine），所以指令裡要嵌入
+     * 語言名稱時得用英文寫。[outputLanguageName] 回的是中文名稱，
+     * 那個留給仍然顯示給使用者看的地方。
+     */
+    fun outputLanguageNameEn(): String = when (lang) {
+        AppLanguage.En -> "English"
+        AppLanguage.Ja -> "Japanese"
+        AppLanguage.Ko -> "Korean"
+        else           -> "Traditional Chinese"
+    }
+
+    /**
      * 給 LLM 的「輸出語言」硬性指令，**用目標語言本身寫**。
      *
-     * 為什麼不能只靠 [outputLanguageName]：提示詞主體是中文，模型看到夾在中文
-     * 句子裡的「用英文回答」很容易整段跟著中文走——實測英文介面的跟讀評語仍然
-     * 回「非常好，繼續加油！」。用該語言自己的祈使句寫，模型才會照做。
-     * 放在提示詞最後一行（recency）效果最穩。
+     * 為什麼不能只靠語言名稱：舊版提示詞主體是中文，模型看到夾在中文句子裡的
+     * 「用英文回答」很容易整段跟著中文走——實測英文介面的跟讀評語仍然
+     * 回「非常好，繼續加油！」。提示詞主體改成英文後這個拉力小了很多，
+     * 但仍然保留這道指令：用該語言自己的祈使句寫、放在最後一行（recency），
+     * 是實測下來最穩的組合。
      */
     fun outputLanguageDirective(field: String): String = when (lang) {
         AppLanguage.En -> "IMPORTANT: the \"$field\" value MUST be written in English."
@@ -174,6 +190,121 @@ object I18n {
         "錄音中…（約 6 秒後自動傳出）" to arrayOf("Recording… (auto-sends in ~6s)", "録音中…（約6秒後に自動送信）", "녹음 중… (약 6초 후 자동 전송)"),
         "🎤 傳語音訊息給家人" to arrayOf("🎤 Send a voice message to family", "🎤 家族に音声メッセージ", "🎤 가족에게 음성 메시지"),
         "1925 安心專線" to arrayOf("1925 helpline", "1925 相談ダイヤル", "1925 상담 전화"),
+        // 設定頁 →「我的專屬發音」（關鍵字觸發捷徑）
+        "我的專屬發音" to arrayOf("My phrase shortcuts", "フレーズショートカット", "문구 단축키"),
+        "設定觸發詞與句子" to arrayOf("Trigger words and sentences", "トリガー語と文", "트리거 단어와 문장"),
+        "講到那幾個字就說出整句，不經過語音轉文字" to arrayOf(
+            "Say the trigger words and it speaks the whole sentence — no speech-to-text involved",
+            "トリガー語を言うと文全体を読み上げます（音声認識は使いません）",
+            "트리거 단어를 말하면 문장 전체를 말합니다 (음성 인식 미사용)"),
+        "挑一句，然後把畫面上那幾個字唸三次。之後你講的話裡帶到那幾個字，App 就會說出整句——比對走聲波形狀，不經過語音轉文字，所以發音不標準也沒關係。" to arrayOf(
+            "Pick a sentence, then say the highlighted words three times. After that, whenever those words appear in what you say, the app speaks the whole sentence. It matches the shape of your voice, not text, so unclear pronunciation is fine.",
+            "文を選び、表示された語を3回言ってください。以降、その語が話の中に出れば文全体を読み上げます。文字ではなく声の波形で照合するので、発音が不明瞭でも大丈夫です。",
+            "문장을 고르고 강조된 단어를 세 번 말하세요. 이후 그 단어가 말 속에 나오면 문장 전체를 말합니다. 글자가 아닌 음성 파형으로 대조하므로 발음이 불분명해도 괜찮습니다."),
+        "再教一次" to arrayOf("Teach again", "もう一度教える", "다시 가르치기"),
+        "再教一次（會加進原本的錄音，不會蓋掉）" to arrayOf(
+            "Teach again — this adds to the existing recordings, it does not replace them",
+            "もう一度教える — 既存の録音に追加され、置き換えません",
+            "다시 가르치기 — 기존 녹음에 추가되며 대체하지 않습니다"),
+        "從雲端取回" to arrayOf("Restore from cloud", "クラウドから復元", "클라우드에서 복원"),
+        "取回中…" to arrayOf("Restoring…", "復元中…", "복원 중…"),
+        "換手機時把設定與錄音一起拿回來，不必重錄" to arrayOf(
+            "Brings back your settings and recordings on a new phone — no need to record again",
+            "機種変更時に設定と録音をまとめて復元します（録り直し不要）",
+            "기기 변경 시 설정과 녹음을 함께 복원합니다 (다시 녹음할 필요 없음)"),
+        "雲端沒有可取回的專屬發音（需要先登入並在另一台裝置設定過）" to arrayOf(
+            "Nothing to restore (sign in first, and set some up on another device)",
+            "復元できる項目がありません（先にログインし、別の端末で設定してください）",
+            "복원할 항목이 없습니다 (먼저 로그인하고 다른 기기에서 설정하세요)"),
+        "已經是最新的，沒有需要取回的項目" to arrayOf(
+            "Already up to date", "すでに最新です", "이미 최신 상태입니다"),
+        "取回 %d 筆" to arrayOf("Restored %d", "%d 件を復元", "%d개 복원됨"),
+        "取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效" to arrayOf(
+            "Restored %1\$d. Another %2\$d have text only — record them on this phone to activate.",
+            "%1\$d 件を復元。他に %2\$d 件はテキストのみ — この端末で録音すると有効になります。",
+            "%1\$d개 복원. 다른 %2\$d개는 텍스트만 있습니다 — 이 기기에서 녹음하면 활성화됩니다."),
+        "返回" to arrayOf("Back", "戻る", "뒤로"),
+        "這是什麼？" to arrayOf("What is this?", "これは？", "이게 뭔가요?"),
+        "收起說明" to arrayOf("Hide", "閉じる", "접기"),
+        "加入新的" to arrayOf("Add new", "新規追加", "새로 추가"),
+        "靈敏度" to arrayOf("Sensitivity", "感度", "민감도"),
+        "嚴格" to arrayOf("Strict", "厳しめ", "엄격"),
+        "標準" to arrayOf("Normal", "標準", "표준"),
+        "寬鬆" to arrayOf("Relaxed", "ゆるめ", "느슨"),
+        "測試看看" to arrayOf("Try it", "試す", "테스트"),
+        "按住，講一整句話。命中的話會唸出來。" to arrayOf(
+            "Hold and say a full sentence. If it matches, the app speaks it.",
+            "長押しして文を話してください。一致すれば読み上げます。",
+            "길게 눌러 문장을 말하세요. 일치하면 읽어 줍니다."),
+        "還沒測過" to arrayOf("Not tested yet", "未テスト", "테스트 전"),
+        "聽著…" to arrayOf("Listening…", "聞いています…", "듣는 중…"),
+        "沒有聽到聲音" to arrayOf("Didn't hear anything", "音が聞こえません", "소리가 들리지 않습니다"),
+        "✗ 沒有命中" to arrayOf("✗ No match", "✗ 一致なし", "✗ 일치 없음"),
+        "最接近：%s" to arrayOf("Closest: %s", "最も近い：%s", "가장 근접: %s"),
+        "需要麥克風權限才能錄音" to arrayOf(
+            "Microphone permission is needed to record.", "録音にはマイクの許可が必要です。", "녹음하려면 마이크 권한이 필요합니다."),
+        "剛才太小聲或太短了，這一次再錄一遍" to arrayOf(
+            "That was too quiet or too short — let's try that one again.",
+            "小さすぎるか短すぎました。もう一度録音しましょう。",
+            "너무 작거나 짧았습니다. 한 번 더 녹음해 주세요."),
+        "無法錄音：%s" to arrayOf("Could not record: %s", "録音できません：%s", "녹음할 수 없습니다: %s"),
+        "未知錯誤" to arrayOf("unknown error", "不明なエラー", "알 수 없는 오류"),
+        "請把「要聽的字」和「要說出口的話」都填好" to arrayOf(
+            "Please fill in both the words to listen for and the sentence to say.",
+            "「認識する語」と「読み上げる文」の両方を入力してください。",
+            "'인식할 단어'와 '말할 문장'을 모두 입력해 주세요."),
+        "無法建立捷徑：%s" to arrayOf("Couldn't set that up: %s", "設定できません：%s", "설정할 수 없습니다: %s"),
+        "請重新錄一次" to arrayOf("please record again", "もう一度録音してください", "다시 녹음해 주세요"),
+        "用你平常的方式說一次" to arrayOf(
+            "Say it the way you normally would.", "いつもどおりに言ってください。", "평소처럼 말해 주세요."),
+        "再說一次，這次慢一點" to arrayOf(
+            "Now say it a little slower.", "今度は少しゆっくり言ってください。", "이번엔 조금 천천히 말해 주세요."),
+        "再說一次，這次小聲一點" to arrayOf(
+            "Now say it a little more quietly.", "今度は少し小さめに言ってください。", "이번엔 조금 작게 말해 주세요."),
+        "最後一次，照你平常的方式" to arrayOf(
+            "Last one — the way you normally would.", "最後にもう一度、いつもどおりに。", "마지막으로, 평소처럼."),
+        "再說一次，這次快一點" to arrayOf(
+            "Now say it a little faster.", "今度は少し速く言ってください。", "이번엔 조금 빠르게 말해 주세요."),
+        "已啟用（%d）" to arrayOf("Active (%d)", "有効 (%d)", "활성 (%d)"),
+        "「%s」已啟用" to arrayOf("\"%s\" is ready", "「%s」を有効化しました", "\"%s\" 활성화됨"),
+        "自訂" to arrayOf("Custom", "カスタム", "사용자 지정"),
+        "自己想一句" to arrayOf("Add my own", "自分で追加", "직접 추가"),
+        "聽到：" to arrayOf("Listens for: ", "認識する語：", "인식 단어: "),
+        "已啟用" to arrayOf("Active", "有効", "활성"),
+        "錄音啟用" to arrayOf("Record to activate", "録音して有効化", "녹음하여 활성화"),
+        "要聽的字" to arrayOf("Words to listen for", "認識する語", "인식할 단어"),
+        "要說出口的話" to arrayOf("Sentence to speak", "読み上げる文", "말할 문장"),
+        "請唸這幾個字" to arrayOf("Say these words", "この語を言ってください", "이 단어를 말하세요"),
+        "錄好了，可以儲存。" to arrayOf("All done — you can activate it now.", "録音完了。有効化できます。", "녹음 완료. 활성화할 수 있습니다."),
+        "重錄上一次" to arrayOf("Redo last recording", "直前の録音をやり直す", "마지막 녹음 다시"),
+        "啟用" to arrayOf("Activate", "有効化", "활성화"),
+        "取消" to arrayOf("Cancel", "キャンセル", "취소"),
+        "完成" to arrayOf("Done", "完了", "완료"),
+        "刪除" to arrayOf("Delete", "削除", "삭제"),
+
+        // SafetyGuard.EmergencyAlert.toTelegramMessage() 用。
+        // 這是發給照顧者的通知，跟著介面語言走——照顧者與使用者共用同一台裝置，
+        // 介面語言是目前唯一能拿到的線索。
+        "🆘 VoiceWeaver 緊急通報" to arrayOf(
+            "🆘 VoiceWeaver emergency alert", "🆘 VoiceWeaver 緊急通報", "🆘 VoiceWeaver 긴급 알림"),
+        "使用者輸入觸發危機關鍵字，請立即聯絡。" to arrayOf(
+            "The user's input triggered a crisis keyword. Please make contact immediately.",
+            "利用者の入力が危機キーワードに該当しました。至急ご連絡ください。",
+            "사용자 입력이 위기 키워드에 해당합니다. 즉시 연락해 주세요."),
+        "🗣 輸入" to arrayOf("🗣 Input", "🗣 入力", "🗣 입력"),
+        "📍 位置未知（GPS 權限未授予或定位失敗）" to arrayOf(
+            "📍 Location unknown (no GPS permission, or the fix failed)",
+            "📍 位置不明（GPS 権限がない、または測位に失敗）",
+            "📍 위치 불명 (GPS 권한 없음 또는 측위 실패)"),
+        "🏷 附近" to arrayOf("🏷 Nearby", "🏷 付近", "🏷 근처"),
+
+        // SafetyGuard.DEFENSIVE_SYSTEM_PROMPT 用。英文沿用其他危機訊息的作法，
+        // 不寫死某個國家的號碼——這個 App 的英文使用者不一定在美國，
+        // 給錯號碼比不給號碼更糟。
+        "我聽到了，建議聯絡家屬或撥打 1925 安心專線" to arrayOf(
+            "I hear you. Please reach out to your family, or call your local crisis line.",
+            "聞いています。ご家族に連絡するか、相談ダイヤルにお電話ください。",
+            "듣고 있습니다. 가족에게 연락하시거나 상담 전화로 연락해 주세요."),
         "119 緊急" to arrayOf("119 emergency", "119 緊急", "119 긴급"),
         "🔒 為了你的安全，這個畫面需要家人確認後才能關閉\n（家人在訊息輸入 /end 即可結束）" to arrayOf("🔒 For your safety, this screen closes only after family confirms\n(family sends /end to finish)", "🔒 安全のため、家族の確認後に閉じます\n（家族が /end で終了）", "🔒 안전을 위해 가족 확인 후 닫힙니다\n(가족이 /end 입력 시 종료)"),
         "畫面與聲音僅安全傳給家人，不會公開。家人可用 /call 視訊、/camera 重拍。" to arrayOf("Screen and audio are sent privately to family only. Family can use /call and /camera.", "画面と音声は家族にのみ安全に送信。家族は /call /camera 利用可。", "화면과 소리는 가족에게만 안전 전송. 가족은 /call /camera 사용 가능."),
