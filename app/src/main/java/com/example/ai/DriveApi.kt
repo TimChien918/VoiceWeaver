@@ -115,10 +115,15 @@ object DriveApi {
         return parent
     }
 
-    /** 這個帳號的聲波模型資料夾：VoiceWeaver/AcousticModels/<uid>。 */
-    fun acousticFolder(token: String, uid: String, create: Boolean): String? =
-        if (uid.isBlank()) null
-        else folderPath(token, listOf(ROOT_FOLDER, ACOUSTIC_DIR, uid), create)
+    /**
+     * 聲波模型資料夾：`VoiceWeaver/AcousticModels`。
+     *
+     * 底下不再分一層帳號 id。這是「使用者自己的」Drive——一個 Google 帳號一個雲端硬碟，
+     * 而 Firebase 身分本來就是同一個 Google 帳號換來的，多包一層永遠只有一個子資料夾，
+     * 只是讓他在 Drive 裡多點一次、還看到一串沒有意義的亂碼。
+     */
+    fun acousticFolder(token: String, create: Boolean): String? =
+        folderPath(token, listOf(ROOT_FOLDER, ACOUSTIC_DIR), create)
 
     /**
      * 語音模型資料夾。新版面是 VoiceWeaver/Models，

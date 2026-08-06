@@ -155,9 +155,10 @@ private fun LibraryStep(
                     EnrolledRow(
                         template = t,
                         // 樣板只存 keyword，圖示鍵是句庫的 id，所以要回查。
+                        // 走 matches 而不是直接比 keyword：關鍵字改寫過之後，
+                        // 早就登錄好的樣板存的是舊字串，只比現值會讓圖示突然變空白。
                         // 自訂的句子查不到，PhraseIcon 會留白。
-                        iconKey = state.library
-                            .firstOrNull { it.keyword.equals(t.keyword, ignoreCase = true) }?.id,
+                        iconKey = state.library.firstOrNull { it.matches(t.keyword) }?.id,
                         onAddTakes = { viewModel.beginAddTakes(t) },
                         onDelete = { viewModel.delete(t) },
                     )
@@ -213,7 +214,11 @@ private fun LibraryStep(
 
             // 已啟用的不再出現在清單裡。同一句同時出現在兩個區塊，
             // 使用者會以為是兩個不同的東西，也不知道該點哪一個。
-            val remaining = state.library.filter { it.keyword.lowercase() !in state.enrolledKeywords }
+            // 比對含舊關鍵字：改寫過關鍵字之後，已經錄好的那些不該又冒出來
+            // 叫他再錄一次——那筆其實還在，也還會命中。
+            val remaining = state.library.filter { e ->
+                state.enrolledKeywords.none { e.matches(it) }
+            }
             remaining.map { it.category }.distinct().forEach { category ->
                 item { SectionHeader(category, c.secondary) }
                 items(remaining.filter { it.category == category }, key = { it.id }) { entry ->

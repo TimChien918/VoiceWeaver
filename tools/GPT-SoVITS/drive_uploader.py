@@ -678,7 +678,7 @@ def delete_character(local_root, lang, char, also_local=True, creds=None):
     return res
 
 
-# ── 聲波模型（專屬發音）VoiceWeaver/AcousticModels/<uid>/ ──────────
+# ── 聲波模型（專屬發音）VoiceWeaver/AcousticModels/ ────────────────
 #
 # 跟語音模型分開放，因為兩者的性質完全不同：
 # 語音模型是「可以分享的角色」（幾百 MB，誰拿去都能用），
@@ -687,32 +687,31 @@ def delete_character(local_root, lang, char, also_local=True, creds=None):
 #
 # 一個樣板一個 JSON：手機端一次只會改一筆，整包重寫會讓兩台裝置同時編輯時互相蓋掉。
 
-def _acoustic_parent(svc, uid, create=False):
-    """VoiceWeaver/AcousticModels/<uid> 的資料夾 id（找不到且不建時回 None）。"""
-    if not uid:
-        return None
+def _acoustic_parent(svc, create=False):
+    """VoiceWeaver/AcousticModels 的資料夾 id（找不到且不建時回 None）。
+
+    底下不再分一層帳號 id：這是使用者自己的雲端硬碟，一個 Google 帳號一個，
+    而 Firebase 身分也是同一個 Google 帳號換來的——多包一層永遠只有一個子資料夾，
+    只是讓他在 Drive 裡多點一次、還看到一串沒有意義的亂碼。
+    """
     root_id = _find_folder(svc, ROOT_FOLDER, "root")
     if not root_id:
         if not create:
             return None
         root_id = _ensure_path(svc, [ROOT_FOLDER])
-    ac_id = (_ensure_folder(svc, ACOUSTIC_DIR, root_id) if create
-             else _find_folder(svc, ACOUSTIC_DIR, root_id))
-    if not ac_id:
-        return None
-    return (_ensure_folder(svc, uid, ac_id) if create
-            else _find_folder(svc, uid, ac_id))
+    return (_ensure_folder(svc, ACOUSTIC_DIR, root_id) if create
+            else _find_folder(svc, ACOUSTIC_DIR, root_id))
 
 
-def list_acoustic(uid, creds=None):
-    """列出這個帳號在 Drive 上的聲波模型。回 {ok, templates:[dict], error}。"""
+def list_acoustic(creds=None):
+    """列出 Drive 上的聲波模型。回 {ok, templates:[dict], error}。"""
     res = {"ok": False, "templates": [], "error": ""}
     try:
         creds = creds or get_credentials(interactive=False)
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        parent = _acoustic_parent(svc, uid)
+        parent = _acoustic_parent(svc)
         if not parent:
             res["ok"] = True; return res          # 還沒有人上傳過
         from google.auth.transport.requests import AuthorizedSession
@@ -734,7 +733,7 @@ def list_acoustic(uid, creds=None):
     return res
 
 
-def upload_acoustic(uid, template, creds=None):
+def upload_acoustic(template, creds=None):
     """上傳/覆蓋一筆聲波模型（template 需含 id）。回 {ok, error}。"""
     res = {"ok": False, "error": ""}
     tid = str((template or {}).get("id") or "").strip()
@@ -745,7 +744,7 @@ def upload_acoustic(uid, template, creds=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        parent = _acoustic_parent(svc, uid, create=True)
+        parent = _acoustic_parent(svc, create=True)
         from googleapiclient.http import MediaInMemoryUpload
         blob = json.dumps(template, ensure_ascii=False).encode("utf-8")
         media = MediaInMemoryUpload(blob, mimetype="application/json", resumable=False)
@@ -763,7 +762,7 @@ def upload_acoustic(uid, template, creds=None):
     return res
 
 
-def delete_acoustic(uid, template_id, creds=None):
+def delete_acoustic(template_id, creds=None):
     """刪掉一筆聲波模型（丟垃圾桶，可在 Drive 還原）。回 {ok, error}。"""
     res = {"ok": False, "error": ""}
     try:
@@ -771,7 +770,7 @@ def delete_acoustic(uid, template_id, creds=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        parent = _acoustic_parent(svc, uid)
+        parent = _acoustic_parent(svc)
         f = _find_file(svc, f"{template_id}.json", parent) if parent else None
         if f:
             _retry(lambda: svc.files().update(fileId=f["id"], body={"trashed": True}).execute())

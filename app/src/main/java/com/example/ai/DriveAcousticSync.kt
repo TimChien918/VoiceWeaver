@@ -38,7 +38,11 @@ interface AcousticMirror {
 }
 
 /**
- * 把聲波模型放進使用者自己的 Google Drive：`VoiceWeaver/AcousticModels/<uid>/<id>.json`。
+ * 把聲波模型放進使用者自己的 Google Drive：`VoiceWeaver/AcousticModels/<id>.json`。
+ *
+ * 底下不再分帳號 id：這是他自己的雲端硬碟，一個 Google 帳號一個，
+ * 而 Firebase 身分也是同一個 Google 帳號換來的。多包一層永遠只有一個子資料夾，
+ * 只是讓他多點一次、還看到一串沒有意義的亂碼。
  *
  * **為什麼 Firestore 之外還要有這一份：** Firestore 那份是「App 內部的同步管道」，
  * 使用者看不到也拿不走；Drive 這份是他自己資料夾裡的檔案，可以自己備份、
@@ -62,35 +66,32 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
 
     override fun push(t: CloudSync.RemoteTemplate) {
         scope.launch {
-            val uid = CloudSync.uid ?: return@launch
             val token = DriveApi.token(appContext) ?: return@launch
-            val folder = DriveApi.acousticFolder(token, uid, create = true) ?: return@launch
+            val folder = DriveApi.acousticFolder(token, create = true) ?: return@launch
             val ok = DriveApi.writeJson(token, "${t.remoteId}.json", folder, toJson(t).toString())
             DiagnosticLog.i(
                 DiagnosticLog.Cat.STT,
                 if (ok) "聲波模型已寫進 Drive" else "聲波模型寫進 Drive 失敗（不影響本機）",
-                "「${t.keyword}」→ VoiceWeaver/${DriveApi.ACOUSTIC_DIR}/…/${t.remoteId}.json",
+                "「${t.keyword}」→ VoiceWeaver/${DriveApi.ACOUSTIC_DIR}/${t.remoteId}.json",
             )
         }
     }
 
     override fun delete(id: Long) {
         scope.launch {
-            val uid = CloudSync.uid ?: return@launch
             val token = DriveApi.token(appContext) ?: return@launch
             // create=false：使用者從來沒同步過的話，不該為了刪東西反而建一堆空資料夾
-            val folder = DriveApi.acousticFolder(token, uid, create = false) ?: return@launch
+            val folder = DriveApi.acousticFolder(token, create = false) ?: return@launch
             DriveApi.trash(token, "$id.json", folder)
         }
     }
 
     override suspend fun pull(): AcousticMirror.Outcome = withContext(Dispatchers.IO) {
         // 沒登入、沒授權 Drive → 這台根本沒接 Drive，它不是一個來源
-        val uid = CloudSync.uid ?: return@withContext AcousticMirror.Outcome.Unavailable
         val token = DriveApi.token(appContext)
             ?: return@withContext AcousticMirror.Outcome.Unavailable
         // 資料夾不存在＝確定還沒有人放東西上去（跟讀失敗不同）
-        val folder = DriveApi.acousticFolder(token, uid, create = false)
+        val folder = DriveApi.acousticFolder(token, create = false)
             ?: return@withContext AcousticMirror.Outcome.Ok(emptyList())
         val entries = DriveApi.listChildren(token, folder)
             .filter { !it.isFolder && it.name.endsWith(".json", ignoreCase = true) }

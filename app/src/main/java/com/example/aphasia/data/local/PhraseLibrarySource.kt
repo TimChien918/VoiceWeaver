@@ -27,11 +27,35 @@ class PhraseLibrarySource(private val context: Context) {
     data class Entry(
         val id: String,
         val category: String,
-        /** 要聽的那幾個字。使用者登錄時就唸這幾個字。 */
+        /**
+         * 要聽的那幾個字。使用者登錄時就唸這幾個字。
+         *
+         * **必須是他實際講那句話時「連續」的一段。** 比對走 subsequence DTW，
+         * 它能拉伸時間軸，但沒辦法跳過中間插進來的音節。
+         * 實測（[com.example.aphasia.KeywordContiguityTest]）：對同一句
+         * 「I need to go to the bathroom」，連續的 "go to the bathroom" 距離 0.85，
+         * 挑實詞跳掉虛詞的 "need go bathroom" 是 7.09——差了八倍，
+         * 而不相干的話大約 12～15，等於後者幾乎沒有安全邊界。
+         */
         val keyword: String,
         /** 命中後要說出口的完整句子。 */
         val sentence: String,
-    )
+        /**
+         * 這一筆用過的舊關鍵字。
+         *
+         * 關鍵字改寫之後，已經登錄過的樣板存的還是舊的字串。沒有這個對照表，
+         * 那些樣板會查不到句庫、圖示變空白，而且會在「加入新的」清單裡重新冒出來，
+         * 看起來像是設定不見了——但他錄的音其實還在，也還會正常命中。
+         */
+        val aliases: List<String> = emptyList(),
+    ) {
+        /** 這個關鍵字（現在的或曾經的）是不是指向這一筆。 */
+        fun matches(kw: String): Boolean {
+            val k = kw.trim()
+            return keyword.equals(k, ignoreCase = true) ||
+                aliases.any { it.equals(k, ignoreCase = true) }
+        }
+    }
 
     suspend fun load(assetName: String = DEFAULT_ASSET): List<Entry> = withContext(Dispatchers.IO) {
         runCatching {

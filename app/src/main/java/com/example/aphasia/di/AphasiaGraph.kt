@@ -91,9 +91,13 @@ class AphasiaGraph(
 
     suspend fun phraseIdFor(keyword: String): String? {
         val map = keywordToId ?: phraseLibrary.load()
-            .associate { it.keyword.lowercase() to it.id }
+            // 舊關鍵字也要進表。關鍵字改寫後，早就登錄好的樣板存的是舊字串，
+            // 查不到 id 就播不到預合成的音檔，會安靜地退回 TTS——
+            // 使用者聽到的是完全不同的聲音，而畫面上什麼都沒說。
+            .flatMap { e -> (listOf(e.keyword) + e.aliases).map { it.lowercase() to e.id } }
+            .toMap()
             .also { keywordToId = it }
-        return map[keyword.lowercase()]
+        return map[keyword.lowercase().trim()]
     }
 
     /**
