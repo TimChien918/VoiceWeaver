@@ -239,26 +239,51 @@ class AcousticTemplateRepositoryImpl(
         return com.example.ai.DriveAcousticMirror.merge(fromDrive, firestore)
     }
 
+    /** [importFromCloud] 的結果。 */
+    data class ImportResult(
+        /** 本機沒有、這次新加進來的。 */
+        val imported: Int,
+        /** 雲端只有文字設定（網頁版建的），要在這支手機補錄才會生效。 */
+        val needsRecording: Int,
+        /** 本機已經有、但要說的句子在別台裝置改過，這次跟著更新。 */
+        val updated: Int,
+    ) {
+        val changed: Boolean get() = imported > 0 || updated > 0
+    }
+
     /**
      * 從雲端拉回樣板，合併進本機。
      *
-     * 合併規則：**以 keyword 為準**，本機已經有同一個觸發詞就跳過。
-     * 理由是本機的那筆是「這支手機上錄的、門檻也是照這支麥克風校準的」，
-     * 雲端來的未必更好；而重複兩筆同觸發詞只會互相搶命中。
+     * **以 keyword 為鍵**。本機已經有同一個觸發詞時：
+     * - 錄音與門檻**不動**——本機那筆是這支手機錄的、門檻也是照這支麥克風
+     *   校準的，換一支麥克風的數字套過來只會讓它不準。
+     * - 但「要說出口的句子」會跟著更新。那是純文字，在哪台裝置改都一樣有效；
+     *   不更新的話，照顧者在電腦上改了句子，患者的手機永遠還在講舊的。
      *
      * 沒有錄音波形的（網頁版建的）會被跳過並回報數量——那種要在手機上補錄
      * 才會生效，直接寫進資料庫只會變成一筆永遠不會命中的死樣板。
-     *
-     * @return 實際匯入幾筆、以及有幾筆因為沒錄音而待補錄
      */
     suspend fun importFromCloud(
         remote: List<com.example.ai.CloudSync.RemoteTemplate>,
-    ): Pair<Int, Int> = withContext(Dispatchers.Default) {
-        val existingKeywords = dao.getAll().map { it.keyword.lowercase() }.toSet()
+    ): ImportResult = withContext(Dispatchers.Default) {
+        val existing = dao.getAll().associateBy { it.keyword.lowercase() }
         var imported = 0
         var needsRecording = 0
+        var updated = 0
         for (r in remote) {
-            if (r.keyword.lowercase() in existingKeywords) continue
+            val local = existing[r.keyword.lowercase()]
+            if (local != null) {
+                // 只同步文字。碰錄音或門檻就是拿別支麥克風的校準結果蓋掉這支的。
+                val newPhrase = r.spokenPhrase.trim()
+                if (newPhrase.isNotBlank() && newPhrase != local.spokenPhrase) {
+                    dao.update(local.copy(
+                        spokenPhrase = newPhrase,
+                        label = r.label.ifBlank { local.label },
+                    ))
+                    updated++
+                }
+                continue
+            }
             if (r.exemplarBlobB64.isBlank()) { needsRecording++; continue }
             val blob = runCatching {
                 android.util.Base64.decode(r.exemplarBlobB64, android.util.Base64.NO_WRAP)
@@ -278,8 +303,8 @@ class AcousticTemplateRepositoryImpl(
             imported++
         }
         DiagnosticLog.i(DiagnosticLog.Cat.STT, "從雲端匯入專屬發音",
-            "匯入=$imported 待補錄=$needsRecording 雲端共=${remote.size}")
-        imported to needsRecording
+            "匯入=$imported 更新=$updated 待補錄=$needsRecording 雲端共=${remote.size}")
+        ImportResult(imported, needsRecording, updated)
     }
 
     override suspend fun match(utterance: Utterance): MatchResult = withContext(Dispatchers.Default) {

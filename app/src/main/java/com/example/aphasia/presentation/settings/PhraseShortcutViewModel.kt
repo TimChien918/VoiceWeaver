@@ -160,6 +160,13 @@ class PhraseShortcutViewModel(
                 }
             }
         }
+        // 一進畫面就自動跟雲端對一次。
+        //
+        // 沒有這一步的話，「同步」其實只有單向：手機錄完會自動上傳，
+        // 但照顧者在電腦上打好的句子要使用者自己想到去按「從雲端取回」——
+        // 而他多半不知道有那顆按鈕，只會覺得電腦上設的東西沒有進到手機。
+        // 靜音模式：真的有變動才出聲，沒登入或已是最新就不吵人。
+        viewModelScope.launch { runCatching { syncFromCloud(silent = true) } }
     }
 
     /**
@@ -173,27 +180,36 @@ class PhraseShortcutViewModel(
      * `VoiceWeaver/AcousticModels/`。兩邊會不同步——網頁版沒 Drive 授權時
      * 只寫得到 Firestore，而使用者可能自己把 Drive 那份搬過帳號。
      */
-    fun syncFromCloud() {
+    /**
+     * @param silent 開畫面時的自動同步用。沒登入、雲端沒東西、已經是最新的——
+     *   這些都不是使用者做錯什麼，跳一個訊息只會變成每次進畫面都要關掉的東西。
+     *   真的有變動才說話。
+     */
+    fun syncFromCloud(silent: Boolean = false) {
         if (_state.value.syncing) return
         _state.value = _state.value.copy(syncing = true, message = null)
         com.example.ai.CloudSync.pullAcousticTemplates { firestore ->
             viewModelScope.launch {
                 val repo = graph.templateRepository as AcousticTemplateRepositoryImpl
                 val remote = runCatching { repo.pullFromClouds(firestore) }.getOrDefault(firestore)
-                val (imported, needsRecording) = runCatching { repo.importFromCloud(remote) }
-                    .getOrDefault(0 to 0)
+                val r = runCatching { repo.importFromCloud(remote) }
+                    .getOrDefault(AcousticTemplateRepositoryImpl.ImportResult(0, 0, 0))
+                val note = when {
+                    remote.isEmpty() ->
+                        com.example.ui.I18n.tr("雲端沒有可取回的專屬發音（需要先登入並在另一台裝置設定過）")
+                    r.imported == 0 && r.updated == 0 && r.needsRecording == 0 ->
+                        com.example.ui.I18n.tr("已經是最新的，沒有需要取回的項目")
+                    r.needsRecording > 0 ->
+                        com.example.ui.I18n.tr("取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效")
+                            .format(r.imported + r.updated, r.needsRecording)
+                    r.updated > 0 && r.imported == 0 ->
+                        com.example.ui.I18n.tr("更新 %d 筆的句子").format(r.updated)
+                    else -> com.example.ui.I18n.tr("取回 %d 筆").format(r.imported + r.updated)
+                }
                 _state.value = _state.value.copy(
                     syncing = false,
-                    message = when {
-                        remote.isEmpty() ->
-                            com.example.ui.I18n.tr("雲端沒有可取回的專屬發音（需要先登入並在另一台裝置設定過）")
-                        imported == 0 && needsRecording == 0 ->
-                            com.example.ui.I18n.tr("已經是最新的，沒有需要取回的項目")
-                        needsRecording > 0 ->
-                            com.example.ui.I18n.tr("取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效")
-                                .format(imported, needsRecording)
-                        else -> com.example.ui.I18n.tr("取回 %d 筆").format(imported)
-                    },
+                    // 自動同步時只有「真的動了東西」才出聲
+                    message = if (silent && !r.changed) _state.value.message else note,
                 )
             }
         }

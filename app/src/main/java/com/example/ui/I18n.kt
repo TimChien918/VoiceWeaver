@@ -219,6 +219,8 @@ object I18n {
         "已經是最新的，沒有需要取回的項目" to arrayOf(
             "Already up to date", "すでに最新です", "이미 최신 상태입니다"),
         "取回 %d 筆" to arrayOf("Restored %d", "%d 件を復元", "%d개 복원됨"),
+        "更新 %d 筆的句子" to arrayOf(
+            "Updated the sentence on %d", "%d 件の文を更新", "%d개의 문장을 업데이트함"),
         "取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效" to arrayOf(
             "Restored %1\$d. Another %2\$d have text only — record them on this phone to activate.",
             "%1\$d 件を復元。他に %2\$d 件はテキストのみ — この端末で録音すると有効になります。",
