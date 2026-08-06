@@ -221,6 +221,14 @@ object I18n {
         "取回 %d 筆" to arrayOf("Restored %d", "%d 件を復元", "%d개 복원됨"),
         "更新 %d 筆的句子" to arrayOf(
             "Updated the sentence on %d", "%d 件の文を更新", "%d개의 문장을 업데이트함"),
+        "雲端已刪除，本機同步移除 %d 筆" to arrayOf(
+            "Removed %d that were deleted in the cloud",
+            "クラウドで削除された %d 件をこの端末からも削除",
+            "클라우드에서 삭제된 %d개를 이 기기에서도 제거"),
+        "連不上雲端（請確認已登入並有網路）" to arrayOf(
+            "Cannot reach the cloud (check you are signed in and online)",
+            "クラウドに接続できません（ログインとネットワークを確認してください）",
+            "클라우드에 연결할 수 없습니다 (로그인과 네트워크를 확인하세요)"),
         "取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效" to arrayOf(
             "Restored %1\$d. Another %2\$d have text only — record them on this phone to activate.",
             "%1\$d 件を復元。他に %2\$d 件はテキストのみ — この端末で録音すると有効になります。",

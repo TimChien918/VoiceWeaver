@@ -286,19 +286,31 @@ object CloudSync {
     )
 
     /**
+     * 一次拉取的結果。
+     *
+     * **[ok] 一定要看。** 雲端是主、手機是從，所以「雲端沒有的就要刪掉」；
+     * 但讀失敗時拿到的也是一份空清單，兩者長得一模一樣。
+     * 分不出來的話，一次網路不順就會把使用者所有的錄音清光——
+     * 而那些錄音是一句講 5 次錄出來的，刪掉就沒有地方能重新下載。
+     */
+    data class TemplatePull(val ok: Boolean, val templates: List<RemoteTemplate>)
+
+    /**
      * 拉回全部樣板。
      *
      * 網頁版只能建「文字設定」（瀏覽器沒有這套 DTW 比對），所以拉回來的項目
      * 可能沒有錄音——那種要在手機上補錄才會生效。呼叫端據 [RemoteTemplate.exemplarBlobB64]
      * 是否為空來決定。
      */
-    fun pullAcousticTemplates(onResult: (List<RemoteTemplate>) -> Unit) {
-        val u = uid ?: return onResult(emptyList())
+    fun pullAcousticTemplates(onResult: (TemplatePull) -> Unit) {
+        // 沒登入不是「雲端是空的」，是「這台裝置還沒有雲端」——不能拿來當刪除依據
+        val u = uid ?: return onResult(TemplatePull(ok = false, templates = emptyList()))
         db.collection("users").document(u).collection("acousticTemplates")
             .get(com.google.firebase.firestore.Source.SERVER)
             .addOnSuccessListener { snap ->
-                onResult(
-                    snap.documents.mapNotNull { d ->
+                onResult(TemplatePull(
+                    ok = true,
+                    templates = snap.documents.mapNotNull { d ->
                         val keyword = d.getString("keyword").orEmpty()
                         val phrase = d.getString("spokenPhrase").orEmpty()
                         // 少了任一個就沒有意義：不知道要聽什麼，或不知道要說什麼
@@ -315,11 +327,11 @@ object CloudSync {
                             createdAt = d.getLong("createdAt") ?: 0L,
                         )
                     }
-                )
+                ))
             }
             .addOnFailureListener {
                 Log.w(TAG, "pull acoustic templates failed", it)
-                onResult(emptyList())
+                onResult(TemplatePull(ok = false, templates = emptyList()))
             }
     }
 

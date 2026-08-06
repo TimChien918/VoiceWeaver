@@ -17,7 +17,24 @@ import org.json.JSONObject
 interface AcousticMirror {
     fun push(t: CloudSync.RemoteTemplate)
     fun delete(id: Long)
-    suspend fun pull(): List<CloudSync.RemoteTemplate>
+
+    /**
+     * 讀回這個帳號的樣板。
+     *
+     * 三種結果要分清楚，因為「雲端是主、手機是從」代表**雲端沒有的要刪掉**，
+     * 而三者對這條規則的意義完全不同：
+     * - [Outcome.Ok]：確定讀到了，那邊就是這些。缺的就是真的被刪了。
+     * - [Outcome.Failed]：本來讀得到卻失敗了。這次的「缺」不能當證據。
+     * - [Outcome.Unavailable]：這台根本沒接 Drive（沒登入／沒授權），
+     *   它從來就不是一個來源，不該因此擋住 Firestore 的判斷。
+     */
+    suspend fun pull(): Outcome
+
+    sealed interface Outcome {
+        data class Ok(val templates: List<CloudSync.RemoteTemplate>) : Outcome
+        data object Failed : Outcome
+        data object Unavailable : Outcome
+    }
 }
 
 /**
@@ -67,17 +84,26 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
         }
     }
 
-    override suspend fun pull(): List<CloudSync.RemoteTemplate> = withContext(Dispatchers.IO) {
-        val uid = CloudSync.uid ?: return@withContext emptyList()
-        val token = DriveApi.token(appContext) ?: return@withContext emptyList()
-        val folder = DriveApi.acousticFolder(token, uid, create = false) ?: return@withContext emptyList()
-        DriveApi.listChildren(token, folder)
+    override suspend fun pull(): AcousticMirror.Outcome = withContext(Dispatchers.IO) {
+        // 沒登入、沒授權 Drive → 這台根本沒接 Drive，它不是一個來源
+        val uid = CloudSync.uid ?: return@withContext AcousticMirror.Outcome.Unavailable
+        val token = DriveApi.token(appContext)
+            ?: return@withContext AcousticMirror.Outcome.Unavailable
+        // 資料夾不存在＝確定還沒有人放東西上去（跟讀失敗不同）
+        val folder = DriveApi.acousticFolder(token, uid, create = false)
+            ?: return@withContext AcousticMirror.Outcome.Ok(emptyList())
+        val entries = DriveApi.listChildren(token, folder)
             .filter { !it.isFolder && it.name.endsWith(".json", ignoreCase = true) }
-            .mapNotNull { entry ->
-                val text = DriveApi.readText(token, entry.id) ?: return@mapNotNull null
-                // 單筆壞掉不該讓整次取回失敗——其他筆是好的，使用者該拿得到
-                runCatching { fromJson(JSONObject(text)) }.getOrNull()
-            }
+        val out = ArrayList<CloudSync.RemoteTemplate>(entries.size)
+        for (entry in entries) {
+            // 讀不到單一檔＝這次的清單不完整。整個算失敗而不是少一筆——
+            // 少一筆會被當成「雲端刪掉了」，然後把本機那筆連錄音一起刪掉。
+            val text = DriveApi.readText(token, entry.id)
+                ?: return@withContext AcousticMirror.Outcome.Failed
+            // 內容壞掉的那一筆才跳過：那是資料本身有問題，不是這次讀不到
+            runCatching { fromJson(JSONObject(text)) }.getOrNull()?.let { out.add(it) }
+        }
+        AcousticMirror.Outcome.Ok(out)
     }
 
     companion object {

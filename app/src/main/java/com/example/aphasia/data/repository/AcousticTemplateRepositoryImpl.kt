@@ -221,6 +221,20 @@ class AcousticTemplateRepositoryImpl(
         }
     }
 
+    /** [pullFromClouds] 的結果。[authoritative] 為真才可以拿來刪本機的東西。 */
+    data class CloudSnapshot(
+        val templates: List<com.example.ai.CloudSync.RemoteTemplate>,
+        /**
+         * 這份清單是不是「雲端真正的全貌」。
+         *
+         * 只要有任何一個來源讀失敗就是 false。**雲端是主、手機是從，
+         * 所以雲端沒有的要刪掉——但前提是真的讀到了雲端。**
+         * 讀失敗時拿到的空清單長得跟「雲端真的空了」一模一樣，
+         * 分不出來就會在一次網路不順時把使用者所有的錄音清光。
+         */
+        val authoritative: Boolean,
+    )
+
     /**
      * 從兩個雲端來源取回樣板：Firestore（即時、免 Drive 授權）與
      * 使用者自己 Drive 的 AcousticModels/。
@@ -229,14 +243,24 @@ class AcousticTemplateRepositoryImpl(
      * 而使用者可能自己把 Drive 那份搬到新帳號。以 keyword 去重、有錄音的優先。
      */
     suspend fun pullFromClouds(
-        firestore: List<com.example.ai.CloudSync.RemoteTemplate>,
-    ): List<com.example.ai.CloudSync.RemoteTemplate> {
-        val fromDrive = runCatching { mirror?.pull() }.getOrNull().orEmpty()
-        if (fromDrive.isNotEmpty()) {
-            DiagnosticLog.i(DiagnosticLog.Cat.STT, "Drive 上的聲波模型",
-                "共 ${fromDrive.size} 筆（Firestore ${firestore.size} 筆）")
-        }
-        return com.example.ai.DriveAcousticMirror.merge(fromDrive, firestore)
+        firestore: com.example.ai.CloudSync.TemplatePull,
+    ): CloudSnapshot {
+        val outcome = runCatching { mirror?.pull() }
+            .getOrDefault(com.example.ai.AcousticMirror.Outcome.Failed)
+        val fromDrive = (outcome as? com.example.ai.AcousticMirror.Outcome.Ok)?.templates.orEmpty()
+        // 沒接 Drive（沒登入／沒授權／測試沒給 mirror）時它不是來源，
+        // 不該擋住 Firestore 的判斷——不然沒授權 Drive 的人永遠同步不到刪除。
+        // 只有「本來讀得到卻失敗」才要降級。
+        val driveOk = outcome !is com.example.ai.AcousticMirror.Outcome.Failed
+
+        DiagnosticLog.i(DiagnosticLog.Cat.STT, "雲端聲波模型",
+            "Firestore ok=${firestore.ok} ${firestore.templates.size} 筆；" +
+                "Drive=${outcome?.javaClass?.simpleName ?: "未接"} ${fromDrive.size} 筆")
+
+        return CloudSnapshot(
+            templates = com.example.ai.DriveAcousticMirror.merge(fromDrive, firestore.templates),
+            authoritative = firestore.ok && driveOk,
+        )
     }
 
     /** [importFromCloud] 的結果。 */
@@ -247,9 +271,20 @@ class AcousticTemplateRepositoryImpl(
         val needsRecording: Int,
         /** 本機已經有、但要說的句子在別台裝置改過，這次跟著更新。 */
         val updated: Int,
+        /** 雲端已經刪掉，這次跟著從本機刪除。 */
+        val removed: Int = 0,
     ) {
-        val changed: Boolean get() = imported > 0 || updated > 0
+        val changed: Boolean get() = imported > 0 || updated > 0 || removed > 0
     }
+
+    /**
+     * 剛建好的樣板不參與刪除判定的寬限時間。
+     *
+     * 推上雲端是背景進行的（不擋使用者操作），所以「剛錄完就切回設定頁」
+     * 有機會在推上去之前就跑到同步——那時它還不在雲端，會被當成
+     * 「雲端刪掉了」而把剛錄的 5 次錄音刪掉。
+     */
+    private val deleteGraceMillis = 5 * 60_000L
 
     /**
      * 從雲端拉回樣板，合併進本機。
@@ -262,14 +297,21 @@ class AcousticTemplateRepositoryImpl(
      *
      * 沒有錄音波形的（網頁版建的）會被跳過並回報數量——那種要在手機上補錄
      * 才會生效，直接寫進資料庫只會變成一筆永遠不會命中的死樣板。
+     *
+     * @param authoritative 這份清單是不是雲端的全貌。**雲端是主、手機是從**，
+     *   所以為真時「雲端沒有的」會一併從本機刪掉——在網頁上刪一筆，手機就跟著刪。
+     *   為假（任一來源讀失敗）時只做新增與更新，絕不刪東西：那時的空缺分不出是
+     *   「使用者刪掉了」還是「這次沒讀到」，而猜錯的代價是使用者的錄音沒了。
      */
     suspend fun importFromCloud(
         remote: List<com.example.ai.CloudSync.RemoteTemplate>,
+        authoritative: Boolean = false,
     ): ImportResult = withContext(Dispatchers.Default) {
         val existing = dao.getAll().associateBy { it.keyword.lowercase() }
         var imported = 0
         var needsRecording = 0
         var updated = 0
+        var removed = 0
         for (r in remote) {
             val local = existing[r.keyword.lowercase()]
             if (local != null) {
@@ -302,9 +344,30 @@ class AcousticTemplateRepositoryImpl(
             )
             imported++
         }
+
+        // 雲端是主：那邊刪掉的，這邊也要消失。只在確定讀到了雲端全貌時才做。
+        if (authoritative) {
+            val cloudKeywords = remote.map { it.keyword.lowercase().trim() }.toSet()
+            val cutoff = now() - deleteGraceMillis
+            for ((key, row) in existing) {
+                if (key in cloudKeywords) continue
+                // 剛錄好的還在背景上傳，這時它「不在雲端」是理所當然的
+                if (row.createdAtMillis > cutoff) {
+                    DiagnosticLog.i(DiagnosticLog.Cat.STT, "剛建立，暫不依雲端刪除",
+                        "「${row.keyword}」建立於 ${row.createdAtMillis}")
+                    continue
+                }
+                dao.delete(row.id)
+                removed++
+                DiagnosticLog.i(DiagnosticLog.Cat.STT, "雲端已刪除，本機跟著刪",
+                    "「${row.keyword}」")
+            }
+        }
+
         DiagnosticLog.i(DiagnosticLog.Cat.STT, "從雲端匯入專屬發音",
-            "匯入=$imported 更新=$updated 待補錄=$needsRecording 雲端共=${remote.size}")
-        ImportResult(imported, needsRecording, updated)
+            "匯入=$imported 更新=$updated 刪除=$removed 待補錄=$needsRecording " +
+                "雲端共=${remote.size} 可信=$authoritative")
+        ImportResult(imported, needsRecording, updated, removed)
     }
 
     override suspend fun match(utterance: Utterance): MatchResult = withContext(Dispatchers.Default) {

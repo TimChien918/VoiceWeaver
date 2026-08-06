@@ -191,14 +191,21 @@ class PhraseShortcutViewModel(
         com.example.ai.CloudSync.pullAcousticTemplates { firestore ->
             viewModelScope.launch {
                 val repo = graph.templateRepository as AcousticTemplateRepositoryImpl
-                val remote = runCatching { repo.pullFromClouds(firestore) }.getOrDefault(firestore)
-                val r = runCatching { repo.importFromCloud(remote) }
+                val snap = runCatching { repo.pullFromClouds(firestore) }.getOrDefault(
+                    AcousticTemplateRepositoryImpl.CloudSnapshot(firestore.templates, false))
+                val r = runCatching { repo.importFromCloud(snap.templates, snap.authoritative) }
                     .getOrDefault(AcousticTemplateRepositoryImpl.ImportResult(0, 0, 0))
                 val note = when {
-                    remote.isEmpty() ->
+                    // 讀不到雲端跟「雲端是空的」要講不一樣的話：前者按了也沒用，
+                    // 後者是真的還沒在別台設定過。
+                    !snap.authoritative && snap.templates.isEmpty() ->
+                        com.example.ui.I18n.tr("連不上雲端（請確認已登入並有網路）")
+                    snap.templates.isEmpty() && r.removed == 0 ->
                         com.example.ui.I18n.tr("雲端沒有可取回的專屬發音（需要先登入並在另一台裝置設定過）")
-                    r.imported == 0 && r.updated == 0 && r.needsRecording == 0 ->
+                    !r.changed && r.needsRecording == 0 ->
                         com.example.ui.I18n.tr("已經是最新的，沒有需要取回的項目")
+                    r.removed > 0 && r.imported == 0 && r.updated == 0 ->
+                        com.example.ui.I18n.tr("雲端已刪除，本機同步移除 %d 筆").format(r.removed)
                     r.needsRecording > 0 ->
                         com.example.ui.I18n.tr("取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效")
                             .format(r.imported + r.updated, r.needsRecording)

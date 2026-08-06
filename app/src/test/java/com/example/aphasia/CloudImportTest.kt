@@ -220,6 +220,175 @@ class CloudImportTest {
             db.acousticTemplateDao().getAll().map { it.keyword }.toSet())
     }
 
+    // ── 雲端是主：那邊刪掉的，這邊也要消失 ────────────────────────────
+
+    /** 造一筆「已經放很久」的本機樣板（避開剛建立的寬限期）。 */
+    private suspend fun enrollOld(keyword: String, phrase: String, f1: Double, f2: Double) {
+        val old = AcousticTemplateRepositoryImpl(
+            db.acousticTemplateDao(), MfccExtractor(),
+            now = { System.currentTimeMillis() - 24L * 3600_000 },   // 一天前
+        )
+        old.enroll(keyword, keyword, phrase, MatchMode.Keyword, takes(f1, f2))
+    }
+
+    @Test
+    fun `網頁上刪掉一筆手機也會刪掉`() = runBlocking {
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        enrollOld("help me", "Please help me", 350.0, 2400.0)
+
+        // 雲端只剩一筆（另一筆在網頁上被刪了）
+        val r = repo.importFromCloud(
+            listOf(remoteWithAudio("help me", "Please help me")), authoritative = true)
+
+        assertEquals(1, r.removed)
+        assertEquals("help me", db.acousticTemplateDao().getAll().single().keyword)
+    }
+
+    @Test
+    fun `雲端全空時本機也清空`() = runBlocking {
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        val r = repo.importFromCloud(emptyList(), authoritative = true)
+        assertEquals(1, r.removed)
+        assertEquals(0, db.acousticTemplateDao().getAll().size)
+    }
+
+    @Test
+    fun `讀不到雲端時絕不刪任何東西`() = runBlocking {
+        // 這是整條刪除邏輯的安全閥。pull 失敗回的也是空清單，
+        // 分不出來就會在一次網路不順時把使用者所有的錄音清光——
+        // 那些是一句講 5 次錄出來的，沒有地方能重新下載。
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        enrollOld("help me", "Please help me", 350.0, 2400.0)
+
+        val r = repo.importFromCloud(emptyList(), authoritative = false)
+
+        assertEquals(0, r.removed)
+        assertFalse(r.changed)
+        assertEquals(2, db.acousticTemplateDao().getAll().size)
+    }
+
+    @Test
+    fun `預設不刪除`() = runBlocking {
+        // 呼叫端忘了傳 authoritative 時，寧可少刪也不要多刪
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        assertEquals(0, repo.importFromCloud(emptyList()).removed)
+        assertEquals(1, db.acousticTemplateDao().getAll().size)
+    }
+
+    @Test
+    fun `剛錄好還在上傳的不會被誤刪`() = runBlocking {
+        // 推上雲端是背景進行的。剛錄完就切回設定頁時，它還沒到雲端——
+        // 那時把它當成「雲端刪掉了」，使用者剛講的 5 次錄音就沒了。
+        repo.enroll("need water", "need water", "I need some water",
+            MatchMode.Keyword, takes(700.0, 1200.0))
+        val r = repo.importFromCloud(emptyList(), authoritative = true)
+        assertEquals(0, r.removed)
+        assertEquals(1, db.acousticTemplateDao().getAll().size)
+    }
+
+    @Test
+    fun `刪除時新增與更新照常進行`() = runBlocking {
+        enrollOld("need water", "舊句子", 700.0, 1200.0)
+        enrollOld("old one", "要被刪掉的", 500.0, 1800.0)
+
+        val r = repo.importFromCloud(listOf(
+            remoteWithAudio("need water", "新句子"),                      // 更新
+            remoteWithAudio("help me", "Please help me", 350.0, 2400.0),  // 新增
+        ), authoritative = true)
+
+        assertEquals(1, r.imported)
+        assertEquals(1, r.updated)
+        assertEquals(1, r.removed)
+        assertEquals(setOf("need water", "help me"),
+            db.acousticTemplateDao().getAll().map { it.keyword }.toSet())
+    }
+
+    @Test
+    fun `只有文字設定的雲端項目也算存在不會刪掉本機的錄音`() = runBlocking {
+        // 網頁版建的那筆沒有錄音波形，但它在雲端是「存在」的。
+        // 把它當成不存在而刪掉本機那筆，等於網頁上改個字就毀掉手機的錄音。
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        val r = repo.importFromCloud(
+            listOf(remoteTextOnly("need water", "I need some water")), authoritative = true)
+        assertEquals(0, r.removed)
+        assertEquals(1, db.acousticTemplateDao().getAll().size)
+    }
+
+    @Test
+    fun `刪除比對不分大小寫與前後空白`() = runBlocking {
+        enrollOld("Need Water", "I need some water", 700.0, 1200.0)
+        val r = repo.importFromCloud(
+            listOf(remoteTextOnly(" need water ", "I need some water")), authoritative = true)
+        assertEquals("大小寫不同不該被當成兩筆而誤刪", 0, r.removed)
+        assertEquals(1, db.acousticTemplateDao().getAll().size)
+    }
+
+    // ── 什麼時候才敢刪：pullFromClouds 的權威性判斷 ──────────────────
+
+    private fun mirrorOf(outcome: com.example.ai.AcousticMirror.Outcome) =
+        object : com.example.ai.AcousticMirror {
+            override fun push(t: CloudSync.RemoteTemplate) {}
+            override fun delete(id: Long) {}
+            override suspend fun pull() = outcome
+        }
+
+    private fun repoWith(mirror: com.example.ai.AcousticMirror?) =
+        AcousticTemplateRepositoryImpl(db.acousticTemplateDao(), MfccExtractor(), mirror = mirror)
+
+    @Test
+    fun `兩邊都讀到才敢刪`() = runBlocking {
+        val snap = repoWith(mirrorOf(com.example.ai.AcousticMirror.Outcome.Ok(emptyList())))
+            .pullFromClouds(CloudSync.TemplatePull(ok = true, templates = emptyList()))
+        assertTrue(snap.authoritative)
+    }
+
+    @Test
+    fun `Firestore 讀失敗就不敢刪`() = runBlocking {
+        val snap = repoWith(mirrorOf(com.example.ai.AcousticMirror.Outcome.Ok(emptyList())))
+            .pullFromClouds(CloudSync.TemplatePull(ok = false, templates = emptyList()))
+        assertFalse(snap.authoritative)
+    }
+
+    @Test
+    fun `Drive 讀失敗就不敢刪`() = runBlocking {
+        val snap = repoWith(mirrorOf(com.example.ai.AcousticMirror.Outcome.Failed))
+            .pullFromClouds(CloudSync.TemplatePull(ok = true, templates = emptyList()))
+        assertFalse(snap.authoritative)
+    }
+
+    @Test
+    fun `沒授權 Drive 的人照樣同步得到刪除`() = runBlocking {
+        // Drive 沒接就不是一個來源。把它當成「讀失敗」的話，
+        // 只用 Google 登入但沒給 Drive 權限的人永遠等不到刪除同步。
+        val snap = repoWith(mirrorOf(com.example.ai.AcousticMirror.Outcome.Unavailable))
+            .pullFromClouds(CloudSync.TemplatePull(ok = true, templates = emptyList()))
+        assertTrue(snap.authoritative)
+    }
+
+    @Test
+    fun `Drive 讀失敗時本機的錄音一個都不會少`() = runBlocking {
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        val repo2 = repoWith(mirrorOf(com.example.ai.AcousticMirror.Outcome.Failed))
+        val snap = repo2.pullFromClouds(CloudSync.TemplatePull(ok = true, templates = emptyList()))
+        val r = repo2.importFromCloud(snap.templates, snap.authoritative)
+        assertEquals(0, r.removed)
+        assertEquals(1, db.acousticTemplateDao().getAll().size)
+    }
+
+    @Test
+    fun `Drive 上獨有的項目不會被當成已刪除`() = runBlocking {
+        // 兩邊會不同步（網頁版沒 Drive 授權時只寫得到 Firestore，反之亦然）。
+        // 判定「雲端有沒有」要看兩邊的聯集，不是只看其中一邊。
+        enrollOld("need water", "I need some water", 700.0, 1200.0)
+        val onlyOnDrive = com.example.ai.AcousticMirror.Outcome.Ok(
+            listOf(remoteTextOnly("need water", "I need some water")))
+        val repo2 = repoWith(mirrorOf(onlyOnDrive))
+        val snap = repo2.pullFromClouds(CloudSync.TemplatePull(ok = true, templates = emptyList()))
+        assertTrue(snap.authoritative)
+        assertEquals(0, repo2.importFromCloud(snap.templates, snap.authoritative).removed)
+        assertEquals(1, db.acousticTemplateDao().getAll().size)
+    }
+
     @Test
     fun `更新後的樣板仍然認得原本的發音`() = runBlocking {
         // 只改文字卻把比對弄壞的話，症狀是「本來會動的突然不動了」
