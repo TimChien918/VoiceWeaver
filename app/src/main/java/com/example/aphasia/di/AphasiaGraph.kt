@@ -60,6 +60,9 @@ class AphasiaGraph(
             dao = database.acousticTemplateDao(),
             extractor = extractor,
             sensitivity = shortcutSensitivity,
+            // 建構時不碰網路也不查登入狀態：每次操作才即時取 token，
+            // 沒登入／沒授權 Drive 就安靜地略過，不影響本機。
+            mirror = com.example.ai.DriveAcousticMirror(appContext),
         )
     }
 

@@ -168,13 +168,18 @@ class PhraseShortcutViewModel(
      * 連錄音波形一起拉——換手機不必重錄，而錄音正是這個功能最花力氣的部分
      *（一句要錄 5 次）。本機已經有同一個觸發詞的會跳過，不覆蓋：
      * 本機那筆是照這支麥克風校準的，雲端來的未必更好。
+     *
+     * 兩個來源都讀：Firestore（即時、免 Drive 授權）與使用者自己 Drive 的
+     * `VoiceWeaver/AcousticModels/`。兩邊會不同步——網頁版沒 Drive 授權時
+     * 只寫得到 Firestore，而使用者可能自己把 Drive 那份搬過帳號。
      */
     fun syncFromCloud() {
         if (_state.value.syncing) return
         _state.value = _state.value.copy(syncing = true, message = null)
-        com.example.ai.CloudSync.pullAcousticTemplates { remote ->
+        com.example.ai.CloudSync.pullAcousticTemplates { firestore ->
             viewModelScope.launch {
                 val repo = graph.templateRepository as AcousticTemplateRepositoryImpl
+                val remote = runCatching { repo.pullFromClouds(firestore) }.getOrDefault(firestore)
                 val (imported, needsRecording) = runCatching { repo.importFromCloud(remote) }
                     .getOrDefault(0 to 0)
                 _state.value = _state.value.copy(

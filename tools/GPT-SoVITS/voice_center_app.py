@@ -639,6 +639,12 @@ I18N = {
                    "en":"Sign in with your own Google account to upload the whole library to YOUR Google Drive (VoiceWeaver/). Colab/phone/web then share the same copy. Only touches files this app created.",
                    "ja":"自分の Google アカウントでログインし、曲庫を自分の Google Drive（VoiceWeaver/）にアップロード。Colab/スマホ/Web が同じものを参照。",
                    "ko":"본인 Google 계정으로 로그인해 라이브러리를 본인 Google Drive(VoiceWeaver/)에 업로드. Colab/휴대폰/웹이 동일본을 공유."},
+    "adv.migrateLayout": {"zh-TW":"🗂 整理曲庫資料夾", "en":"🗂 Tidy library folders",
+                          "ja":"🗂 曲庫フォルダを整理", "ko":"🗂 라이브러리 폴더 정리"},
+    "adv.migrateHint": {"zh-TW":"語音模型移到 Models/、聲波模型（專屬發音）放 AcousticModels/，兩種模型分開放才不會互相誤刪。只移動位置，不重新上傳或下載。",
+                        "en":"Moves voice models into Models/ and phrase-shortcut acoustic models into AcousticModels/, so the two kinds can't be deleted by mistake together. Moves only — nothing is re-uploaded or re-downloaded.",
+                        "ja":"音声モデルを Models/ に、フレーズ用の音波モデルを AcousticModels/ に移動します。移動のみで再アップロード・再ダウンロードはしません。",
+                        "ko":"음성 모델은 Models/로, 문구 단축키의 음파 모델은 AcousticModels/로 이동합니다. 이동만 하며 재업로드·재다운로드는 없습니다."},
     "adv.gdLogin": {"zh-TW":"🔑 Google 登入", "en":"🔑 Sign in Google", "ja":"🔑 Google ログイン", "ko":"🔑 Google 로그인"},
     "adv.gdLogout": {"zh-TW":"登出", "en":"Sign out", "ja":"ログアウト", "ko":"로그아웃"},
     "adv.stopgen":  {"zh-TW":"⏹ 中止合成", "en":"⏹ Stop synthesis", "ja":"⏹ 合成を中止", "ko":"⏹ 합성 중지"},
@@ -2102,6 +2108,18 @@ class App:
                                   font=(FONT_UI, SZ_SMALL), anchor="w")
         self.gd_status.pack(fill="x", padx=20, pady=(0, 8)); self._track(self.gd_status, "muted")
 
+        # 舊版面（語言資料夾直接躺在曲庫根）才顯示這顆。已經是新版面就整排不出現——
+        # 一顆按了沒事發生的按鈕只會讓人懷疑自己是不是漏做了什麼。
+        self._mig_row = tk.Frame(parent); self._track(self._mig_row, "bg")
+        self._mig_btn = self._btn(self._mig_row, self.t("adv.migrateLayout"),
+                                  self.adv_migrate_layout, C_AMBER)
+        self._mig_btn.pack(fill="x", padx=20)
+        self._mig_hint = tk.Label(self._mig_row, font=(FONT_UI, SZ_SMALL),
+                                  wraplength=580, justify="left", anchor="w")
+        self._mig_hint.pack(fill="x", padx=20, pady=(2, 8))
+        self.tr(self._mig_hint, "adv.migrateHint"); self._track(self._mig_hint, "muted")
+        self._sync_migrate_visibility()
+
         _section("adv.secTest")
         tr = tk.Frame(parent); tr.pack(fill="x", padx=20, pady=(4, 4)); self._track(tr, "bg")
         self.test_entry = tk.Entry(tr, font=(FONT_UI, SZ_BODY))
@@ -3159,10 +3177,45 @@ class App:
                 pass
         if path and os.path.isdir(path):
             os.environ["VOICEWEAVER_EMOTION_ROOT"] = path
+            # 聲波模型（專屬發音）跟語音模型放同一個曲庫、不同資料夾。
+            # 這裡只保證資料夾在，不碰既有版面——搬家要使用者按下去才做。
+            try:
+                if em:
+                    em.acoustic_root(path, create=True)
+            except Exception:
+                pass
         else:
             os.environ.pop("VOICEWEAVER_EMOTION_ROOT", None)
             path = ""
         return path
+
+    def migrate_library_layout(self) -> str:
+        """把曲庫（本機＋Drive）從舊版面搬成 Models/ 版面。回給使用者看的一行字。
+
+        本機是改目錄項目、Drive 是改父節點，兩邊都不重新複製檔案內容，
+        所以幾十 GB 的曲庫也只花幾秒。
+        """
+        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        if em is None or not root:
+            return self.t("還沒設定曲庫資料夾")
+        moved, err = em.migrate_layout(root)
+        if err:
+            return self.t("本機搬移失敗：%s") % err
+        parts = [self.t("本機已搬 %d 個語言資料夾") % moved if moved
+                 else self.t("本機已經是新版面")]
+        if gdrive is not None and gdrive.deps_ok() and gdrive.is_signed_in():
+            r = gdrive.migrate_drive_layout()
+            if r.get("error"):
+                parts.append(self.t("Drive 搬移失敗：%s") % r["error"])
+            else:
+                parts.append(self.t("Drive 已搬 %d 個") % len(r.get("moved", [])))
+        else:
+            parts.append(self.t("（未登入 Google，Drive 端未處理）"))
+        try:
+            self._write_catalog_line(root)
+        except Exception:
+            pass
+        return "；".join(parts)
 
     # ── Google Drive 上傳（使用者自己的 Drive，OAuth）──────────
     def _gdrive_status_text(self) -> str:
@@ -3192,6 +3245,36 @@ class App:
                 self._pre_prog.pack_forget()
         except Exception:
             pass
+
+    def _sync_migrate_visibility(self):
+        """只有還在舊版面時才顯示「整理曲庫資料夾」，整理完就自己收起來。"""
+        try:
+            root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+            if em is not None and root and em.is_legacy_layout(root):
+                self._mig_row.pack(fill="x", pady=(4, 4))
+            else:
+                self._mig_row.pack_forget()
+        except Exception:
+            pass
+
+    def adv_migrate_layout(self):
+        """把曲庫搬成 Models/ 版面（本機＋Drive）。"""
+        from tkinter import messagebox
+        if not messagebox.askyesno(
+                "VoiceWeaver",
+                self.t("要把曲庫整理成新版面嗎？\n\n"
+                       "語音模型會移到 Models/ 底下，聲波模型（專屬發音）放 AcousticModels/，"
+                       "兩種模型分開放才不會互相誤刪。\n\n"
+                       "只是移動位置，不會重新上傳或下載任何檔案。")):
+            return
+        self.set_adv_status(self.t("整理曲庫資料夾中…"))
+
+        def work():
+            msg = self.migrate_library_layout()
+            self.root.after(0, lambda: (self.set_adv_status(msg),
+                                        self._sync_migrate_visibility()))
+
+        threading.Thread(target=work, daemon=True).start()
 
     def adv_fetch_pretrained(self):
         """下載 GPT-SoVITS 基礎預訓練模型（語音服務的前置條件，約 1.6GB）。"""
@@ -3447,7 +3530,7 @@ class App:
         return f"🗂 已更新曲庫目錄 catalog.json：{s.get('characters',0)} 角色 / 約 {mb:.0f} MB"
 
     def _sync_to_drive_library(self, name, lang, gpt_src, sov_src, ref_src, prompt, emotion=None):
-        """匯入即上傳：把模型複製進 Drive 曲庫的 <語言>/<角色>/ 結構，並刷新 catalog。
+        """匯入即上傳：把模型複製進 Drive 曲庫的 Models/<語言>/<角色>/，並刷新 catalog。
 
         只有設定了情緒資料夾（VOICEWEAVER_EMOTION_ROOT，即 Drive for Desktop 的曲庫）才動作；
         實際上傳交給 Google Drive 桌面版。回傳目的地資料夾字串（沒動作回 ""）。
@@ -3462,7 +3545,9 @@ class App:
         LANG = (lang or "ZH").upper()
         char = _re.sub(r"[ _](ZH|CN|EN|JA|JP|KO|KR)\b", "", name or "", flags=_re.I).strip("_ ") or (name or "角色")
         char = _re.sub(r'[\\/:*?"<>|]', "_", char).strip() or "角色"
-        cdir = Path(root) / LANG / char
+        # 走 models_root 而不是直接接 root：新版面要落在 Models/ 底下，
+        # 舊版面則沿用原位置，否則匯入的角色會掉到掃描端看不到的那一層。
+        cdir = Path(em.models_root(root)) / LANG / char
 
         def _cp(src, dst):
             src = Path(src) if src else None

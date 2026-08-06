@@ -28,6 +28,13 @@ class AcousticTemplateRepositoryImpl(
      * 下一次發聲就該生效，不該要重開 App。
      */
     private val sensitivity: () -> Float = { 1f },
+    /**
+     * 使用者自己 Drive 裡的那一份聲波模型。null＝不做（測試、或還沒授權 Drive）。
+     *
+     * 跟 Firestore 是兩條獨立的路：Firestore 即時但看不見，Drive 是他自己
+     * 資料夾裡的檔案、備份得走也刪得掉。任一邊掛掉都不影響本機。
+     */
+    private val mirror: com.example.ai.AcousticMirror? = null,
 ) : AcousticTemplateRepository {
 
     override fun observeAll(): Flow<List<AcousticTemplate>> =
@@ -171,9 +178,10 @@ class AcousticTemplateRepositoryImpl(
 
     override suspend fun delete(id: Long) {
         dao.delete(id)
-        // 刪除也要同步。少了這一步，換手機拉回來時會把使用者刻意刪掉的
-        // 樣板救回來——而他刪掉多半正是因為那筆會誤觸發。
+        // 刪除也要同步，而且**兩邊都要**。少刪任何一邊，換手機拉回來時都會把
+        // 使用者刻意刪掉的樣板救回來——而他刪掉多半正是因為那筆會誤觸發。
         runCatching { com.example.ai.CloudSync.deleteAcousticTemplate(id) }
+        runCatching { mirror?.delete(id) }
     }
 
     /**
@@ -187,16 +195,48 @@ class AcousticTemplateRepositoryImpl(
         matchMode: String, rejection: Float, margin: Float,
         blob: ByteArray, createdAt: Long,
     ) {
+        val b64 = android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP)
         runCatching {
             com.example.ai.CloudSync.pushAcousticTemplate(
                 id = id, label = label, keyword = keyword, spokenPhrase = spokenPhrase,
                 matchMode = matchMode, rejectionThreshold = rejection, marginThreshold = margin,
-                exemplarBlobB64 = android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP),
-                createdAt = createdAt,
+                exemplarBlobB64 = b64, createdAt = createdAt,
             )
         }.onFailure {
             DiagnosticLog.w(DiagnosticLog.Cat.STT, "樣板同步失敗（不影響本機）", it.message.orEmpty())
         }
+        // 使用者自己 Drive 裡的那一份。分開 runCatching：Firestore 失敗
+        // 不該讓 Drive 也跳過，兩條路本來就是為了互相補位。
+        runCatching {
+            mirror?.push(
+                com.example.ai.CloudSync.RemoteTemplate(
+                    remoteId = id.toString(), label = label, keyword = keyword,
+                    spokenPhrase = spokenPhrase, matchMode = matchMode,
+                    rejectionThreshold = rejection, marginThreshold = margin,
+                    exemplarBlobB64 = b64, createdAt = createdAt,
+                )
+            )
+        }.onFailure {
+            DiagnosticLog.w(DiagnosticLog.Cat.STT, "寫進 Drive 失敗（不影響本機）", it.message.orEmpty())
+        }
+    }
+
+    /**
+     * 從兩個雲端來源取回樣板：Firestore（即時、免 Drive 授權）與
+     * 使用者自己 Drive 的 AcousticModels/。
+     *
+     * 兩邊都讀是因為它們會不同步：網頁版沒 Drive 授權時只寫得到 Firestore，
+     * 而使用者可能自己把 Drive 那份搬到新帳號。以 keyword 去重、有錄音的優先。
+     */
+    suspend fun pullFromClouds(
+        firestore: List<com.example.ai.CloudSync.RemoteTemplate>,
+    ): List<com.example.ai.CloudSync.RemoteTemplate> {
+        val fromDrive = runCatching { mirror?.pull() }.getOrNull().orEmpty()
+        if (fromDrive.isNotEmpty()) {
+            DiagnosticLog.i(DiagnosticLog.Cat.STT, "Drive 上的聲波模型",
+                "共 ${fromDrive.size} 筆（Firestore ${firestore.size} 筆）")
+        }
+        return com.example.ai.DriveAcousticMirror.merge(fromDrive, firestore)
     }
 
     /**

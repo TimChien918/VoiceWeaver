@@ -5,10 +5,17 @@ api_v2.py（/models）與 voice_center_app.py（web 橋接合成）共用這支�
 與 Colab 端 voiceweaver_bridge.py 同一套邏輯（換參考音＝換語氣）。
 
 資料夾結構（依語言分，每角色一組情緒參考音）：
-    <root>/<LANG>/<角色>/
+    <root>/Models/<LANG>/<角色>/
         *.ckpt                                    GPT 權重
         *.pth                                     SoVITS 權重
         reference_audios/**/emotions/【情緒】逐字稿.wav   多顆，一情緒一顆
+    <root>/AcousticModels/<uid>/<樣板id>.json     聲波模型（專屬發音的關鍵字樣板）
+    <root>/catalog.json                           曲庫索引（路徑一律相對 <root>）
+
+**Models/ 這一層是後來加的。** 舊版把 ZH/EN/JA/KO 直接放在 <root> 底下，
+但 <root> 後來還要放聲波模型，語音模型跟聲波模型混在同一層會看不出誰是誰。
+[models_root] 負責這件事的相容：有 Models/ 就用，沒有就當舊版直接用 <root>——
+所以既有使用者不搬家也不會壞，搬了也照樣運作。
 
 情緒根目錄：環境變數 VOICEWEAVER_EMOTION_ROOT（沒設就沒有情緒模型，呼叫端退回舊 model_history）。
 """
@@ -20,6 +27,9 @@ import time
 NEUTRAL = "中立"
 CATALOG_NAME = "catalog.json"   # 雲端曲庫目錄索引（放在曲庫根目錄）
 LANG_DIRS = {"ZH", "EN", "JA", "KO"}
+
+MODELS_DIR = "Models"            # 語音模型（GPT-SoVITS 聲文權重＋參考音）
+ACOUSTIC_DIR = "AcousticModels"  # 聲波模型（專屬發音的 MFCC 樣板）
 
 EMOTION_ALIASES = {
     "中立": ["中立", "平静", "平靜", "neutral"],
@@ -73,9 +83,85 @@ def emotion_root():
     return (os.environ.get("VOICEWEAVER_EMOTION_ROOT") or "").rstrip("/")
 
 
+def models_root(root=None):
+    """語音模型實際所在的資料夾。
+
+    優先序：已經有 <root>/Models 就用它；否則若是舊版面（語言資料夾直接躺在
+    <root>）就沿用 <root>；兩者皆非（全新或空的曲庫）一律回 <root>/Models，
+    **即使它還不存在**——新資料要落在新版面，不然第一次下載就又長回舊版面。
+
+    唯一的分層判斷點。掃描、健檢、建索引、隨選下載全都走這裡，
+    才不會出現「某一支看新路徑、另一支看舊路徑」的半搬家狀態。
+    """
+    root = root if root is not None else emotion_root()
+    if not root:
+        return ""
+    sub = os.path.join(root, MODELS_DIR)
+    if os.path.isdir(sub):
+        return sub
+    if is_legacy_layout(root):
+        return root
+    return sub
+
+
+def acoustic_root(root=None, create=False):
+    """聲波模型資料夾 <root>/AcousticModels。[create] 為真時缺了就建。"""
+    root = root if root is not None else emotion_root()
+    if not root:
+        return ""
+    d = os.path.join(root, ACOUSTIC_DIR)
+    if create:
+        os.makedirs(d, exist_ok=True)
+    return d
+
+
+def is_legacy_layout(root=None):
+    """舊版版面：語言資料夾直接躺在 <root>，還沒有 Models/。"""
+    root = root if root is not None else emotion_root()
+    if not root or not os.path.isdir(root):
+        return False
+    if os.path.isdir(os.path.join(root, MODELS_DIR)):
+        return False
+    return any(os.path.isdir(os.path.join(root, l)) for l in LANG_DIRS)
+
+
+def migrate_layout(root=None):
+    """把舊版 <root>/<LANG> 搬進 <root>/Models/<LANG>。回 (搬了幾個, 錯誤訊息)。
+
+    同一個檔案系統內是改目錄項目，不是複製——曲庫幾十 GB 也是瞬間完成。
+    已經是新版面就直接回 (0, "")，重複呼叫安全。
+    """
+    root = root if root is not None else emotion_root()
+    if not is_legacy_layout(root):
+        return 0, ""
+    dest = os.path.join(root, MODELS_DIR)
+    try:
+        os.makedirs(dest, exist_ok=True)
+        moved = 0
+        for lang in sorted(LANG_DIRS):
+            src = os.path.join(root, lang)
+            if not os.path.isdir(src):
+                continue
+            dst = os.path.join(dest, lang)
+            if os.path.isdir(dst):
+                # 兩邊都有：不覆蓋，把舊的內容併進去，衝突的留在原地讓使用者自己看
+                for name in os.listdir(src):
+                    s, d = os.path.join(src, name), os.path.join(dst, name)
+                    if not os.path.exists(d):
+                        os.rename(s, d)
+                if not os.listdir(src):
+                    os.rmdir(src)
+            else:
+                os.rename(src, dst)
+            moved += 1
+        return moved, ""
+    except OSError as e:
+        return 0, str(e)
+
+
 def scan_emotion_models(root=None):
-    """掃 <root>/<LANG>/<角色>/ → [{name, character, lang, gpt, sovits, emotions{canon:{ref,prompt}}}]。"""
-    root = root or emotion_root()
+    """掃 <root>/Models/<LANG>/<角色>/ → [{name, character, lang, gpt, sovits, emotions{canon:{ref,prompt}}}]。"""
+    root = models_root(root or emotion_root())
     out = []
     if not root or not os.path.isdir(root):
         return out
@@ -131,7 +217,7 @@ def scan_report(root=None):
         emotions[],untagged[],issues[]}], summary{characters,ready,issues}}。
     與 scan_emotion_models 不同：這支「連壞掉的角色也列出來」，方便提示使用者怎麼修。
     """
-    root = root or emotion_root()
+    root = models_root(root or emotion_root())
     rep = {"root": root, "exists": bool(root) and os.path.isdir(root),
            "langs": [], "characters": [],
            "summary": {"characters": 0, "ready": 0, "issues": 0}}
@@ -203,18 +289,25 @@ def format_report(rep):
         for it in c["issues"]:
             lines.append(f"        • {it}")
     if s["characters"] == 0:
-        lines.append("   （還沒有任何角色資料夾；把 <語言>/<角色>/ 放進來即可）")
+        lines.append("   （還沒有任何角色資料夾；把 Models/<語言>/<角色>/ 放進來即可）")
     return "\n".join(lines)
 
 
 def ensure_template(root=None):
-    """在 <root> 底下建好 ZH/EN/JA/KO 空資料夾（缺才建）。回新建的語言清單。"""
+    """建好 <root>/Models/{ZH,EN,JA,KO} 與 <root>/AcousticModels（缺才建）。回新建的語言清單。
+
+    舊版面（語言直接在 <root>）不動它——那是使用者已經放好東西的地方，
+    在旁邊多長一個空的 Models/ 只會讓人搞不清楚該把檔案放哪一邊。
+    要換新版面請走 [migrate_layout]。
+    """
     root = root or emotion_root()
     if not root:
         return []
+    acoustic_root(root, create=True)
+    base = root if is_legacy_layout(root) else os.path.join(root, MODELS_DIR)
     created = []
     for lang in ("ZH", "EN", "JA", "KO"):
-        d = os.path.join(root, lang)
+        d = os.path.join(base, lang)
         if not os.path.isdir(d):
             os.makedirs(d, exist_ok=True)
             created.append(lang)
@@ -242,10 +335,13 @@ def build_catalog(root=None):
     root = root or emotion_root()
     cat = {"version": 1, "updatedAt": int(time.time() * 1000),
            "characters": [], "summary": {"characters": 0, "ready": 0, "bytes": 0}}
-    if not root or not os.path.isdir(root):
+    # 掃描在 Models/（或舊版面的 <root>），但路徑一律相對「曲庫根」——
+    # 消費端只會 open(<root>/<rel>)，兩種版面產出的索引都直接可用。
+    mroot = models_root(root)
+    if not root or not os.path.isdir(mroot):
         return cat
-    for lang in sorted(os.listdir(root)):
-        ldir = os.path.join(root, lang)
+    for lang in sorted(os.listdir(mroot)):
+        ldir = os.path.join(mroot, lang)
         if lang.upper() not in LANG_DIRS or not os.path.isdir(ldir):
             continue
         LANG = lang.upper()

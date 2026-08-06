@@ -26,6 +26,8 @@ SCOPES = [
 ]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 ROOT_FOLDER = "VoiceWeaver"                          # Drive 上曲庫根資料夾名
+MODELS_DIR = "Models"                                # 語音模型（GPT-SoVITS 聲文權重）
+ACOUSTIC_DIR = "AcousticModels"                      # 聲波模型（專屬發音的關鍵字樣板）
 LANG_DIRS = {"ZH", "EN", "JA", "KO"}
 _APP_DIR = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
 
@@ -41,16 +43,30 @@ def _here():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def parse_ref_filename(fname):
-    """『【情緒】逐字稿.wav』→ (canon情緒, 逐字稿)。沿用 emotion_models 同一套解析。"""
+def _em():
+    """取 emotion_models 模組（拿不到回 None）。資料夾版面的規則只寫在那一支。"""
     try:
         import sys
         if _here() not in sys.path:
             sys.path.insert(0, _here())
         import emotion_models
-        return emotion_models.parse_ref_filename(fname)
-    except Exception:
-        return "中立", os.path.splitext(fname)[0]
+        return emotion_models
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def parse_ref_filename(fname):
+    """『【情緒】逐字稿.wav』→ (canon情緒, 逐字稿)。沿用 emotion_models 同一套解析。"""
+    em = _em()
+    if em:
+        return em.parse_ref_filename(fname)
+    return "中立", os.path.splitext(fname)[0]
+
+
+def local_models_dir(local_root):
+    """本機快取裡語音模型的實際位置（新版面 <root>/Models，舊版面 <root>）。"""
+    em = _em()
+    return em.models_root(local_root) if em else local_root
 
 
 def client_secret_path():
@@ -311,6 +327,78 @@ def _ensure_path(svc, parts):
     return parent
 
 
+def _models_parent(svc, create=False):
+    """Drive 上語音模型的父資料夾 id。
+
+    新版面是 VoiceWeaver/Models；舊版面把 ZH/EN/JA/KO 直接掛在 VoiceWeaver 底下，
+    那時就回 VoiceWeaver 本身。回 (parent_id, is_legacy)；沒有 VoiceWeaver 回 (None, False)。
+
+    [create] 為真時（上傳路徑）會把 Models/ 建出來——新上傳一律進新版面，
+    但**不會**把舊版面的既有角色搬過去，那是 [migrate_drive_layout] 的事。
+    """
+    root_id = _find_folder(svc, ROOT_FOLDER, "root")
+    if not root_id:
+        if not create:
+            return None, False
+        root_id = _ensure_path(svc, [ROOT_FOLDER])
+    models_id = _find_folder(svc, MODELS_DIR, root_id)
+    if models_id:
+        return models_id, False
+    # 沒有 Models/：舊版面才會有語言資料夾直接掛在根下。
+    # 這種情況連上傳也留在舊版面——同一個曲庫橫跨兩種版面的話，
+    # 使用者會在 Drive 上看到同一個角色出現在兩個地方，比沒搬家更難懂。
+    legacy = any(f["name"].upper() in LANG_DIRS
+                 for f in _list_children(svc, root_id, folders_only=True))
+    if legacy:
+        return root_id, True
+    return (_ensure_folder(svc, MODELS_DIR, root_id) if create else None), False
+
+
+def migrate_drive_layout(creds=None, progress=None):
+    """把 Drive 上舊版面的 VoiceWeaver/<LANG> 搬進 VoiceWeaver/Models/<LANG>。
+
+    **搬的是資料夾的父節點，不是檔案內容**——Drive 的 addParents/removeParents
+    只改 metadata，幾十 GB 的曲庫也是幾秒完成，不會重新上傳任何一個位元組。
+
+    回 {ok, moved:[LANG], error}。已經是新版面就 moved=[]。
+    """
+    res = {"ok": False, "moved": [], "error": ""}
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        root_id = _find_folder(svc, ROOT_FOLDER, "root")
+        if not root_id:
+            res["ok"] = True; return res          # Drive 上還沒有曲庫，沒得搬
+        langs = [f for f in _list_children(svc, root_id, folders_only=True)
+                 if f["name"].upper() in LANG_DIRS]
+        if not langs:
+            res["ok"] = True; return res
+        models_id = _ensure_folder(svc, MODELS_DIR, root_id)
+        for lf in langs:
+            existing = _find_folder(svc, lf["name"], models_id)
+            if existing:
+                # Models/ 底下已經有同名語言：搬角色進去，不動已存在的同名角色
+                for cf in _list_children(svc, lf["id"], folders_only=True):
+                    if _find_folder(svc, cf["name"], existing):
+                        continue
+                    _retry(lambda f=cf: svc.files().update(
+                        fileId=f["id"], addParents=existing,
+                        removeParents=lf["id"], fields="id").execute())
+            else:
+                _retry(lambda f=lf: svc.files().update(
+                    fileId=f["id"], addParents=models_id,
+                    removeParents=root_id, fields="id").execute())
+            res["moved"].append(lf["name"].upper())
+            if progress:
+                progress(lf["name"], 100)
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
 def _find_file(svc, name, parent):
     q = (f"name = {_q(name)} and {_q(parent)} in parents and "
          f"mimeType != '{FOLDER_MIME}' and trashed = false")
@@ -343,13 +431,13 @@ def _upload_file(svc, local, parent, remote_name=None, progress=None):
 
 
 def upload_character(root, lang, char, progress=None):
-    """把本機 <root>/<LANG>/<角色>/ 整包上傳到 Drive VoiceWeaver/<LANG>/<角色>/。
+    """把本機 <root>/Models/<LANG>/<角色>/ 整包上傳到 Drive VoiceWeaver/Models/<LANG>/<角色>/。
 
     回 {ok, character, lang, uploaded, skipped, bytes, error}。
     """
     res = {"ok": False, "character": char, "lang": (lang or "").upper(),
            "uploaded": 0, "skipped": 0, "bytes": 0, "error": ""}
-    cdir = os.path.join(root, res["lang"], char)
+    cdir = os.path.join(local_models_dir(root), res["lang"], char)
     if not os.path.isdir(cdir):
         res["error"] = "找不到角色資料夾"; return res
     try:
@@ -357,11 +445,15 @@ def upload_character(root, lang, char, progress=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        leaf = _ensure_path(svc, [ROOT_FOLDER, res["lang"], char])
+        models_id, _legacy = _models_parent(svc, create=True)
+        lang_id = _ensure_folder(svc, res["lang"], models_id)
+        leaf = _ensure_folder(svc, char, lang_id)
         for r, _d, files in os.walk(cdir):
             rel = os.path.relpath(r, cdir)
-            parent = leaf if rel == "." else _ensure_path(
-                svc, [ROOT_FOLDER, res["lang"], char] + rel.split(os.sep))
+            parent = leaf
+            if rel != ".":
+                for part in rel.split(os.sep):
+                    parent = _ensure_folder(svc, part, parent)
             for f in sorted(files):
                 if f == ".DS_Store":
                     continue
@@ -393,7 +485,7 @@ def _list_children(svc, parent, folders_only=False):
 
 def is_downloaded(local_root, lang, char, refs_expected=None):
     """本機快取是否已有這個角色（要有 .ckpt + .pth + 至少一顆參考音才算）。"""
-    cdir = os.path.join(local_root, (lang or "").upper(), char)
+    cdir = os.path.join(local_models_dir(local_root), (lang or "").upper(), char)
     if not os.path.isdir(cdir):
         return False
     names = os.listdir(cdir)
@@ -418,11 +510,11 @@ def list_drive_catalog(local_root=None, creds=None):
             res["error"] = "尚未登入 Google"
             return res
         svc = _service(creds)
-        root_id = _find_folder(svc, ROOT_FOLDER, "root")
-        if not root_id:
+        models_id, _legacy = _models_parent(svc)
+        if not models_id:
             res["ok"] = True          # 已登入但 Drive 上還沒有曲庫（還沒上傳過）
             return res
-        for lf in _list_children(svc, root_id, folders_only=True):
+        for lf in _list_children(svc, models_id, folders_only=True):
             lang = lf["name"].upper()
             if lang not in LANG_DIRS:
                 continue
@@ -486,18 +578,20 @@ def download_character(local_root, lang, char, progress=None, creds=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        root_id = _find_folder(svc, ROOT_FOLDER, "root")
-        lang_id = _find_folder(svc, res["lang"], root_id) if root_id else None
+        models_id, _legacy = _models_parent(svc)
+        lang_id = _find_folder(svc, res["lang"], models_id) if models_id else None
         char_id = _find_folder(svc, char, lang_id) if lang_id else None
         if not char_id:
             res["error"] = "Drive 上找不到這個角色"; return res
+        # 下載目的地要跟掃描端看的是同一層，否則下載完了 is_downloaded 仍判 False
+        cache_base = local_models_dir(local_root)
 
         def _walk(fid, rel):
             for f in _list_children(svc, fid):
                 sub = os.path.join(rel, f["name"])
                 if f["mimeType"] == FOLDER_MIME:
                     _walk(f["id"], sub); continue
-                dst = os.path.join(local_root, res["lang"], char, sub)
+                dst = os.path.join(cache_base, res["lang"], char, sub)
                 size = int(f.get("size") or 0)
                 if os.path.isfile(dst) and os.path.getsize(dst) == size:
                     res["skipped"] += 1; res["bytes"] += size; continue
@@ -540,7 +634,7 @@ def download_character(local_root, lang, char, progress=None, creds=None):
 def remove_download(local_root, lang, char):
     """移除本機快取（雲端保留）。回 (ok, 釋出bytes)。"""
     import shutil
-    cdir = os.path.join(local_root, (lang or "").upper(), char)
+    cdir = os.path.join(local_models_dir(local_root), (lang or "").upper(), char)
     if not os.path.isdir(cdir):
         return False, 0
     freed = 0
@@ -569,8 +663,8 @@ def delete_character(local_root, lang, char, also_local=True, creds=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        root_id = _find_folder(svc, ROOT_FOLDER, "root")
-        lang_id = _find_folder(svc, LANG, root_id) if root_id else None
+        models_id, _legacy = _models_parent(svc)
+        lang_id = _find_folder(svc, LANG, models_id) if models_id else None
         char_id = _find_folder(svc, char, lang_id) if lang_id else None
         if not char_id:
             res["error"] = "Drive 上找不到這個角色"; return res
@@ -579,6 +673,109 @@ def delete_character(local_root, lang, char, also_local=True, creds=None):
         if also_local and local_root:
             remove_download(local_root, LANG, char)
         res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+# ── 聲波模型（專屬發音）VoiceWeaver/AcousticModels/<uid>/ ──────────
+#
+# 跟語音模型分開放，因為兩者的性質完全不同：
+# 語音模型是「可以分享的角色」（幾百 MB，誰拿去都能用），
+# 聲波模型是「這個人的聲音特徵」（幾十 KB，換一個人講就完全比不出來）。
+# 混在同一層的話，使用者想備份／搬移／刪掉其中一種都會誤傷另一種。
+#
+# 一個樣板一個 JSON：手機端一次只會改一筆，整包重寫會讓兩台裝置同時編輯時互相蓋掉。
+
+def _acoustic_parent(svc, uid, create=False):
+    """VoiceWeaver/AcousticModels/<uid> 的資料夾 id（找不到且不建時回 None）。"""
+    if not uid:
+        return None
+    root_id = _find_folder(svc, ROOT_FOLDER, "root")
+    if not root_id:
+        if not create:
+            return None
+        root_id = _ensure_path(svc, [ROOT_FOLDER])
+    ac_id = (_ensure_folder(svc, ACOUSTIC_DIR, root_id) if create
+             else _find_folder(svc, ACOUSTIC_DIR, root_id))
+    if not ac_id:
+        return None
+    return (_ensure_folder(svc, uid, ac_id) if create
+            else _find_folder(svc, uid, ac_id))
+
+
+def list_acoustic(uid, creds=None):
+    """列出這個帳號在 Drive 上的聲波模型。回 {ok, templates:[dict], error}。"""
+    res = {"ok": False, "templates": [], "error": ""}
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        parent = _acoustic_parent(svc, uid)
+        if not parent:
+            res["ok"] = True; return res          # 還沒有人上傳過
+        from google.auth.transport.requests import AuthorizedSession
+        sess = AuthorizedSession(creds)
+        for f in _list_children(svc, parent):
+            if not f["name"].lower().endswith(".json"):
+                continue
+            r = sess.get(f"https://www.googleapis.com/drive/v3/files/{f['id']}?alt=media",
+                         timeout=60)
+            if r.status_code != 200:
+                continue
+            try:
+                res["templates"].append(json.loads(r.content.decode("utf-8")))
+            except ValueError:
+                continue          # 壞掉的單筆不該讓整份清單失敗
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+def upload_acoustic(uid, template, creds=None):
+    """上傳/覆蓋一筆聲波模型（template 需含 id）。回 {ok, error}。"""
+    res = {"ok": False, "error": ""}
+    tid = str((template or {}).get("id") or "").strip()
+    if not tid:
+        res["error"] = "樣板缺少 id"; return res
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        parent = _acoustic_parent(svc, uid, create=True)
+        from googleapiclient.http import MediaInMemoryUpload
+        blob = json.dumps(template, ensure_ascii=False).encode("utf-8")
+        media = MediaInMemoryUpload(blob, mimetype="application/json", resumable=False)
+        name = f"{tid}.json"
+        exist = _find_file(svc, name, parent)
+        if exist:
+            _retry(lambda: svc.files().update(fileId=exist["id"], media_body=media).execute())
+        else:
+            _retry(lambda: svc.files().create(
+                body={"name": name, "parents": [parent]}, media_body=media,
+                fields="id").execute())
+        res["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        res["error"] = str(e)
+    return res
+
+
+def delete_acoustic(uid, template_id, creds=None):
+    """刪掉一筆聲波模型（丟垃圾桶，可在 Drive 還原）。回 {ok, error}。"""
+    res = {"ok": False, "error": ""}
+    try:
+        creds = creds or get_credentials(interactive=False)
+        if not creds:
+            res["error"] = "尚未登入 Google"; return res
+        svc = _service(creds)
+        parent = _acoustic_parent(svc, uid)
+        f = _find_file(svc, f"{template_id}.json", parent) if parent else None
+        if f:
+            _retry(lambda: svc.files().update(fileId=f["id"], body={"trashed": True}).execute())
+        res["ok"] = True          # 本來就不在＝已經是想要的狀態
     except Exception as e:  # noqa: BLE001
         res["error"] = str(e)
     return res

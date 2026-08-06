@@ -124,13 +124,30 @@ def _parse_ref_filename(fname):
 _models_cache = None
 
 
+def _models_dir():
+    """語音模型實際所在的層。
+
+    與 emotion_models.models_root 同一套規則（這支刻意不 import 那邊，
+    因為 Colab 上只有上游 GPT-SoVITS，VoiceWeaver repo 不在）：
+    有 Models/ 就用，否則舊版面沿用根目錄，全新曲庫走 Models/。
+    改這裡就要一起改 emotion_models。
+    """
+    sub = os.path.join(MODELS_ROOT, "Models")
+    if os.path.isdir(sub):
+        return sub
+    if any(os.path.isdir(os.path.join(MODELS_ROOT, l)) for l in LANG_DIRS):
+        return MODELS_ROOT
+    return sub
+
+
 def _scan_emotion_structure():
-    """掃 <root>/<LANG>/<角色>/：回 [{name, lang, gpt, sovits, emotions{canon:{ref,prompt}}}]。"""
+    """掃 <root>/Models/<LANG>/<角色>/：回 [{name, lang, gpt, sovits, emotions{canon:{ref,prompt}}}]。"""
     out = []
-    if not os.path.isdir(MODELS_ROOT):
+    mroot = _models_dir()
+    if not os.path.isdir(mroot):
         return out
-    for lang in sorted(os.listdir(MODELS_ROOT)):
-        ldir = os.path.join(MODELS_ROOT, lang)
+    for lang in sorted(os.listdir(mroot)):
+        ldir = os.path.join(mroot, lang)
         if lang.upper() not in LANG_DIRS or not os.path.isdir(ldir):
             continue
         LANG = lang.upper()
