@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,8 +43,13 @@ object DiagnosticLog {
     private const val MAX_TOTAL_BYTES = 8L * 1024 * 1024   // 8MB 上限，超過就刪最舊的整天檔案
     private const val KEEP_DAYS = 7
 
-    private val stamp = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
-    private val daySuffix = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    // SimpleDateFormat **不是執行緒安全的**，而 write() 是從任何執行緒呼叫的
+    //（收音在 IO、比對在 Default、按鈕在 Main）。共用一個實例時，兩邊同時
+    // format 會踩到它內部共用的 Calendar，產出亂掉的時間戳，偶爾直接丟
+    // ArrayIndexOutOfBoundsException——而那個例外會從一行「記個 log」冒出來，
+    // 看起來完全像是別的地方壞掉。每個執行緒一份最省事。
+    private val stamp = ThreadLocal.withInitial { SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US) }
+    private val daySuffix = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
 
     /** 寫檔丟到單一背景執行緒，呼叫端（含 UI 執行緒）永遠不阻塞、也不必自己同步。 */
     private val writer = Executors.newSingleThreadExecutor { r ->
@@ -93,7 +99,7 @@ object DiagnosticLog {
 
     private fun write(level: String, cat: Cat, message: String, detail: String?, t: Throwable?) {
         val sb = StringBuilder()
-            .append(stamp.format(Date())).append(' ')
+            .append(stamp.get()!!.format(Date())).append(' ')
             .append(level).append(' ')
             .append('[').append(cat.name).append("] ")
             .append(redact(message))
@@ -108,7 +114,10 @@ object DiagnosticLog {
         // logcat 仍然照送一份，接著電腦除錯時 tag 統一成 VoiceWeaver，不必再猜是哪個類別的 tag
         when (level) { "E" -> Log.e(TAG, line); "W" -> Log.w(TAG, line); else -> Log.i(TAG, line) }
 
-        _recent.value = (_recent.value + line).takeLast(MAX_MEMORY_LINES)
+        // update{} 而不是讀了再寫：write() 會從多個執行緒同時進來，
+        // `value = value + line` 是 read-modify-write，兩邊撞在一起就會丟行——
+        // 而丟掉的往往正是同時發生的那幾行，也就是查併發問題最需要的那幾行。
+        _recent.update { (it + line).takeLast(MAX_MEMORY_LINES) }
 
         if (dir == null) { pending.offer(line); return }
         writer.execute { appendLines(listOf(line)) }
@@ -133,7 +142,7 @@ object DiagnosticLog {
 
     private fun todayFile(): File? {
         val d = dir ?: return null
-        return File(d, "vw-${daySuffix.format(Date())}.log")
+        return File(d, "vw-${daySuffix.get()!!.format(Date())}.log")
     }
 
     private fun appendLines(lines: List<String>) {
@@ -152,6 +161,10 @@ object DiagnosticLog {
             var total = 0L
             files.forEachIndexed { index, f ->
                 total += f.length()
+                // index 0 是今天這一份，永遠不刪。
+                // 沒有這個例外的話，單日就寫超過 8MB 時（跑診斷、連續失敗重試）
+                // 下次開 App 會先把今天的紀錄刪掉——而那正是要查的那一份。
+                if (index == 0) return@forEachIndexed
                 if (index >= KEEP_DAYS || total > MAX_TOTAL_BYTES) f.delete()
             }
         }
@@ -170,7 +183,10 @@ object DiagnosticLog {
             sb.append("───── ").append(f.name).append(" ─────\n")
             sb.append(runCatching { f.readText() }.getOrDefault("(讀取失敗)\n"))
         }
-        return if (sb.length > maxBytes) sb.substring(sb.length - maxBytes) else sb.toString()
+        // files() 是「新到舊」，所以 sb 的開頭才是最新的紀錄。
+        // 超量時要砍掉尾巴（最舊的），砍開頭等於把剛剛出問題的那幾行丟掉——
+        // 而使用者按「分享日誌」正是因為剛剛出了問題。
+        return if (sb.length > maxBytes) sb.substring(0, maxBytes) else sb.toString()
     }
 
     /** 使用者按「清除日誌」用。 */

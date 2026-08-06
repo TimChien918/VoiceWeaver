@@ -72,10 +72,42 @@ object CorpusImporter {
         Result.Ok(rows.map { it.toAacItem() })
     }.getOrElse { Result.Err("JSON 格式錯誤：${it.message?.take(80)}") }
 
+    /**
+     * 切一列 CSV，**認得雙引號包起來的欄位**。
+     *
+     * 直接 `split(",")` 的後果實測是整列往後位移一格：
+     * `a1,"I need water, please",💧,products` 會被切成
+     * `label=「"I need water」`、`emoji=「please"」`——匯進來的圖卡標籤是半句話、
+     * emoji 欄變成文字，而畫面上不會有任何錯誤，使用者只會覺得「匯入的卡怪怪的」。
+     * 而 AAC 的標籤本來就是句子，帶逗號是常態不是例外。
+     *
+     * 依 RFC 4180：引號內的逗號屬於內容，連續兩個雙引號代表一個字面雙引號。
+     */
+    internal fun splitCsvLine(line: String): List<String> {
+        val out = ArrayList<String>()
+        val cur = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            when {
+                inQuotes && c == '"' && i + 1 < line.length && line[i + 1] == '"' -> {
+                    cur.append('"'); i++          // "" → 一個字面雙引號
+                }
+                c == '"' -> inQuotes = !inQuotes
+                c == ',' && !inQuotes -> { out.add(cur.toString()); cur.setLength(0) }
+                else -> cur.append(c)
+            }
+            i++
+        }
+        out.add(cur.toString())
+        return out.map { it.trim() }
+    }
+
     fun parseCsv(raw: String): Result = runCatching {
         val lines = raw.lines().filter { it.isNotBlank() }
         if (lines.size < 2) return Result.Err("CSV 至少要有 header + 1 列")
-        val header = lines.first().split(",").map { it.trim().lowercase() }
+        val header = splitCsvLine(lines.first()).map { it.lowercase() }
         val idxId            = header.indexOf("id")
         val idxLabel         = header.indexOf("label")
         val idxEmoji         = header.indexOf("emoji")
@@ -84,7 +116,7 @@ object CorpusImporter {
         if (idxId < 0 || idxLabel < 0) return Result.Err("CSV header 缺少 id 或 label 欄")
 
         val items = lines.drop(1).map { line ->
-            val cols = line.split(",").map { it.trim() }
+            val cols = splitCsvLine(line)
             JsonRow(
                 id = cols.getOrNull(idxId).orEmpty(),
                 label = cols.getOrNull(idxLabel).orEmpty(),

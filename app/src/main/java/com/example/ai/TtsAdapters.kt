@@ -164,7 +164,10 @@ object AzureTtsAdapter : TtsAdapter {
 
 object DeepgramAdapter : TtsAdapter {
     override fun buildRequest(entry: TtsApiEntry, text: String, langTag: String): Request {
-        val url = "${entry.effectiveEndpoint}?model=${entry.effectiveModel}&encoding=mp3"
+        // 模型名是使用者在設定裡自己打的，一定要編碼：帶空白會讓 URL 直接壞掉，
+        // 帶 & 等於偷偷多塞一個查詢參數進去。
+        val url = "${entry.effectiveEndpoint}?model=" +
+            java.net.URLEncoder.encode(entry.effectiveModel, "UTF-8") + "&encoding=mp3"
         return Request.Builder()
             .url(url)
             .addHeader("Authorization", "Token ${entry.key.trim()}")

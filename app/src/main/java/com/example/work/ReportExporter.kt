@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import com.example.data.RehabLog
+import com.example.ui.I18n
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,25 +28,32 @@ object ReportExporter {
         return Intent(Intent.ACTION_SEND).apply {
             type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "VoiceWeaver 復健成績報告")
+            putExtra(Intent.EXTRA_SUBJECT, I18n.tr("VoiceWeaver 復健成績報告"))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }
 
     suspend fun exportCsv(context: Context, logs: List<RehabLog>): Intent = withContext(Dispatchers.IO) {
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.TAIWAN)
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         val sb = StringBuilder("﻿")   // UTF-8 BOM，Excel 才不會中文亂碼
-        sb.appendLine("時間,場景,目標句,分數")
+        // 每個文字欄位都要包引號並跳脫。原本只有目標句有包，場景卻是裸的——
+        // 地點標籤是使用者自己打的（「台北, 大安」很正常），一個逗號就把
+        // 那一列往後推一格，治療師打開來看到的分數會落在別的欄位。
+        fun cell(v: String) = "\"" + v.replace("\"", "\"\"") + "\""
+        sb.appendLine(listOf(
+            I18n.tr("時間"), I18n.tr("場景"), I18n.tr("目標句"), I18n.tr("分數"),
+        ).joinToString(",") { cell(it) })
         logs.sortedByDescending { it.timestamp }.forEach { l ->
-            val safe = l.targetSentence.replace("\"", "\"\"")
-            sb.appendLine("${fmt.format(Date(l.timestamp))},${l.locationTag},\"$safe\",${l.score}")
+            sb.appendLine(listOf(
+                fmt.format(Date(l.timestamp)), l.locationTag, l.targetSentence, l.score.toString(),
+            ).joinToString(",") { cell(it) })
         }
         val file = File(dir(context), "rehab_report.csv").apply { writeText(sb.toString()) }
         shareIntent(context, file, "text/csv")
     }
 
     suspend fun exportPdf(context: Context, logs: List<RehabLog>): Intent = withContext(Dispatchers.IO) {
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.TAIWAN)
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         val doc = PdfDocument()
         val title = Paint().apply { textSize = 20f; isFakeBoldText = true }
         val head = Paint().apply { textSize = 12f; isFakeBoldText = true }
@@ -60,12 +68,12 @@ object ReportExporter {
             val c = page.canvas
             var y = margin + 10f
             if (pageNo == 1) {
-                c.drawText("VoiceWeaver 復健成績報告", margin, y, title); y += 30f
-                c.drawText("總練習：${sorted.size} 次   平均分：$avg / 100", margin, y, body); y += 26f
+                c.drawText(I18n.tr("VoiceWeaver 復健成績報告"), margin, y, title); y += 30f
+                c.drawText(I18n.tr("總練習 %1\$d 次    平均 %2\$d / 100").format(sorted.size, avg), margin, y, body); y += 26f
             }
-            c.drawText("時間", margin, y, head)
-            c.drawText("目標句", margin + 130f, y, head)
-            c.drawText("分數", pageW - margin - 40f, y, head); y += lineH
+            c.drawText(I18n.tr("時間"), margin, y, head)
+            c.drawText(I18n.tr("目標句"), margin + 130f, y, head)
+            c.drawText(I18n.tr("分數"), pageW - margin - 40f, y, head); y += lineH
             while (idx < sorted.size && y < pageH - margin) {
                 val l = sorted[idx]
                 c.drawText(fmt.format(Date(l.timestamp)), margin, y, body)

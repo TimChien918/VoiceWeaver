@@ -138,7 +138,13 @@ object OpenAiCompatAdapter : LlmAdapter {
 object GeminiAdapter : LlmAdapter {
     override fun buildRequest(entry: LlmApiEntry, spec: LlmRequestSpec): Request {
         if (entry.key.isBlank()) error("API key 未設定")
-        val url = "${entry.effectiveEndpoint.trimEnd('/')}/${entry.effectiveModel}:generateContent?key=${entry.key.trim()}"
+        // model 進路徑、key 進查詢字串，兩個都是使用者自己輸入的
+        // model 在「路徑」裡、key 在「查詢字串」裡，兩者的編碼規則不一樣：
+        // URLEncoder 是給查詢字串用的，它把空白編成 +，放進路徑就是錯的。
+        // 路徑段落要 %20，所以編完再把 + 換掉。
+        fun pathSeg(v: String) = java.net.URLEncoder.encode(v.trim(), "UTF-8").replace("+", "%20")
+        val url = "${entry.effectiveEndpoint.trimEnd('/')}/" + pathSeg(entry.effectiveModel) +
+            ":generateContent?key=" + java.net.URLEncoder.encode(entry.key.trim(), "UTF-8")
 
         val parts = JSONArray().put(JSONObject().put("text", spec.user))
         if (spec.audioBase64 != null) {

@@ -116,7 +116,12 @@ object TemplateMatcher {
         // 樣板，代表這次發聲本來就有歧義，不該因為它沒過門檻就被當作不存在。
         // 相對比例而非絕對差：真實距離落在 3～15 之間，絕對差 0.15 的檢查
         // 等於從來沒生效過——兩個樣板一樣像時 App 仍會很有把握地講錯那句。
-        val runnerUp = scored.getOrNull(1)
+        // **要取「best 以外」的最佳者，不能寫死索引 1。**
+        // scored 是全部樣板、accepted 是過了各自門檻的子集，兩者的第一名不一定是同一個。
+        // 只要距離最近的那個沒過自己的門檻，best 就會是 scored[1]，
+        // 而 scored.getOrNull(1) 取到的正是 best 自己 → margin 恆為 0
+        // → 永遠判成「有歧義」，明明只有一個候選卻要使用者再選一次。
+        val runnerUp = scored.firstOrNull { it.template.id != best.template.id }
         val margin = runnerUp?.let {
             // 分母加下限而不是在 best≈0 時回傳無限大。
             // 回無限大等於「完全確定」，但兩個樣板都貼合到距離趨近 0 時，

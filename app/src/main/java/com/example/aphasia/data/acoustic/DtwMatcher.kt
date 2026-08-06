@@ -298,7 +298,11 @@ object DtwMatcher {
         val spread = max(sigma * k, mean * MIN_RELATIVE_SPREAD)
         // 門檻至少要收得下（砍掉離群值之後）最孤立的那一次。
         val floor = kept.max() * (1f + MIN_RELATIVE_SPREAD)
-        return max(mean + spread, floor)
+        // **絕對下限。** mean 與 σ 同時為 0 時（幾次錄音的特徵完全一樣，
+        // 例如錄到的是靜音或極短的片段）上面三項全是 0，門檻就變成 0——
+        // 而距離永遠不小於 0，等於這個樣板**永遠不會命中**。
+        // 使用者會看到「已啟用」卻怎麼叫都沒反應，完全查不出原因。
+        return max(max(mean + spread, floor), MIN_ABSOLUTE_THRESHOLD)
     }
 
     /**
@@ -319,10 +323,20 @@ object DtwMatcher {
         return if (nearest.isEmpty()) null else nearest.average().toFloat()
     }
 
+    /**
+     * 兩幀之間的距離。**維度不同時回 [Float.MAX_VALUE]，不是只比共同的前綴。**
+     *
+     * 只比前綴的後果實測是災難性的：一個 2 維的樣板對上 3 維的查詢會算出
+     * 距離 0.0——也就是「完全一樣」，於是那個樣板會命中所有聲音，
+     * 使用者講什麼都被說成同一句。
+     *
+     * 這不是假想：特徵維度會因為 MFCC 設定改變而變（係數個數、要不要 delta），
+     * 而樣板現在會跨裝置同步——舊裝置存的樣板拉到新版就是不同維度。
+     */
     private fun euclidean(a: FloatArray, b: FloatArray): Float {
+        if (a.size != b.size) return Float.MAX_VALUE
         var sum = 0f
-        val n = min(a.size, b.size)
-        for (i in 0 until n) {
+        for (i in a.indices) {
             val d = a[i] - b[i]
             sum += d * d
         }
@@ -334,6 +348,14 @@ object DtwMatcher {
 
     /** σ≈0 時門檻相對於 mean 的最小放寬幅度，同時也是「最差配對」的安全邊際 */
     private const val MIN_RELATIVE_SPREAD = 0.25f
+
+    /**
+     * 門檻的絕對下限。
+     *
+     * 防的是「門檻算成 0 ⇒ 樣板永遠不會命中」。訂得很小（真實錄音的組內距離
+     * 通常在 3～8），所以對正常的登錄完全沒有影響——它只在退化的輸入上起作用。
+     */
+    private const val MIN_ABSOLUTE_THRESHOLD = 0.05f
 
     /** 提供給測試與診斷：兩段序列的長度是否落在可比對範圍內 */
     fun lengthsComparable(a: FeatureSequence, b: FeatureSequence): Boolean {

@@ -44,7 +44,10 @@ object GeminiImageClient {
         if (prompt.isBlank()) {
             return@withContext Result.failure(IllegalStateException("請先輸入要生成的圖片描述"))
         }
-        val url = "${endpoint.trimEnd('/')}/$model:generateContent?key=$apiKey"
+        // 路徑段落要 %20 不是 +（URLEncoder 是給查詢字串用的）
+        val modelSeg = java.net.URLEncoder.encode(model.trim(), "UTF-8").replace("+", "%20")
+        val url = "${endpoint.trimEnd('/')}/$modelSeg:generateContent?key=" +
+            java.net.URLEncoder.encode(apiKey, "UTF-8")
         val body = JSONObject()
             .put(
                 "contents",

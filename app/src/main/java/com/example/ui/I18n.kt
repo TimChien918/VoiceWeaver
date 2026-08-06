@@ -233,6 +233,17 @@ object I18n {
             "Restored %1\$d. Another %2\$d have text only — record them on this phone to activate.",
             "%1\$d 件を復元。他に %2\$d 件はテキストのみ — この端末で録音すると有効になります。",
             "%1\$d개 복원. 다른 %2\$d개는 텍스트만 있습니다 — 이 기기에서 녹음하면 활성화됩니다."),
+        "VoiceWeaver 復健成績報告" to arrayOf(
+            "VoiceWeaver rehab report", "VoiceWeaver リハビリ成績表", "VoiceWeaver 재활 리포트"),
+        "總練習 %1\$d 次    平均 %2\$d / 100" to arrayOf(
+            "%1\$d sessions    average %2\$d / 100",
+            "練習 %1\$d 回    平均 %2\$d / 100",
+            "연습 %1\$d회    평균 %2\$d / 100"),
+        // 復健成績報告的 CSV 表頭
+        "時間" to arrayOf("Time", "時刻", "시간"),
+        "場景" to arrayOf("Place", "場面", "장소"),
+        "目標句" to arrayOf("Target sentence", "目標文", "목표 문장"),
+        "分數" to arrayOf("Score", "スコア", "점수"),
         "返回" to arrayOf("Back", "戻る", "뒤로"),
         "這是什麼？" to arrayOf("What is this?", "これは？", "이게 뭔가요?"),
         "收起說明" to arrayOf("Hide", "閉じる", "접기"),

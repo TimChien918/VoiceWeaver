@@ -118,7 +118,9 @@ object ImageGenClient {
         withContext(Dispatchers.IO) {
             val enc = URLEncoder.encode(prompt, "UTF-8")
             val model = entry.effectiveModel.ifBlank { "flux" }
-            val url = "${entry.effectiveEndpoint.trimEnd('/')}/$enc?model=$model&nologo=true&width=1024&height=1024"
+            // prompt 已經編碼了，model 卻沒有——它同樣是使用者自己打的
+            val url = "${entry.effectiveEndpoint.trimEnd('/')}/$enc?model=" +
+                URLEncoder.encode(model, "UTF-8") + "&nologo=true&width=1024&height=1024"
             val req = Request.Builder().url(url).get().build()
             runCatching {
                 client.newCall(req).execute().use { resp ->

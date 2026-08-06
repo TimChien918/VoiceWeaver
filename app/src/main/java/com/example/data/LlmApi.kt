@@ -103,7 +103,15 @@ data class LlmApiEntry(
     val effectiveEndpoint: String get() = endpoint.trim().ifBlank { provider.defaultEndpoint }
     val effectiveModel: String get() = model.trim().ifBlank { provider.defaultModel }
     val label: String get() = name.trim().ifBlank { provider.displayName }
-    val usable: Boolean get() = !provider.needsKey || (key.trim().isNotBlank() && !key.startsWith("YOUR_"))
+    val usable: Boolean
+        get() {
+            if (!provider.needsKey) return true
+            // trim 之後才判斷佔位符：從文件複製貼上很容易帶到前後空白，
+            // 而 " YOUR_KEY " 用未 trim 的字串比對就繞過了這道檢查，
+            // 結果是它進了候選清單、換來一個看不懂的 401。
+            val k = key.trim()
+            return k.isNotBlank() && !k.startsWith("YOUR_")
+        }
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("provider", provider.name).put("name", name)

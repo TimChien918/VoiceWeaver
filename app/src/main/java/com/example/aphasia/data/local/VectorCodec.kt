@@ -107,9 +107,13 @@ object VectorCodec {
 
     /** 兩個已正規化向量的內積 = cosine 相似度。 */
     fun dot(a: FloatArray, b: FloatArray): Float {
+        // **維度不符回 0，不是只比共同前綴。**
+        // 比前綴會算出一個看起來很合理的相似度，於是換過編碼器版本之後
+        // 檢索會回傳「有排序、但其實不對」的結果——比回傳空的更難發現。
+        // 0 代表「不相似」，是這裡唯一安全的答案。
+        if (a.size != b.size) return 0f
         var sum = 0f
-        val n = minOf(a.size, b.size)
-        for (i in 0 until n) sum += a[i] * b[i]
+        for (i in a.indices) sum += a[i] * b[i]
         return sum
     }
 

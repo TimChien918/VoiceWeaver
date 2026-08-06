@@ -17,20 +17,55 @@ object SafetyGuard {
 
     /** 中文 / 英文常見危機關鍵字。盡量比對「字串包含」而不是「等於」，因為使用者
      *  可能會把字拆成片段（"自...殺"）餵進重組區。 */
+    /**
+     * 危機訊號。
+     *
+     * **這份清單漏一個說法，就等於那個說法完全沒有安全網。** 實測過
+     * 「I want to die」原本判定為 NORMAL——它不在清單裡，而 kill myself／
+     * end my life 都在，顯然只是漏掉。介面已經支援 en/ja/ko，安全層卻還停在
+     * 以中文為主的階段；這一層漏掉的代價跟其他地方完全不同，寧可多擋。
+     *
+     * 寧可誤報也不要漏報：誤報的代價是多跳一個關心的畫面，漏報的代價是
+     * 這個人唯一能求救的管道安靜地放行。
+     */
     private val CRISIS_PATTERNS: List<Regex> = listOf(
+        // 中文
         Regex("自\\s*殺"),
         Regex("自\\s*殘"),
         Regex("自\\s*我\\s*了\\s*斷"),
         Regex("想\\s*死"),
         Regex("不\\s*想\\s*活"),
+        Regex("活\\s*不\\s*下\\s*去"),
         Regex("結\\s*束\\s*生\\s*命"),
+        Regex("了\\s*結\\s*自\\s*己"),
         Regex("跳\\s*樓"),
         Regex("上\\s*吊"),
         Regex("吞\\s*藥"),
-        Regex("(?i)suicide"),
-        Regex("(?i)kill\\s*myself"),
-        Regex("(?i)end\\s*my\\s*life"),
-        Regex("(?i)self[-\\s]?harm")
+        Regex("割\\s*腕"),
+        // 英文
+        Regex("(?i)suicid"),                       // suicide / suicidal
+        Regex("(?i)kill\\s*(myself|my\\s*self)"),
+        Regex("(?i)end\\s*(my|it\\s*all)\\b.*\\blife|end\\s*it\\s*all"),
+        Regex("(?i)take\\s*my\\s*(own\\s*)?life"),
+        Regex("(?i)self[-\\s]?harm"),
+        Regex("(?i)hurt\\s*myself"),
+        Regex("(?i)cut\\s*myself"),
+        Regex("(?i)want\\s*(to\\s*)?die"),          // 實測原本漏掉，是最常見的說法之一
+        Regex("(?i)wanna\\s*die"),
+        Regex("(?i)(don'?t|do\\s*not)\\s*want\\s*to\\s*live"),
+        Regex("(?i)better\\s*off\\s*dead"),
+        Regex("(?i)hang\\s*myself"),
+        Regex("(?i)jump\\s*off"),
+        Regex("(?i)overdose"),
+        // 日文
+        Regex("自\\s*殺"),
+        Regex("死\\s*に\\s*たい"),
+        Regex("消\\s*え\\s*たい"),
+        Regex("生\\s*き\\s*た\\s*く\\s*な\\s*い"),
+        // 韓文
+        Regex("자\\s*살"),
+        Regex("죽\\s*고\\s*싶"),
+        Regex("살\\s*기\\s*싫"),
     )
 
     /** 模型若還是吐出來，要靜默替換的詞 → 給病人友善的中性說法。 */
@@ -41,7 +76,13 @@ object SafetyGuard {
         Regex("(?i)放\\s*棄\\s*治\\s*療")          to "與醫師討論下一步",
         Regex("自\\s*殺")                         to "（請與家屬聯絡）",
         Regex("自\\s*殘")                         to "（請與家屬聯絡）",
-        Regex("(?i)suicide")                     to "(please contact family)"
+        Regex("(?i)suicid\\w*")                   to "(please contact family)",
+        Regex("(?i)kill\\s*yourself")             to "(please contact family)",
+        Regex("(?i)you\\s*(will\\s*)?(never|won'?t)\\s*(get\\s*)?(better|recover)")
+                                                 to "we will work on rehab together",
+        Regex("(?i)there'?s\\s*no\\s*hope")      to "please talk with your family",
+        Regex("(?i)give\\s*up\\s*(on\\s*)?treatment")
+                                                 to "discuss the next step with your doctor"
     )
 
     /**
@@ -108,15 +149,41 @@ You are an assistive communication device for a person with aphasia. These rules
         Regex("不\\s*要\\s*救\\s*我"),
         Regex("不\\s*想\\s*治"),
         Regex("拔\\s*管"),
-        Regex("(?i)refuse\\s*treatment"),
-        Regex("(?i)stop\\s*treating")
+        Regex("(?i)refuse\\s*(the\\s*)?treatment"),
+        Regex("(?i)stop\\s*(the\\s*)?treat"),
+        Regex("(?i)give\\s*up\\s*(on\\s*)?(treatment|therapy)"),
+        Regex("(?i)(don'?t|do\\s*not)\\s*(want|need)\\s*(any\\s*)?(more\\s*)?(treatment|therapy)"),
+        Regex("(?i)(don'?t|do\\s*not)\\s*(save|resuscitate)\\s*me"),
+        Regex("(?i)\\bDNR\\b"),
+        Regex("(?i)pull\\s*the\\s*(plug|tube)"),
+        Regex("治\\s*療\\s*を\\s*やめ"),
+        Regex("치\\s*료\\s*를?\\s*그만"),
     )
 
-    /** 醫療 / 疼痛意圖關鍵字：發聲前需二次確認（避免 AI 誤判部位或意圖）。 */
+    /**
+     * 醫療 / 疼痛意圖關鍵字：發聲前需二次確認（避免 AI 誤判部位或意圖）。
+     *
+     * 原本只有中文，所以英文介面的使用者說「my chest hurts」會被判成 NORMAL，
+     * 直接跳過那一道確認——而那道確認正是為了防止 AI 把部位講錯。
+     * 這裡多擋一次的代價只是多按一個「確認」，漏擋的代價是替他講錯病情。
+     */
     private val MEDICAL_CONFIRM_KEYWORDS: List<String> = listOf(
+        // 中文
         "痛", "藥", "醫生", "醫師", "護理", "打針", "開刀", "手術", "急診",
         "頭暈", "噁心", "想吐", "流血", "發燒", "過敏", "呼吸", "胸悶",
-        "拉肚子", "便秘", "抽筋", "麻木", "腫", "摔", "跌倒"
+        "拉肚子", "便秘", "抽筋", "麻木", "腫", "摔", "跌倒",
+        // 日文／韓文
+        "痛い", "薬", "医者", "看護", "手術", "救急", "めまい", "吐き気",
+        "아파", "약", "의사", "간호", "수술", "응급", "어지", "메스꺼",
+    )
+
+    /** 英文的醫療關鍵字要看「詞」而不是子字串——`ill` 會命中 `still`、`bill`。 */
+    private val MEDICAL_CONFIRM_EN: Regex = Regex(
+        "(?i)\\b(pain|painful|hurts?|hurting|ache|aching|sore|medicine|medication|" +
+            "pills?|doctor|nurse|surgery|operation|injection|shot|emergency|" +
+            "dizzy|nausea|nauseous|vomit|bleed|bleeding|blood|fever|allergic|allergy|" +
+            "breathe|breathing|chest|diarrh?ea|constipat\\w*|cramp|numb|swollen|swelling|" +
+            "fell|fallen|fall)\\b"
     )
 
     fun classifyRisk(text: String): RiskLevel {
@@ -124,6 +191,7 @@ You are an assistive communication device for a person with aphasia. These rules
         if (CRISIS_PATTERNS.any { it.containsMatchIn(text) }) return RiskLevel.LOCK
         if (REFUSAL_PATTERNS.any { it.containsMatchIn(text) }) return RiskLevel.LOCK
         if (MEDICAL_CONFIRM_KEYWORDS.any { text.contains(it) }) return RiskLevel.CONFIRM
+        if (MEDICAL_CONFIRM_EN.containsMatchIn(text)) return RiskLevel.CONFIRM
         return RiskLevel.NORMAL
     }
 

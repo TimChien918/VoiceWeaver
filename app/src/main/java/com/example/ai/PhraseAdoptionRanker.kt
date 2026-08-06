@@ -60,6 +60,10 @@ object PhraseAdoptionRanker {
      */
     fun normalize(text: String): String =
         text.trim()
+            // 轉小寫：英文候選常常只差在句首大小寫（"I need water" / "i need water"），
+            // 不轉的話同一個說法會被記成兩筆，採納分永遠累積不起來，
+            // 等於這個功能對英文使用者形同無效。
+            .lowercase(java.util.Locale.ROOT)
             .replace(Regex("[\\s]+"), "")
             .trimEnd('。', '，', '！', '？', '.', ',', '!', '?')
 

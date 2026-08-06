@@ -87,11 +87,14 @@ object SttClient {
 
             // Deepgram：音訊直接當 body，參數走 query string，認證是 Token 不是 Bearer
             SttApiStyle.DEEPGRAM -> {
+                // model 與 language 都是使用者可以在設定裡自己打的，一定要編碼：
+                // 名稱帶空白會讓 URL 直接壞掉，帶 & 更等於多塞一個查詢參數進去。
+                fun q(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
                 val url = buildString {
                     append(endpoint)
                     append(if (endpoint.contains('?')) "&" else "?")
-                    append("model=").append(model)
-                    append("&language=").append(lang)
+                    append("model=").append(q(model))
+                    append("&language=").append(q(lang))
                     // smart_format 會補標點與大小寫，對「拿去唸出來」的用途差很多
                     append("&smart_format=true")
                 }

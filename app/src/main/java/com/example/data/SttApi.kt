@@ -132,7 +132,13 @@ data class SttApiEntry(
      * 讓它進到候選清單只會換來一個看不懂的 401。
      */
     val usable: Boolean
-        get() = enabled && (!provider.needsKey || (key.trim().isNotBlank() && !key.startsWith("YOUR_")))
+        get() {
+            if (!enabled) return false
+            if (!provider.needsKey) return true
+            // trim 之後才判斷佔位符——" YOUR_KEY " 用未 trim 的字串比對會繞過去
+            val k = key.trim()
+            return k.isNotBlank() && !k.startsWith("YOUR_")
+        }
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
