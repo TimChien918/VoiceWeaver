@@ -206,12 +206,6 @@ object I18n {
             "Teach again — this adds to the existing recordings, it does not replace them",
             "もう一度教える — 既存の録音に追加され、置き換えません",
             "다시 가르치기 — 기존 녹음에 추가되며 대체하지 않습니다"),
-        "從雲端取回" to arrayOf("Restore from cloud", "クラウドから復元", "클라우드에서 복원"),
-        "取回中…" to arrayOf("Restoring…", "復元中…", "복원 중…"),
-        "換手機時把設定與錄音一起拿回來，不必重錄" to arrayOf(
-            "Brings back your settings and recordings on a new phone — no need to record again",
-            "機種変更時に設定と録音をまとめて復元します（録り直し不要）",
-            "기기 변경 시 설정과 녹음을 함께 복원합니다 (다시 녹음할 필요 없음)"),
         "雲端沒有可取回的專屬發音（需要先登入並在另一台裝置設定過）" to arrayOf(
             "Nothing to restore (sign in first, and set some up on another device)",
             "復元できる項目がありません（先にログインし、別の端末で設定してください）",

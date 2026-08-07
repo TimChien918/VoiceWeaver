@@ -21,9 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ButtonDefaults
@@ -64,6 +67,21 @@ import com.example.ui.currentIosScheme
 @Composable
 fun PhraseShortcutScreen(viewModel: PhraseShortcutViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // 從背景回到前景時再對一次雲端。
+    //
+    // ViewModel 的 init 只在建立時跑一次，所以「照顧者在電腦上打好句子 → 使用者
+    // 把手機從口袋拿出來」這個最常見的情境不會觸發同步——而畫面停在這一頁，
+    // 使用者看不到新句子，只會覺得同步壞了。這裡補上 ON_RESUME。
+    // silent = true：沒變動就不出聲，不會每次解鎖都跳訊息。
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.syncFromCloud(silent = true)
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
 
     if (state.recordingFor != null) {
         EnrollmentStep(state, viewModel)
@@ -188,33 +206,14 @@ private fun LibraryStep(
                 }
             }
 
-            // 同步放在「加入新的」上面：換手機時第一件想做的事是把舊的拿回來，
-            // 而不是重新設定一次。
-            item {
-                Surface(
-                    onClick = { if (!state.syncing) viewModel.syncFromCloud() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = c.card,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.CloudDownload, contentDescription = null,
-                            tint = if (state.syncing) c.secondary else c.blue,
-                        )
-                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text(
-                                if (state.syncing) I18n.tr("取回中…") else I18n.tr("從雲端取回"),
-                                color = c.label, fontSize = 17.sp,
-                            )
-                            Text(
-                                I18n.tr("換手機時把設定與錄音一起拿回來，不必重錄"),
-                                color = c.secondary, fontSize = 13.sp,
-                            )
-                        }
-                    }
-                }
-            }
+            // **這裡刻意沒有「從雲端取回」按鈕。**
+            //
+            // 同步是每次進到這一頁、以及從背景回到前景時自動做的（見 ViewModel 的
+            // syncFromCloud(silent = true)）。要使用者按一顆按鈕才拿得到照顧者
+            // 剛在電腦上打好的句子，等於這個同步只有「知道有那顆按鈕的人」才有——
+            // 而使用者多半想不到要按，只會覺得兩邊根本沒有同步。
+            //
+            // 取回中會在上方的 MessageBar 顯示，不需要一個常駐的按鈕來承載狀態。
 
             item { SectionHeader(I18n.tr("加入新的"), c.secondary) }
             item {
