@@ -424,19 +424,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         // 讀回上次學到的供應商實測統計（成功率／延遲），冷啟動不必重新踩雷
         SmartApiRouter.init(application)
         AacUsageRanker.init(application)
-
-        // 把存起來的識字卡模式接回畫面狀態。
-        //
-        // AacUiState 是純記憶體的，預設 flashcardMode=false；設定是非同步讀回來的。
-        // 沒有這一步的話，重度模式的使用者每次開 App 看到的都是九宮格，
-        // 要自己再按一次切換——而「打開就是識字卡」正是重度模式的全部意義。
-        // 只在第一次載到設定時套用，之後以使用者當下切的為準（takeWhile 只收一筆）。
-        viewModelScope.launch {
-            val saved = settingsRepo.settings.first().aacFlashcardMode
-            if (saved != _aacState.value.flashcardMode) {
-                _aacState.value = _aacState.value.copy(flashcardMode = saved, flashcardIndex = 0)
-            }
-        }
     }
 
     private val assessor = HardwareAssessor(application)
@@ -1033,6 +1020,23 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
     init {
+        // 把存起來的識字卡模式接回畫面狀態。
+        //
+        // **一定要放在 settingsRepo 宣告之後的 init。** Kotlin 的屬性初始化與 init 區塊
+        // 是照宣告順序跑的，放在最上面那個 init 裡時 settingsRepo 還是 null，
+        // 而 viewModelScope 用的是 Main.immediate、會同步跑進去 → 建構當下就 NPE，
+        // App 一開就閃退。
+        //
+        // AacUiState 是純記憶體的，預設 flashcardMode=false；設定是非同步讀回來的。
+        // 沒有這一步，重度模式的使用者每次開 App 看到的都是九宮格，
+        // 要自己再按一次切換——而「打開就是識字卡」正是重度模式的全部意義。
+        viewModelScope.launch {
+            val saved = settingsRepo.settings.first().aacFlashcardMode
+            if (saved != _aacState.value.flashcardMode) {
+                _aacState.value = _aacState.value.copy(flashcardMode = saved, flashcardIndex = 0)
+            }
+        }
+
         // 啟動時依目前設定套用背景排程（每日提醒 + 成績單推送），確保重裝/更新後仍生效
         viewModelScope.launch {
             val s = settingsRepo.settings.firstOrNull() ?: return@launch
