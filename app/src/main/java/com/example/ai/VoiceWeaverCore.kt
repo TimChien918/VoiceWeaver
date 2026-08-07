@@ -424,6 +424,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         // 讀回上次學到的供應商實測統計（成功率／延遲），冷啟動不必重新踩雷
         SmartApiRouter.init(application)
         AacUsageRanker.init(application)
+
+        // 把存起來的識字卡模式接回畫面狀態。
+        //
+        // AacUiState 是純記憶體的，預設 flashcardMode=false；設定是非同步讀回來的。
+        // 沒有這一步的話，重度模式的使用者每次開 App 看到的都是九宮格，
+        // 要自己再按一次切換——而「打開就是識字卡」正是重度模式的全部意義。
+        // 只在第一次載到設定時套用，之後以使用者當下切的為準（takeWhile 只收一筆）。
+        viewModelScope.launch {
+            val saved = settingsRepo.settings.first().aacFlashcardMode
+            if (saved != _aacState.value.flashcardMode) {
+                _aacState.value = _aacState.value.copy(flashcardMode = saved, flashcardIndex = 0)
+            }
+        }
     }
 
     private val assessor = HardwareAssessor(application)
@@ -2543,13 +2556,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun setSeverityMode(mode: com.example.data.SeverityMode) = viewModelScope.launch {
         settingsRepo.setSeverityMode(mode)
         when (mode) {
+            // 輕度不動使用者現有設定（他可能自己調過字級）
             com.example.data.SeverityMode.Mild -> Unit
-            com.example.data.SeverityMode.Moderate -> settingsRepo.setFontScale(1.4f)
+            com.example.data.SeverityMode.Moderate -> {
+                settingsRepo.setFontScale(1.4f)
+                // 中度是「超大圖卡的九宮格」，不是識字卡。從重度切回來時要跟著收回去，
+                // 否則畫面停在識字卡，看起來像是切了沒反應。
+                settingsRepo.setAacFlashcardMode(false)
+                _aacState.value = _aacState.value.copy(flashcardMode = false, flashcardIndex = 0)
+            }
             com.example.data.SeverityMode.Severe -> {
                 settingsRepo.setFontScale(1.8f)
-                if (!_aacState.value.flashcardMode) {
-                    _aacState.value = _aacState.value.copy(flashcardMode = true, flashcardIndex = 0)
-                }
+                settingsRepo.setAacFlashcardMode(true)
+                _aacState.value = _aacState.value.copy(flashcardMode = true, flashcardIndex = 0)
             }
         }
     }
@@ -2881,10 +2900,17 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         _aacState.value = _aacState.value.copy(selectedCategory = cat, flashcardIndex = 0)
     }
 
-    /** 切換 grid ↔ flashcard 兩種瀏覽模式。指針歸零，避免越界。 */
+    /**
+     * 切換 grid ↔ flashcard 兩種瀏覽模式。指針歸零，避免越界。
+     *
+     * **同時寫回設定。** 只改記憶體狀態的話，重開 App 就掉回九宮格——
+     * 而重度模式的整個重點就是「打開就是識字卡」。
+     */
     fun aacToggleFlashcardMode() {
         val s = _aacState.value
-        _aacState.value = s.copy(flashcardMode = !s.flashcardMode, flashcardIndex = 0)
+        val next = !s.flashcardMode
+        _aacState.value = s.copy(flashcardMode = next, flashcardIndex = 0)
+        viewModelScope.launch { settingsRepo.setAacFlashcardMode(next) }
     }
 
     /** 識字卡：往下一張（含 wrap-around，永遠不會卡住） */

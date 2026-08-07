@@ -149,6 +149,15 @@ data class AppSettings(
     val sovitsConsentAccepted: Boolean = false,
     /** AAC 意圖確認卡開關：AI 組句後跳大圖卡讓不識字使用者 ✓/✗ 確認。 */
     val aacIntentConfirmEnabled: Boolean = true,
+    /**
+     * AAC 識字卡（一次一張）模式。
+     *
+     * 要存起來，不能只放在 ViewModel 記憶體裡：重度模式的整個重點就是
+     * 「打開就是識字卡」，而記憶體狀態每次重開 App 都會掉回九宮格——
+     * 使用者會覺得自己設過的重度模式根本沒生效。
+     * 預設值由嚴重程度決定（見 [SeverityMode]），之後以使用者自己切的為準。
+     */
+    val aacFlashcardMode: Boolean = false,
     /** 意圖確認卡用 AI 生圖產生「專屬圖卡」（不識字適用；較耗時，預設關）。 */
     val aacIntentImageEnabled: Boolean = false,
     /** 無障礙嚴重程度分級。 */
@@ -302,6 +311,7 @@ class SettingsRepository(private val context: Context) {
         val NgrokPairCode = stringPreferencesKey("ngrok_pair_code")
         val SovitsConsent       = booleanPreferencesKey("sovits_consent_accepted")
         val AacIntentConfirm    = booleanPreferencesKey("aac_intent_confirm")
+        val AacFlashcardMode    = booleanPreferencesKey("aac_flashcard_mode")
         val AacIntentImage      = booleanPreferencesKey("aac_intent_image")
         val SeverityMode        = stringPreferencesKey("severity_mode")
         val CustomApiEnabled    = booleanPreferencesKey("custom_api_enabled")
@@ -389,6 +399,9 @@ class SettingsRepository(private val context: Context) {
         ngrokPairCode = this[Keys.NgrokPairCode] ?: "",
         sovitsConsentAccepted = this[Keys.SovitsConsent] ?: false,
         aacIntentConfirmEnabled = this[Keys.AacIntentConfirm] ?: true,
+        // 沒設定過時看嚴重程度：重度預設就是識字卡
+        aacFlashcardMode = this[Keys.AacFlashcardMode]
+            ?: (this[Keys.SeverityMode] == SeverityMode.Severe.name),
         aacIntentImageEnabled = this[Keys.AacIntentImage] ?: false,
         severityMode = runCatching { SeverityMode.valueOf(this[Keys.SeverityMode] ?: SeverityMode.Mild.name) }.getOrDefault(SeverityMode.Mild),
         customApiEnabled = this[Keys.CustomApiEnabled] ?: false,
@@ -465,6 +478,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNgrokPairCode(v: String) = update { it[Keys.NgrokPairCode] = v }
     suspend fun setSovitsConsentAccepted(on: Boolean) = update { it[Keys.SovitsConsent] = on }
     suspend fun setAacIntentConfirmEnabled(on: Boolean) = update { it[Keys.AacIntentConfirm] = on }
+    suspend fun setAacFlashcardMode(on: Boolean) = update { it[Keys.AacFlashcardMode] = on }
     suspend fun setAacIntentImageEnabled(on: Boolean) = update { it[Keys.AacIntentImage] = on }
     suspend fun setSeverityMode(mode: SeverityMode) = update { it[Keys.SeverityMode] = mode.name }
     suspend fun setCustomApiEnabled(on: Boolean) = update { it[Keys.CustomApiEnabled] = on }

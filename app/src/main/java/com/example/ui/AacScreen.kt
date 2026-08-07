@@ -245,6 +245,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                     CategoryGrid(
                         p = p,
                         gazeIndex = if (gazeEnabled) gazeGridIndex(eyeControl.gazeX, eyeControl.gazeY, AacCategory.values().size) else -1,
+                        severity = settings.severityMode,
                         onPick = { viewModel.aacSelectCategory(it) }
                     )
                 }
@@ -254,6 +255,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                         items = filteredItems,
                         p = p,
                         gazeIndex = if (gazeEnabled) gazeGridIndex(eyeControl.gazeX, eyeControl.gazeY, itemCount) else -1,
+                        severity = settings.severityMode,
                         onPick = { viewModel.aacAppendItem(it) },
                         onCustomAmount = if (state.selectedCategory == AacCategory.Money) {
                             { showCustomAmount = true }
@@ -637,12 +639,41 @@ fun parseCustomAacItems(json: String): List<AacItem> {
     }.getOrDefault(emptyList())
 }
 
+/**
+ * 圖卡的最小邊長，跟著嚴重程度走。
+ *
+ * 原本兩個格線都寫死 `Adaptive(110.dp)`，完全沒讀 severityMode——
+ * 所以「中度＝超大圖卡」在畫面上**一點差別都沒有**，使用者調了等於沒調。
+ *
+ *  輕度 110dp：手機直向約 3 欄，功能完整的人用得順
+ *  中度 168dp：約 2 欄，卡片大一倍，手抖或視力差也點得到
+ *  重度 240dp：約 1 欄。重度平常走識字卡，這是他手動切回格線時的樣子，
+ *              仍然要維持「一次看一張」的大小，不然切回來反而變小最擠。
+ */
+internal fun aacCardMinSize(mode: com.example.data.SeverityMode): androidx.compose.ui.unit.Dp =
+    when (mode) {
+        com.example.data.SeverityMode.Mild -> 110.dp
+        com.example.data.SeverityMode.Moderate -> 168.dp
+        com.example.data.SeverityMode.Severe -> 240.dp
+    }
+
+/** 卡片變大時字也要跟著變大，否則只是多出一堆空白，看起來仍然像沒改。 */
+internal fun aacScaleFor(mode: com.example.data.SeverityMode): Float =
+    when (mode) {
+        com.example.data.SeverityMode.Mild -> 1f
+        com.example.data.SeverityMode.Moderate -> 1.5f
+        com.example.data.SeverityMode.Severe -> 2.1f
+    }
+
 @Composable
 private fun CategoryGrid(
     p: com.example.ui.theme.AppPalette,
     gazeIndex: Int,
+    severity: com.example.data.SeverityMode = com.example.data.SeverityMode.Mild,
     onPick: (AacCategory) -> Unit
 ) {
+    val cardMin = aacCardMinSize(severity)
+    val scale = aacScaleFor(severity)
     val groups = remember {
         listOf(
             I18n.tr("基礎溝通") to listOf(AacCategory.Actions, AacCategory.Needs, AacCategory.Questions, AacCategory.Emotions, AacCategory.Emergency),
@@ -652,8 +683,9 @@ private fun CategoryGrid(
     }
     val orderedCategories = remember(groups) { groups.flatMap { it.second } }
     LazyVerticalGrid(
-        // 自適應欄數：手機直向仍是 3 欄，平板與橫向自動變多欄，不再把卡片拉長變形
-        columns = GridCells.Adaptive(minSize = 110.dp),
+        // 自適應欄數：平板與橫向自動變多欄，不再把卡片拉長變形。
+        // 最小邊長跟著嚴重程度走——這是「超大圖卡」真正生效的地方。
+        columns = GridCells.Adaptive(minSize = cardMin),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
@@ -684,11 +716,11 @@ private fun CategoryGrid(
                             .background(p.surface)
                             .padding(8.dp)
                     ) {
-                        Text(cat.emoji, fontSize = 40.sp)
+                        Text(cat.emoji, fontSize = (40 * scale).sp)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             stringResource(catLabelRes(cat)),
-                            fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            fontSize = (15 * scale).sp, fontWeight = FontWeight.Bold,
                             color = p.textLight, textAlign = TextAlign.Center
                         )
                     }
@@ -704,9 +736,12 @@ private fun ItemGrid(
     items: List<AacItem>,
     p: com.example.ui.theme.AppPalette,
     gazeIndex: Int,
+    severity: com.example.data.SeverityMode = com.example.data.SeverityMode.Mild,
     onPick: (AacItem) -> Unit,
     onCustomAmount: (() -> Unit)? = null
 ) {
+    val cardMin = aacCardMinSize(severity)
+    val scale = aacScaleFor(severity)
     // 問題18：搜尋無結果時顯示提示
     if (items.isEmpty() && onCustomAmount == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -722,7 +757,7 @@ private fun ItemGrid(
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 110.dp),
+        columns = GridCells.Adaptive(minSize = cardMin),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize()
@@ -745,11 +780,11 @@ private fun ItemGrid(
                             .border(1.5.dp, p.auraAmber.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
                             .padding(8.dp)
                     ) {
-                        Text("✏️", fontSize = 36.sp)
+                        Text("✏️", fontSize = (36 * scale).sp)
                         Spacer(Modifier.height(4.dp))
                         Text(
                             stringResource(R.string.aac_custom_amount),
-                            fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            fontSize = (14 * scale).sp, fontWeight = FontWeight.Bold,
                             color = p.auraAmber, textAlign = TextAlign.Center, maxLines = 2
                         )
                     }
@@ -789,10 +824,10 @@ private fun ItemGrid(
                         )
                         .padding(8.dp)
                 ) {
-                    Text(item.emoji, fontSize = 36.sp)
+                    Text(item.emoji, fontSize = (36 * scale).sp)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        AacI18n.label(item), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                        AacI18n.label(item), fontSize = (14 * scale).sp, fontWeight = FontWeight.Bold,
                         color = p.textLight, textAlign = TextAlign.Center, maxLines = 2
                     )
                 }
@@ -1236,13 +1271,15 @@ fun AacInlinePanel(
                     )
                 }
                 !browsingItems -> {
-                    CategoryGrid(p = p, gazeIndex = -1, onPick = { viewModel.aacSelectCategory(it) })
+                    CategoryGrid(p = p, gazeIndex = -1, severity = settings.severityMode,
+                        onPick = { viewModel.aacSelectCategory(it) })
                 }
                 else -> {
                     ItemGrid(
                         items = filteredItems,
                         p = p,
                         gazeIndex = -1,
+                        severity = settings.severityMode,
                         onPick = { viewModel.aacAppendItem(it) },
                         onCustomAmount = if (state.selectedCategory == AacCategory.Money) {
                             { showCustomAmount = true }
