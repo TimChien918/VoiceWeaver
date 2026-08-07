@@ -255,6 +255,16 @@ data class AppSettings(
      * 一個寫死的常數不可能同時適合所有人，而猜錯的代價由使用者承擔。
      */
     val shortcutSensitivity: Float = 1.0f,
+    /**
+     * 專屬發音（聲波比對）總開關。**預設開啟**——這是既有行為，不能因為
+     * 多了一個開關就把已經在用的人關掉。
+     *
+     * 做成可關的理由：比對是在每一次發聲之前跑的，樣板一多就會有延遲；
+     * 而且門檻沒調好時會誤觸發——替使用者說出他沒想說的話。真的遇到那種情況，
+     * 使用者需要一個「先不要用這個功能」的出口，而不是被迫把樣板一句句刪掉。
+     * 與網頁版的 acousticMatch 是同一個開關（網頁那邊預設關閉，因為是實驗性的移植）。
+     */
+    val acousticMatchEnabled: Boolean = true,
     /** 高對比模式：純黑底 + 高彩文字，視力弱者用。 */
     val highContrast: Boolean = false,
     /** 每日復健提醒開關。 */
@@ -374,6 +384,7 @@ class SettingsRepository(private val context: Context) {
         val CustomAacItems      = stringPreferencesKey("custom_aac_items")
         val NoseSensitivity     = floatPreferencesKey("nose_sensitivity")
         val ShortcutSensitivity = floatPreferencesKey("shortcut_sensitivity")
+        val AcousticMatch = booleanPreferencesKey("acoustic_match_enabled")
         val HighContrast        = booleanPreferencesKey("high_contrast")
         val DailyReminderEnabled= booleanPreferencesKey("daily_reminder_enabled")
         val DailyReminderHour   = androidx.datastore.preferences.core.intPreferencesKey("daily_reminder_hour")
@@ -456,6 +467,7 @@ class SettingsRepository(private val context: Context) {
         customAacItems     = this[Keys.CustomAacItems] ?: "",
         noseSensitivity    = this[Keys.NoseSensitivity] ?: 1.0f,
         shortcutSensitivity= this[Keys.ShortcutSensitivity] ?: 1.0f,
+        acousticMatchEnabled = this[Keys.AcousticMatch] ?: true,
         highContrast       = this[Keys.HighContrast] ?: false,
         dailyReminderEnabled = this[Keys.DailyReminderEnabled] ?: false,
         dailyReminderHour  = this[Keys.DailyReminderHour] ?: 19,
@@ -569,6 +581,10 @@ class SettingsRepository(private val context: Context) {
     /** @see AppSettings.shortcutSensitivity */
     suspend fun setShortcutSensitivity(v: Float) =
         update { it[Keys.ShortcutSensitivity] = v.coerceIn(0.7f, 1.8f) }
+
+    /** @see AppSettings.acousticMatchEnabled */
+    suspend fun setAcousticMatchEnabled(on: Boolean) =
+        update { it[Keys.AcousticMatch] = on }
     suspend fun setReportPushFrequency(freq: String) = update { it[Keys.ReportPushFrequency] = freq }
     suspend fun setLinkedComputerId(id: String) = update { it[Keys.LinkedComputerId] = id.trim() }
     suspend fun setCurrentLocationTag(tag: String) = update { it[Keys.CurrentLocationTag] = tag }  // 問題10：保存地點

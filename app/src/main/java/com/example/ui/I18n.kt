@@ -1520,5 +1520,12 @@ object I18n {
         "难过" to arrayOf("Sad", "かなしい", "슬픔"),
         "恐惧" to arrayOf("Fearful", "こわい", "두려움"),
         "吃惊" to arrayOf("Surprised", "おどろき", "놀람"),
+
+        // ── 專屬發音總開關 ──
+        "啟用專屬發音" to arrayOf("Use my own pronunciation", "わたし専用の発音を使う", "내 전용 발음 사용"),
+        "關掉之後不會再做聲波比對，錄好的樣板都還留著。" to arrayOf(
+            "Turning this off stops the waveform matching. Your recordings are kept.",
+            "オフにすると波形照合を行いません。録音はそのまま残ります。",
+            "끄면 파형 대조를 하지 않습니다. 녹음은 그대로 남습니다."),
     )
 }

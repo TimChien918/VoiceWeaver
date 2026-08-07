@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -117,6 +118,28 @@ private fun LibraryStep(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             state.message?.let { item { MessageBar(it) { viewModel.dismissMessage() } } }
+
+            // 總開關。放在這一頁最上面，因為「這個功能一直說錯話」的人
+            // 第一個會來的就是這裡——他要的是一個關掉的地方，
+            // 不是把辛苦錄好的樣板一句句刪掉。
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(I18n.tr("啟用專屬發音"), color = c.label, fontSize = 16.sp)
+                        Text(
+                            I18n.tr("關掉之後不會再做聲波比對，錄好的樣板都還留著。"),
+                            color = c.secondary, fontSize = 12.sp,
+                        )
+                    }
+                    Switch(
+                        checked = state.acousticEnabled,
+                        onCheckedChange = { viewModel.setAcousticEnabled(it) },
+                    )
+                }
+            }
 
             if (state.helpExpanded) {
                 item {

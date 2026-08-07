@@ -1715,6 +1715,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     private suspend fun matchAcousticShortcut(
         utterance: com.example.aphasia.domain.model.Utterance
     ): Boolean {
+        // 總開關。關掉就整條路徑不跑——比對是在每一次發聲之前做的，
+        // 門檻沒調好時會替使用者說出他沒想說的話，那種時候他需要一個
+        // 「先不要用這個功能」的出口，而不是被迫把樣板一句句刪掉。
+        if (!settings.value.acousticMatchEnabled) return false
         val result = runCatching { aphasiaGraph.templateRepository.match(utterance) }
             .onFailure { DiagnosticLog.e(DiagnosticLog.Cat.STT, "聲學捷徑比對失敗，改走原流程", t = it) }
             .getOrNull() ?: return false

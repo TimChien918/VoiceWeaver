@@ -84,6 +84,8 @@ class PhraseShortcutViewModel(
 
     data class UiState(
         val library: List<PhraseLibrarySource.Entry> = emptyList(),
+        /** 專屬發音總開關（預設開；關掉只是不比對，樣板都還在）。 */
+        val acousticEnabled: Boolean = true,
         val enrolled: List<AcousticTemplate> = emptyList(),
         /** 正在登錄的那一筆。null＝在清單畫面。 */
         val recordingFor: PhraseLibrarySource.Entry? = null,
@@ -166,6 +168,7 @@ class PhraseShortcutViewModel(
                 repo.settings.collect { s ->
                     _state.value = _state.value.copy(
                         sensitivity = Sensitivity.nearest(s.shortcutSensitivity),
+                        acousticEnabled = s.acousticMatchEnabled,
                     )
                 }
             }
@@ -236,6 +239,12 @@ class PhraseShortcutViewModel(
         viewModelScope.launch { settings?.setShortcutSensitivity(value.gain) }
         // 樂觀更新：DataStore 回流有延遲，等它會讓按鈕看起來沒反應
         _state.value = _state.value.copy(sensitivity = value)
+    }
+
+    /** 專屬發音總開關。 */
+    fun setAcousticEnabled(on: Boolean) {
+        _state.value = _state.value.copy(acousticEnabled = on)   // 立即回饋，不等 DataStore
+        settings?.let { repo -> viewModelScope.launch { repo.setAcousticMatchEnabled(on) } }
     }
 
     // ── 選一句 ──────────────────────────────────────────────────────────

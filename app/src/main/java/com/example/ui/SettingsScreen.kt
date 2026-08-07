@@ -332,7 +332,13 @@ fun SettingsScreen(
 
             // 雲端帳號狀態／登入登出已搬到右上角頭像選單（Chrome 風），不再佔頂層一張卡。
 
-            // 中度/重度模式隱藏複雜設定，照護者可用「輕度」模式設定
+            // 中度/重度模式隱藏「患者用不到」的複雜設定。
+            //
+            // **但照顧者要設定的東西不能一起藏。** 嚴重程度講的是患者的溝通介面要多簡單，
+            // 而 API 金鑰、角色語音這些是照顧者在幫他設定的。舊版把它們一起藏起來，
+            // 結果是照顧者得先把模式切回輕度才找得到入口——而切回重度會連帶
+            // 重設字級與識字卡模式，等於每設定一次就把患者的畫面翻一次。
+            // 使用者的原話：「手機為什麼沒有 API 管理」。
             val showComplex = settings.severityMode == com.example.data.SeverityMode.Mild
 
             // 一般：外觀／效能與硬體／顯示與朗讀／無障礙輔助功能，都收進子頁，頂層只留導覽列
@@ -354,18 +360,19 @@ fun SettingsScreen(
                         label = I18n.tr("無障礙輔助功能"), onClick = { showAccessibility = true }, p = p,
                         icon = Icons.Filled.Accessible, iconTint = IosCategory.Blue
                     )
+                    // 照顧者設定：不分嚴重程度都要進得去（見上方 showComplex 的說明）
+                    AdvancedEntryRow(
+                        label = I18n.tr("API 金鑰管理"), onClick = { showApiKeys = true }, p = p,
+                        icon = Icons.Filled.VpnKey, iconTint = IosCategory.Gray
+                    )
+                    AdvancedEntryRow(
+                        label = I18n.tr("角色語音與雲端曲庫"), onClick = { showGptSovit = true }, p = p,
+                        icon = Icons.Filled.Mic, iconTint = IosCategory.Pink
+                    )
                     if (showComplex) {
-                        AdvancedEntryRow(
-                            label = I18n.tr("API 金鑰管理"), onClick = { showApiKeys = true }, p = p,
-                            icon = Icons.Filled.VpnKey, iconTint = IosCategory.Gray
-                        )
                         AdvancedEntryRow(
                             label = I18n.tr("進階設定"), onClick = { showExtended = true }, p = p,
                             icon = Icons.Filled.Settings, iconTint = IosCategory.Gray
-                        )
-                        AdvancedEntryRow(
-                            label = I18n.tr("角色語音與雲端曲庫"), onClick = { showGptSovit = true }, p = p,
-                            icon = Icons.Filled.Mic, iconTint = IosCategory.Pink
                         )
                     }
                     AdvancedEntryRow(
