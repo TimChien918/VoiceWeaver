@@ -81,18 +81,34 @@ data class TimeBucket(
 
 /**
  * 正向情緒詞典。被使用者唸出來就 +1，作為「正向情緒字眼次數」指標。
- * 故意只放 8 個常見詞，避免誤判（"我不好"裡的「好」這種反例不會誤計）。
+ *
+ * **不可以放單獨一個「好」。** 舊版放了，而註解還寫著「"我不好"裡的「好」
+ * 這種反例不會誤計」——但比對是純粹的 indexOf 子字串搜尋，實測
+ * 「我不好」「不好意思」「我這裡好痛」全部被算成正向情緒。
+ * 「好痛」被記成正向，是把最需要被看見的疼痛訊號反向記進治療師的報表裡。
+ *
+ * 改成只收「本身就帶正向語意、不會被否定詞黏住」的詞組。
  */
 private val POSITIVE_WORDS = listOf(
-    "謝謝", "好", "喜歡", "開心", "高興", "幸福", "舒服", "加油"
+    "謝謝", "喜歡", "開心", "高興", "幸福", "舒服", "加油",
+    // 原本那個單字「好」拆成明確的正向說法
+    "很好", "好多了", "太好了", "好棒", "好極了",
 )
+
+/**
+ * 否定詞。出現在正向詞正前方時那一次不算數——「不喜歡」「沒有好多了」
+ * 跟「喜歡」「好多了」是相反的意思，計進同一個指標等於指標是壞的。
+ */
+private val NEGATIONS = listOf("不", "沒", "別", "無", "未", "毋")
 
 fun countPositiveWords(text: String): Int =
     POSITIVE_WORDS.sumOf { w ->
         var idx = 0; var count = 0
         while (true) {
             val found = text.indexOf(w, idx); if (found < 0) break
-            count++; idx = found + w.length
+            val prev = if (found > 0) text.substring(found - 1, found) else ""
+            if (prev !in NEGATIONS) count++
+            idx = found + w.length
         }
         count
     }

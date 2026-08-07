@@ -54,8 +54,10 @@ object SafetyGuard {
         Regex("(?i)wanna\\s*die"),
         Regex("(?i)(don'?t|do\\s*not)\\s*want\\s*to\\s*live"),
         Regex("(?i)better\\s*off\\s*dead"),
-        Regex("(?i)hang\\s*myself"),
-        Regex("(?i)jump\\s*off"),
+        Regex("(?i)hang(ing)?\\s*myself"),
+        // jump\s*off 不會命中 jumping off，而動名詞才是實際的講法
+        // （"thinking of jumping off the roof"）。網頁版的回歸測試抓到的。
+        Regex("(?i)jump(ing|s|ed)?\\s*off"),
         Regex("(?i)overdose"),
         // 日文
         Regex("自\\s*殺"),
