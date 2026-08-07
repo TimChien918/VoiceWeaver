@@ -10,7 +10,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import com.example.data.AppLanguage
+import com.example.ui.theme.LocalAppFontScale
+import com.example.ui.theme.linearFontDensity
 import java.util.Locale
 
 /**
@@ -47,19 +50,32 @@ fun LocaleProvider(language: AppLanguage, content: @Composable () -> Unit) {
 }
 
 /**
- * 在 Dialog／Popup 內重掛一次語言。
+ * 在 Dialog／Popup 內重掛一次語言**與字級**。
  *
  * Compose 的 [androidx.compose.ui.window.Dialog] 會用自己的 window 建 view，
  * 該 view 的 AndroidComposeView 在 `ProvideAndroidCompositionLocals` 裡把
- * `LocalContext` / `LocalConfiguration` 換成「view 自己的 context」——外層 [LocaleProvider]
- * 提供的 localized context 就這樣被蓋掉了。結果是同一個面板裡
- * `I18n.tr()`（純物件、不看 context）是英文，`stringResource()` 卻退回裝置語言的中文。
+ * `LocalContext` / `LocalConfiguration` / `LocalDensity` 換成「view 自己的」——外層
+ * [LocaleProvider] 提供的 localized context 與 `MyApplicationTheme` 設定的字級
+ * 就這樣被蓋掉了。結果是同一個面板裡 `I18n.tr()`（純物件、不看 context）是英文、
+ * `stringResource()` 卻退回裝置語言的中文，而且**字級調到最大也完全沒變**
+ * ——設定子頁全部走這個元件，等於整個設定頁的字級是壞的。
+ *
+ * 字級要從 [LocalAppFontScale] 讀（平台不會動它），不能讀 `LocalDensity`——
+ * 這裡拿到的已經是被平台換掉的那一份了。
  *
  * 所以凡是 Dialog 內容都要包這一層。
  */
 @Composable
 fun ReapplyAppLocale(content: @Composable () -> Unit) {
-    LocaleProvider(language = I18n.lang, content = content)
+    val appScale = LocalAppFontScale.current
+    // 這裡的 base 是 Dialog window 的密度：density 正確、fontScale 是系統設定值。
+    // 乘上 App 自己的倍率就回到跟主畫面一致。
+    val base = LocalDensity.current
+    LocaleProvider(language = I18n.lang) {
+        CompositionLocalProvider(
+            LocalDensity provides linearFontDensity(base.density, base.fontScale * appScale)
+        ) { content() }
+    }
 }
 
 /**

@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -193,11 +194,19 @@ class MainActivity : ComponentActivity() {
                             bottomBar = {
                                 // 寬螢幕改用左側導覽軌（在 Scaffold 外層），這裡就不重複出現
                                 if (!useRail) {
+                                    // NavigationBar 是固定 80dp 高、每格等寬的。字級拉大時
+                                    // 11sp 的「重組／復健」塞不進那一格，會被縮成純粹的「…」——
+                                    // 六個一模一樣的「…」比沒有標籤還糟。圖示本身就認得出來，
+                                    // 而且選中的那個有底色，所以字大到放不下就直接不顯示文字。
+                                    val fsNav = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
+                                    val navLabels = fsNav < 1.8f
                                     NavigationBar(containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface) {
                                         tabs.forEach { tab ->
                                             NavigationBarItem(
                                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                                label = { Text(tab.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                                label = if (!navLabels) null else {
+                                                    { Text(tab.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                                },
                                                 selected = currentRoute == tab.route,
                                                 onClick = { navController.go(tab.route) },
                                                 colors = navColors

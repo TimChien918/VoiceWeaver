@@ -433,11 +433,14 @@ private fun SentencePreview(items: List<AacItem>, p: com.example.ui.theme.AppPal
     var showUndoToast by remember { mutableStateOf(false) }
     var lastRemovedItem by remember { mutableStateOf<AacItem?>(null) }
 
+    // 組合區的高度也要跟著字級長。固定 64dp 在 1.8 倍字級下會把提示文字上下切掉，
+    // 而那行字正是在告訴使用者「這裡還沒有東西、去下面點圖卡」。
+    val fsCombo = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height((64f * fsCombo.coerceIn(1f, 1.6f)).dp)
             .clip(RoundedCornerShape(14.dp))
             .background(p.surface)
             .border(1.dp, p.neonCyan.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
@@ -649,13 +652,23 @@ fun parseCustomAacItems(json: String): List<AacItem> {
  *  中度 168dp：約 2 欄，卡片大一倍，手抖或視力差也點得到
  *  重度 240dp：約 1 欄。重度平常走識字卡，這是他手動切回格線時的樣子，
  *              仍然要維持「一次看一張」的大小，不然切回來反而變小最擠。
+ *
+ * @param fontScale 使用者的字級倍率。卡片是固定 dp、裡面的字是 sp，
+ *   字級拉到 3 倍時 36sp 的 emoji 會漲到 108dp，塞不進 110dp 的卡片裡——
+ *   結果就是字被裁掉或整張卡爆版。卡片必須跟著字一起長。
  */
-internal fun aacCardMinSize(mode: com.example.data.SeverityMode): androidx.compose.ui.unit.Dp =
-    when (mode) {
-        com.example.data.SeverityMode.Mild -> 110.dp
-        com.example.data.SeverityMode.Moderate -> 168.dp
-        com.example.data.SeverityMode.Severe -> 240.dp
+internal fun aacCardMinSize(
+    mode: com.example.data.SeverityMode,
+    fontScale: Float = 1f,
+): androidx.compose.ui.unit.Dp {
+    val base = when (mode) {
+        com.example.data.SeverityMode.Mild -> 110f
+        com.example.data.SeverityMode.Moderate -> 168f
+        com.example.data.SeverityMode.Severe -> 240f
     }
+    // 只放大不縮小：字級調小的人要的是一頁看更多，卡片不必跟著縮到點不到。
+    return (base * fontScale.coerceAtLeast(1f)).dp
+}
 
 /** 卡片變大時字也要跟著變大，否則只是多出一堆空白，看起來仍然像沒改。 */
 internal fun aacScaleFor(mode: com.example.data.SeverityMode): Float =
@@ -672,7 +685,7 @@ private fun CategoryGrid(
     severity: com.example.data.SeverityMode = com.example.data.SeverityMode.Mild,
     onPick: (AacCategory) -> Unit
 ) {
-    val cardMin = aacCardMinSize(severity)
+    val cardMin = aacCardMinSize(severity, LocalDensity.current.fontScale)
     val scale = aacScaleFor(severity)
     val groups = remember {
         listOf(
@@ -740,7 +753,7 @@ private fun ItemGrid(
     onPick: (AacItem) -> Unit,
     onCustomAmount: (() -> Unit)? = null
 ) {
-    val cardMin = aacCardMinSize(severity)
+    val cardMin = aacCardMinSize(severity, LocalDensity.current.fontScale)
     val scale = aacScaleFor(severity)
     // 問題18：搜尋無結果時顯示提示
     if (items.isEmpty() && onCustomAmount == null) {
@@ -1004,9 +1017,21 @@ private fun FlashcardChrome(
             )
         }
         // ── 三大按鈕 ──
+        //
+        // 字級放大時「上一張」會被擠成「上一\n張」——兩側按鈕只有 weight(1f)，
+        // 而 16sp 在 1.8 倍下約 29sp，加上 28dp 的箭頭就超過那一格的寬度。
+        // 硬塞 maxLines=1 只會變成裁掉半個字，更難看也更難懂。
+        //
+        // 所以字級一大就把兩側改成「只有一個大箭頭」：←／→ 本來就不需要文字說明，
+        // 而騰出來的寬度全部留給中間那顆「是這個」——它是真正的動作按鈕，
+        // 也是重度使用者唯一必須讀懂的一顆。
+        val fsBtn = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
+        val compact = fsBtn >= 1.3f
+        val arrowSize = if (compact) 44.dp else 28.dp
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth().height(72.dp)
+            // 高度也要跟著字級長，否則大字在固定 72dp 裡會被上下切掉
+            modifier = Modifier.fillMaxWidth().height((72f * fsBtn.coerceIn(1f, 1.6f)).dp)
         ) {
             FlashcardActionButton(
                 p = p,
@@ -1014,9 +1039,18 @@ private fun FlashcardChrome(
                 border = p.textMuted.copy(alpha = 0.4f),
                 onClick = onPrev,
                 content = {
-                    Icon(Icons.Default.ChevronLeft, null, tint = p.textLight, modifier = Modifier.size(28.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(I18n.tr("上一張"), color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Icon(
+                        Icons.Default.ChevronLeft,
+                        contentDescription = if (compact) I18n.tr("上一張") else null,
+                        tint = p.textLight, modifier = Modifier.size(arrowSize),
+                    )
+                    if (!compact) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            I18n.tr("上一張"), color = p.textLight, fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold, maxLines = 1,
+                        )
+                    }
                 },
                 modifier = Modifier.weight(1f)
             )
@@ -1026,11 +1060,16 @@ private fun FlashcardChrome(
                 border = p.neonGreen,
                 onClick = onConfirm,
                 content = {
-                    Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(30.dp))
+                    Icon(Icons.Default.Check, null, tint = Color.White,
+                        modifier = Modifier.size(if (compact) 34.dp else 30.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(I18n.tr("是這個"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        I18n.tr("是這個"), color = Color.White, fontSize = 18.sp,
+                        fontWeight = FontWeight.Black, maxLines = 1,
+                    )
                 },
-                modifier = Modifier.weight(1.3f)
+                // 兩側收成箭頭之後，把省下來的寬度給這一顆
+                modifier = Modifier.weight(if (compact) 2.6f else 1.3f)
             )
             FlashcardActionButton(
                 p = p,
@@ -1038,9 +1077,18 @@ private fun FlashcardChrome(
                 border = p.textMuted.copy(alpha = 0.4f),
                 onClick = onNext,
                 content = {
-                    Text(I18n.tr("下一張"), color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Default.ChevronRight, null, tint = p.textLight, modifier = Modifier.size(28.dp))
+                    if (!compact) {
+                        Text(
+                            I18n.tr("下一張"), color = p.textLight, fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold, maxLines = 1,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = if (compact) I18n.tr("下一張") else null,
+                        tint = p.textLight, modifier = Modifier.size(arrowSize),
+                    )
                 },
                 modifier = Modifier.weight(1f)
             )

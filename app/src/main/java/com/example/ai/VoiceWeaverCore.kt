@@ -2555,7 +2555,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /**
      * 嚴重程度分級：除了存設定，同步套用對應預設 —
-     * 中度 → 字體 1.4×；重度 → 字體 1.8× + AAC 識字卡逐張模式。輕度不動使用者現有設定。
+     * 中度 → 字體 1.6×；重度 → 字體 2.4× + AAC 識字卡逐張模式。輕度不動使用者現有設定。
+     *
+     * 這兩個數字原本是 1.4／1.8，但 Android 14 的非線性字級會把大字壓回去，
+     * 實際上重度模式的圖卡幾乎沒放大。改成線性換算之後才真的有差別，
+     * 也才有空間把重度推到 2.4×——重度使用者要的就是「一眼看到」。
      */
     fun setSeverityMode(mode: com.example.data.SeverityMode) = viewModelScope.launch {
         settingsRepo.setSeverityMode(mode)
@@ -2563,14 +2567,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             // 輕度不動使用者現有設定（他可能自己調過字級）
             com.example.data.SeverityMode.Mild -> Unit
             com.example.data.SeverityMode.Moderate -> {
-                settingsRepo.setFontScale(1.4f)
+                settingsRepo.setFontScale(1.6f)
                 // 中度是「超大圖卡的九宮格」，不是識字卡。從重度切回來時要跟著收回去，
                 // 否則畫面停在識字卡，看起來像是切了沒反應。
                 settingsRepo.setAacFlashcardMode(false)
                 _aacState.value = _aacState.value.copy(flashcardMode = false, flashcardIndex = 0)
             }
             com.example.data.SeverityMode.Severe -> {
-                settingsRepo.setFontScale(1.8f)
+                settingsRepo.setFontScale(2.4f)
                 settingsRepo.setAacFlashcardMode(true)
                 _aacState.value = _aacState.value.copy(flashcardMode = true, flashcardIndex = 0)
             }

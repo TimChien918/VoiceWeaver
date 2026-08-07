@@ -65,6 +65,7 @@ fun QrScanDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+      com.example.ui.ReapplyAppLocale {
         Box(
             Modifier
                 .fillMaxSize()
@@ -164,5 +165,6 @@ fun QrScanDialog(
                 Icon(Icons.Default.Close, contentDescription = "關閉", tint = Color.White)
             }
         }
+      }
     }
 }

@@ -115,6 +115,19 @@ data class BehaviorMetrics(
     }
 }
 
+/**
+ * 字級倍率的可選範圍。
+ *
+ * 上限 3.0 是因為重度視障使用者要的是「整個螢幕一個字」，而原本的 1.8 剛好落在
+ * Android 14 非線性字級壓縮最嚴重的區間裡——拉到底幾乎看不出變化。
+ * 見 `MyApplicationTheme` 對 `LocalDensity` 的覆寫說明。
+ *
+ * 滑桿、預設鈕、儲存時的 clamp 一律用這一組，不要各自寫死數字：
+ * 三處對不上時的症狀是「拉到底、放開，數字自己跳回去」。
+ */
+const val MIN_FONT_SCALE = 0.8f
+const val MAX_FONT_SCALE = 3.0f
+
 /** App 全域設定快照（單一資料源，UI 訂閱 [SettingsRepository.settings] 取得即時值）*/
 data class AppSettings(
     val theme: AppTheme = AppTheme.Tech,
@@ -457,7 +470,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloudProvider(p: CloudProvider)   = update { it[Keys.CloudProvider] = p.name }
     suspend fun setAudioUnderstandSource(s: AudioUnderstandSource) = update { it[Keys.AudioUnderstandSrc] = s.name }
     suspend fun setTtsRate(rate: Float)              = update { it[Keys.TtsRate] = rate.coerceIn(0.5f, 1.5f) }
-    suspend fun setFontScale(scale: Float)           = update { it[Keys.FontScale] = scale.coerceIn(0.8f, 1.8f) }
+    // 上限跟畫面層共用同一組常數。這裡原本各寫死一個 1.8——滑桿放寬到 3.0 之後，
+    // 使用者拉到底、放開、數字又跳回 1.8，看起來像設定存不起來。
+    suspend fun setFontScale(scale: Float)           =
+        update { it[Keys.FontScale] = scale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE) }
     suspend fun setAutoSaveRehab(on: Boolean)        = update { it[Keys.AutoSave] = on }
     suspend fun setEyeControlEnabled(on: Boolean)    = update { it[Keys.EyeControlEnabled] = on }
     suspend fun setEyeControlMode(m: EyeControlMode) = update { it[Keys.EyeControlMode] = m.name }

@@ -80,7 +80,10 @@ fun FloatingPanel(
                     Spacer(Modifier.width(2.dp))
                     Icon(icon, null, tint = p.textLight, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = p.textLight, modifier = Modifier.weight(1f))
+                    // 返回列也是固定高度的導覽列，標題放大幅度要設上限（見 chromeSp）。
+                    Text(title, fontSize = com.example.ui.theme.chromeSp(20f),
+                        fontWeight = FontWeight.Bold, color = p.textLight,
+                        maxLines = 1, modifier = Modifier.weight(1f))
                 }
                 if (scrollable) {
                     Column(

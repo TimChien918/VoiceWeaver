@@ -78,7 +78,8 @@ fun ExtendedSettingsScreen(
                     RowToggle(I18n.tr("高對比模式"), I18n.tr("純黑底 + 高彩文字，視力弱者用"),
                         settings.highContrast, p) { scope.launch { settingsRepo.setHighContrast(it) } }
                     Spacer(Modifier.height(10.dp))
-                    SliderRow(I18n.tr("超大字"), "%.1fx", settings.fontScale, 0.8f..1.8f, p) {
+                    SliderRow(I18n.tr("超大字"), "%.1fx", settings.fontScale,
+                        com.example.data.MIN_FONT_SCALE..com.example.data.MAX_FONT_SCALE, p) {
                         scope.launch { settingsRepo.setFontScale(it) }
                     }
                     Spacer(Modifier.height(10.dp))

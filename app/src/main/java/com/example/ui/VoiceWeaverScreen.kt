@@ -29,10 +29,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
@@ -124,19 +126,30 @@ fun VoiceWeaverScreen(
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
+                        // TopAppBar 高度是固定的 64dp。字級拉到 2 倍以上時，
+                        // 標題 19sp + 標語 11sp 加起來就超過那個高度，標語會被下面的
+                        // 內容壓掉一半——看起來像畫面壞了。標語是裝飾性的，
+                        // 字大到放不下時直接不顯示，比露出半行字好。
+                        val fsBar = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
                         Column {
                             Text(
                                 text = "VoiceWeaver",
-                                fontSize = 19.sp,
+                                fontSize = com.example.ui.theme.chromeSp(19f),
                                 fontWeight = FontWeight.Bold,
-                                color = textLight
+                                color = textLight,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            Text(
-                                text = stringResource(R.string.main_app_tagline),
-                                fontSize = 11.sp,
-                                color = textMuted,
-                                fontWeight = FontWeight.Medium
-                            )
+                            if (fsBar < 1.6f) {
+                                Text(
+                                    text = stringResource(R.string.main_app_tagline),
+                                    fontSize = 11.sp,
+                                    color = textMuted,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 },
@@ -516,34 +529,45 @@ fun VoiceWeaverScreen(
                         val forcedCamPerms by com.example.testing.TestHooks.forcedPermissions.collectAsState()
                         if (forcedCamPerms["CAMERA"] ?: camPerm.status.isGranted) {
                             var showCameraPreview by remember { mutableStateOf(false) }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                CameraLensChip(
-                                    label = I18n.tr(CameraLens.Back.displayName),
-                                    selected = settings.cameraLens == CameraLens.Back,
-                                    onClick = { viewModel.setCameraLens(CameraLens.Back) },
-                                    modifier = Modifier.weight(1f),
-                                    selectedColor = neonGreen,
-                                    textLight = textLight,
-                                    textMuted = textMuted
-                                )
-                                CameraLensChip(
-                                    label = I18n.tr(CameraLens.Front.displayName),
-                                    selected = settings.cameraLens == CameraLens.Front,
-                                    onClick = { viewModel.setCameraLens(CameraLens.Front) },
-                                    modifier = Modifier.weight(1f),
-                                    selectedColor = neonGreen,
-                                    textLight = textLight,
-                                    textMuted = textMuted
-                                )
-                                CameraLensChip(
-                                    label = I18n.tr(CameraLens.Both.displayName),
-                                    selected = settings.cameraLens == CameraLens.Both,
-                                    onClick = { viewModel.setCameraLens(CameraLens.Both) },
-                                    modifier = Modifier.weight(1f),
-                                    selectedColor = neonGreen,
-                                    textLight = textLight,
-                                    textMuted = textMuted
-                                )
+                            // 三顆並排各佔 1/3 寬。字級拉到 3 倍時「後攝影機」要 5 個字，
+                            // 那一格塞不下就被硬切成「後攝影」——看起來像壞掉的字串。
+                            // 改成字大時一行一顆，每顆拿到整個寬度。
+                            val fsLens = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
+                            val lenses = listOf(CameraLens.Back, CameraLens.Front, CameraLens.Both)
+                            if (fsLens >= 1.6f) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    lenses.forEach { lens ->
+                                        CameraLensChip(
+                                            label = I18n.tr(lens.displayName),
+                                            selected = settings.cameraLens == lens,
+                                            onClick = { viewModel.setCameraLens(lens) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            selectedColor = neonGreen,
+                                            textLight = textLight,
+                                            textMuted = textMuted
+                                        )
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    lenses.forEach { lens ->
+                                        CameraLensChip(
+                                            label = I18n.tr(lens.displayName),
+                                            selected = settings.cameraLens == lens,
+                                            onClick = { viewModel.setCameraLens(lens) },
+                                            modifier = Modifier.weight(1f),
+                                            selectedColor = neonGreen,
+                                            textLight = textLight,
+                                            textMuted = textMuted
+                                        )
+                                    }
+                                }
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(
@@ -1644,6 +1668,9 @@ private fun CameraLensChip(
                 label,
                 fontSize = 11.sp,
                 maxLines = 1,
+                // 沒有 Ellipsis 的 maxLines 是「硬切」，會裁掉半個字，
+                // 看起來像字串壞掉而不是「放不下」。
+                overflow = TextOverflow.Ellipsis,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
             )
         },
@@ -1683,6 +1710,8 @@ private fun CameraPreviewDialog(
     var cameraProvider by remember { mutableStateOf<androidx.camera.lifecycle.ProcessCameraProvider?>(null) }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+      // Dialog 是新 Window，語言與字級都要重掛（見 ReapplyAppLocale）。
+      ReapplyAppLocale {
         Column(
             modifier = Modifier
                 .fillMaxWidth(if (isLandscape) 0.82f else 0.94f)
@@ -1773,6 +1802,7 @@ private fun CameraPreviewDialog(
         onDispose {
             runCatching { cameraProvider?.unbindAll() }
         }
+      }
     }
 }
 
@@ -1795,6 +1825,8 @@ private fun VisionCatalogDialog(
 ) {
     val p = com.example.ui.theme.LocalAppPalette.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+      // Dialog 是新 Window，語言與字級都要重掛（見 ReapplyAppLocale）。
+      ReapplyAppLocale {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
@@ -1894,5 +1926,6 @@ private fun VisionCatalogDialog(
                 }
             }
         }
+      }
     }
 }

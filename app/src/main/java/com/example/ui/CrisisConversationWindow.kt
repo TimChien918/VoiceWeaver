@@ -89,6 +89,9 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
         onDismissRequest = { /* 不可隨手關，需按下方「我好一點了」*/ },
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
+      // Dialog 開在新 Window，語言與字級都會被平台蓋回系統預設——見 ReapplyAppLocale。
+      // 這個視窗是危機當下要讀的，字太小等於沒有。
+      com.example.ui.ReapplyAppLocale {
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
@@ -224,6 +227,7 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
                 fontSize = 9.sp, color = CalmMuted, textAlign = TextAlign.Center, lineHeight = 13.sp
             )
         }
+      }
     }
 }
 

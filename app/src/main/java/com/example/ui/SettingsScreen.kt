@@ -51,6 +51,8 @@ import com.example.data.EyeControlMode
 import com.example.data.GptSovitVoiceMode
 import com.example.data.PowerMode
 import com.example.ui.theme.LocalAppPalette
+import com.example.data.MAX_FONT_SCALE
+import com.example.data.MIN_FONT_SCALE
 import com.example.ui.theme.iosReadable
 import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -273,7 +275,10 @@ fun SettingsScreen(
                 title = {
                     Text(
                         stringResource(R.string.title_settings),
-                        fontSize = 22.sp, fontWeight = FontWeight.Bold, color = iosScheme.label
+                        // TopAppBar 固定 64dp 高，22sp 在 3 倍字級下會被切成一團黑塊。
+                        fontSize = com.example.ui.theme.chromeSp(22f),
+                        fontWeight = FontWeight.Bold, color = iosScheme.label,
+                        maxLines = 1,
                     )
                 },
                 actions = {
@@ -689,16 +694,17 @@ private fun DisplaySettingsPanel(
         SliderRow(
             valueLabel = "%.1fx".format(settings.fontScale),
             value = settings.fontScale,
-            valueRange = 0.8f..1.8f,
-            steps = 9,
+            valueRange = MIN_FONT_SCALE..MAX_FONT_SCALE,
+            steps = 21,
             onChange = onFontScaleChange,
             p = p
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             FontPresetChip(I18n.tr("標準"), settings.fontScale, 1.0f, { onFontScaleChange(1.0f) }, Modifier.weight(1f), p)
-            FontPresetChip(I18n.tr("大"), settings.fontScale, 1.25f, { onFontScaleChange(1.25f) }, Modifier.weight(1f), p)
-            FontPresetChip(I18n.tr("特大"), settings.fontScale, 1.55f, { onFontScaleChange(1.55f) }, Modifier.weight(1f), p)
+            FontPresetChip(I18n.tr("大"), settings.fontScale, 1.4f, { onFontScaleChange(1.4f) }, Modifier.weight(1f), p)
+            FontPresetChip(I18n.tr("特大"), settings.fontScale, 2.0f, { onFontScaleChange(2.0f) }, Modifier.weight(1f), p)
+            FontPresetChip(I18n.tr("超大"), settings.fontScale, 3.0f, { onFontScaleChange(3.0f) }, Modifier.weight(1f), p)
         }
     }
 }
