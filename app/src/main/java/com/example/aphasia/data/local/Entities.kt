@@ -20,6 +20,8 @@ data class AcousticTemplateEntity(
     @ColumnInfo(name = "match_mode", defaultValue = "Keyword") val matchMode: String = "Keyword",
     /** 要聽的那幾個字。只給使用者看，比對完全靠波形。 */
     @ColumnInfo(name = "keyword", defaultValue = "") val keyword: String = "",
+    /** 語句庫分類，只用來整理（雲端會照這個開資料夾）。自己加的是 "Custom"。 */
+    @ColumnInfo(name = "category", defaultValue = "Custom") val category: String = "Custom",
     @ColumnInfo(name = "spoken_phrase") val spokenPhrase: String,
     /** [VectorCodec.encodeBundle] 的輸出 */
     @ColumnInfo(name = "exemplar_blob", typeAffinity = ColumnInfo.BLOB)

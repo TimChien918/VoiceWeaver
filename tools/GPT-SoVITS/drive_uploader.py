@@ -13,6 +13,7 @@
 """
 import json
 import os
+import re
 import time
 import urllib.request
 
@@ -703,6 +704,40 @@ def _acoustic_parent(svc, create=False):
             else _find_folder(svc, ACOUSTIC_DIR, root_id))
 
 
+ACOUSTIC_DEFAULT_CATEGORY = "Custom"
+
+_CATEGORY_BAD = re.compile(r'[/\\:*?"<>|]')
+_CATEGORY_WS = re.compile(r"\s+")
+
+
+def sanitize_category(raw):
+    """把分類洗成能當資料夾名稱的字串。與 App／網頁端同一套規則。
+
+    檔名不能有 `/`，前後空白會被 Drive 吃掉，空字串則建不出資料夾——
+    這些都會讓上傳靜靜失敗，而使用者只看到「同步好像沒作用」。
+    """
+    cleaned = _CATEGORY_WS.sub(" ", _CATEGORY_BAD.sub(" ", str(raw or "")).strip())[:48]
+    return cleaned or ACOUSTIC_DEFAULT_CATEGORY
+
+
+def _acoustic_files(svc, parent):
+    """根目錄本身 + 每個分類子資料夾裡的 .json，回 [(file, parent_id)]。
+
+    新版面是 AcousticModels/<分類>/<id>.json，但根目錄也要掃：舊版面平放在
+    那裡，而且使用者隨時可能自己把檔案拖出來。少掃一層的後果不是「少一筆」——
+    「雲端是主」會把它當成已刪除，連手機上的錄音一起清掉。
+    """
+    out = []
+    for f in _list_children(svc, parent):
+        if f.get("mimeType") == FOLDER_MIME:
+            for g in _list_children(svc, f["id"]):
+                if g.get("mimeType") != FOLDER_MIME and g["name"].lower().endswith(".json"):
+                    out.append((g, f["id"]))
+        elif f["name"].lower().endswith(".json"):
+            out.append((f, parent))
+    return out
+
+
 def list_acoustic(creds=None):
     """列出 Drive 上的聲波模型。回 {ok, templates:[dict], error}。"""
     res = {"ok": False, "templates": [], "error": ""}
@@ -716,9 +751,7 @@ def list_acoustic(creds=None):
             res["ok"] = True; return res          # 還沒有人上傳過
         from google.auth.transport.requests import AuthorizedSession
         sess = AuthorizedSession(creds)
-        for f in _list_children(svc, parent):
-            if not f["name"].lower().endswith(".json"):
-                continue
+        for f, _parent in _acoustic_files(svc, parent):
             r = sess.get(f"https://www.googleapis.com/drive/v3/files/{f['id']}?alt=media",
                          timeout=60)
             if r.status_code != 200:
@@ -744,7 +777,10 @@ def upload_acoustic(template, creds=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        parent = _acoustic_parent(svc, create=True)
+        root = _acoustic_parent(svc, create=True)
+        category = sanitize_category(template.get("category"))
+        parent = _ensure_folder(svc, category, root)
+        template = dict(template, category=category)
         from googleapiclient.http import MediaInMemoryUpload
         blob = json.dumps(template, ensure_ascii=False).encode("utf-8")
         media = MediaInMemoryUpload(blob, mimetype="application/json", resumable=False)
@@ -756,6 +792,12 @@ def upload_acoustic(template, creds=None):
             _retry(lambda: svc.files().create(
                 body={"name": name, "parents": [parent]}, media_body=media,
                 fields="id").execute())
+        # 這一筆以前可能平放在根目錄、或歸在別的分類。留著的話同一個樣板
+        # 會有兩份，而「雲端是主」會讓兩份都被拉回手機 → 重複的觸發詞。
+        for f, owner in _acoustic_files(svc, root):
+            if f["name"] == name and owner != parent:
+                _retry(lambda fid=f["id"]: svc.files().update(
+                    fileId=fid, body={"trashed": True}).execute())
         res["ok"] = True
     except Exception as e:  # noqa: BLE001
         res["error"] = str(e)
@@ -771,9 +813,12 @@ def delete_acoustic(template_id, creds=None):
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
         parent = _acoustic_parent(svc)
-        f = _find_file(svc, f"{template_id}.json", parent) if parent else None
-        if f:
-            _retry(lambda: svc.files().update(fileId=f["id"], body={"trashed": True}).execute())
+        # 不假設它在哪一層：根目錄與每個分類資料夾都找一次
+        name = f"{template_id}.json"
+        for f, _owner in (_acoustic_files(svc, parent) if parent else []):
+            if f["name"] == name:
+                _retry(lambda fid=f["id"]: svc.files().update(
+                    fileId=fid, body={"trashed": True}).execute())
         res["ok"] = True          # 本來就不在＝已經是想要的狀態
     except Exception as e:  # noqa: BLE001
         res["error"] = str(e)

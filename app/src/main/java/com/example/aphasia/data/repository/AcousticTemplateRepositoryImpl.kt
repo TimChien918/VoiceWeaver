@@ -52,6 +52,8 @@ class AcousticTemplateRepositoryImpl(
         spokenPhrase: String,
         matchMode: MatchMode,
         takes: List<Utterance>,
+        /** 語句庫分類，只用來整理（雲端照它開資料夾）。自己加的留 Custom。 */
+        category: String = AcousticTemplate.CATEGORY_CUSTOM,
     ): AcousticTemplate = withContext(Dispatchers.Default) {
         require(takes.size >= AcousticTemplate.MIN_ENROLLMENT_TAKES) {
             "Need at least ${AcousticTemplate.MIN_ENROLLMENT_TAKES} recordings, got ${takes.size}"
@@ -73,6 +75,7 @@ class AcousticTemplateRepositoryImpl(
             label = label,
             matchMode = matchMode.name,
             keyword = keyword,
+            category = AcousticTemplate.sanitizeCategory(category),
             spokenPhrase = spokenPhrase,
             exemplarBlob = VectorCodec.encodeBundle(usable),
             rejectionThreshold = threshold,
@@ -97,12 +100,14 @@ class AcousticTemplateRepositoryImpl(
                 ),
         )
         syncUp(id, label, keyword, spokenPhrase, matchMode.name, threshold,
-            AcousticTemplate.DEFAULT_MARGIN, entity.exemplarBlob, entity.createdAtMillis)
+            AcousticTemplate.DEFAULT_MARGIN, entity.exemplarBlob, entity.createdAtMillis,
+            entity.category)
         AcousticTemplate(
             id = id,
             label = label,
             matchMode = matchMode,
             keyword = keyword,
+            category = entity.category,
             spokenPhrase = spokenPhrase,
             exemplars = usable,
             rejectionThreshold = threshold,
@@ -149,7 +154,8 @@ class AcousticTemplateRepositoryImpl(
             )
             syncUp(id, existing.label, existing.keyword, existing.spokenPhrase,
                 existing.matchMode.name, threshold, existing.marginThreshold,
-                VectorCodec.encodeBundle(merged), existing.createdAtMillis)
+                VectorCodec.encodeBundle(merged), existing.createdAtMillis,
+                existing.category)
             existing.copy(exemplars = merged, rejectionThreshold = threshold)
         }
 
@@ -160,6 +166,42 @@ class AcousticTemplateRepositoryImpl(
      *（實測有一筆膨脹到 21.9，把所有聲音都吞掉）。錄音本身還在，所以不需要
      * 請使用者重錄——直接重算就好。冪等，重複呼叫沒有副作用。
      */
+    /**
+     * 補回既有樣板的分類。回實際改動的筆數。
+     *
+     * 分類是後來才加的欄位，Room 的 migration 只能給預設值 'Custom'——
+     * SQL 讀不到語句庫那份 asset，猜錯會把使用者的東西歸到錯的地方。
+     * 但**App 層讀得到**，所以在這裡用觸發詞把它對回去。
+     *
+     * 只動還停在 Custom 的那些：使用者或別台裝置已經給過分類的不要覆蓋。
+     * 對不上語句庫的（自己加的句子）本來就該留在 Custom。
+     *
+     * @param lookup 觸發詞 → 分類。對不上時回 null。
+     */
+    suspend fun backfillCategories(lookup: (String) -> String?): Int = withContext(Dispatchers.Default) {
+        var changed = 0
+        for (row in dao.getAll()) {
+            if (row.category != AcousticTemplate.CATEGORY_CUSTOM) continue
+            val found = lookup(row.keyword)?.takeIf { it.isNotBlank() } ?: continue
+            val category = AcousticTemplate.sanitizeCategory(found)
+            if (category == row.category) continue
+            dao.update(row.copy(category = category))
+            changed++
+            // 雲端那份也要跟著搬，否則手機顯示已分類、Drive 還平放在根目錄。
+            // blob 解不開的就不要往上推：那筆已經壞了，覆蓋雲端只會讓
+            // 另一台裝置上還好的那份也跟著壞掉。
+            if (row.toDomainOrNull() != null) {
+                syncUp(row.id, row.label, row.keyword, row.spokenPhrase, row.matchMode,
+                    row.rejectionThreshold, row.marginThreshold, row.exemplarBlob,
+                    row.createdAtMillis, category)
+            }
+        }
+        if (changed > 0) {
+            DiagnosticLog.i(DiagnosticLog.Cat.STT, "補回專屬發音的分類", "共 $changed 筆")
+        }
+        changed
+    }
+
     suspend fun recalibrateAll(): Int = withContext(Dispatchers.Default) {
         var changed = 0
         for (row in dao.getAll()) {
@@ -194,13 +236,14 @@ class AcousticTemplateRepositoryImpl(
         id: Long, label: String, keyword: String, spokenPhrase: String,
         matchMode: String, rejection: Float, margin: Float,
         blob: ByteArray, createdAt: Long,
+        category: String = AcousticTemplate.CATEGORY_CUSTOM,
     ) {
         val b64 = android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP)
         runCatching {
             com.example.ai.CloudSync.pushAcousticTemplate(
                 id = id, label = label, keyword = keyword, spokenPhrase = spokenPhrase,
                 matchMode = matchMode, rejectionThreshold = rejection, marginThreshold = margin,
-                exemplarBlobB64 = b64, createdAt = createdAt,
+                exemplarBlobB64 = b64, createdAt = createdAt, category = category,
             )
         }.onFailure {
             DiagnosticLog.w(DiagnosticLog.Cat.STT, "樣板同步失敗（不影響本機）", it.message.orEmpty())
@@ -214,6 +257,7 @@ class AcousticTemplateRepositoryImpl(
                     spokenPhrase = spokenPhrase, matchMode = matchMode,
                     rejectionThreshold = rejection, marginThreshold = margin,
                     exemplarBlobB64 = b64, createdAt = createdAt,
+                    category = category,
                 )
             )
         }.onFailure {
@@ -321,6 +365,7 @@ class AcousticTemplateRepositoryImpl(
                     dao.update(local.copy(
                         spokenPhrase = newPhrase,
                         label = r.label.ifBlank { local.label },
+                        category = AcousticTemplate.sanitizeCategory(r.category),
                     ))
                     updated++
                 }
@@ -336,6 +381,7 @@ class AcousticTemplateRepositoryImpl(
             dao.insert(
                 AcousticTemplateEntity(
                     label = r.label, matchMode = r.matchMode, keyword = r.keyword,
+                    category = AcousticTemplate.sanitizeCategory(r.category),
                     spokenPhrase = r.spokenPhrase, exemplarBlob = blob,
                     rejectionThreshold = r.rejectionThreshold,
                     marginThreshold = r.marginThreshold,
@@ -424,6 +470,7 @@ class AcousticTemplateRepositoryImpl(
             label = label,
             matchMode = runCatching { MatchMode.valueOf(matchMode) }.getOrDefault(MatchMode.Whole),
             keyword = keyword.ifBlank { label },
+            category = category,
             spokenPhrase = spokenPhrase,
             exemplars = VectorCodec.decodeBundle(exemplarBlob),
             rejectionThreshold = rejectionThreshold,

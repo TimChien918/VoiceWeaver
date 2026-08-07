@@ -137,7 +137,17 @@ class PhraseShortcutViewModel(
             .onEach { _state.value = _state.value.copy(amplitude = it) }
             .launchIn(viewModelScope)
         viewModelScope.launch {
-            _state.value = _state.value.copy(library = library.load())
+            val entries = library.load()
+            _state.value = _state.value.copy(library = entries)
+            // 分類是後來才加的欄位，Room migration 只能給預設值 Custom
+            //（SQL 讀不到語句庫那份 asset）。這裡才是第一個同時握有
+            // 「既有樣板」與「語句庫」的地方，用觸發詞把分類對回去——
+            // 否則使用者雲端硬碟裡的舊檔案會永遠卡在 Custom 資料夾。
+            runCatching {
+                (graph.templateRepository as AcousticTemplateRepositoryImpl).backfillCategories { kw ->
+                    entries.firstOrNull { it.matches(kw) }?.category
+                }
+            }
         }
         // 校準公式改過，舊樣板的門檻還是用舊公式算的（實測有一筆膨脹到 21.9，
         // 把所有聲音都吞掉）。錄音都還在，所以直接重算，不必請使用者重錄。
@@ -355,6 +365,9 @@ class PhraseShortcutViewModel(
                     // 樣板只要對上其中的「need water」就算命中。
                     matchMode = MatchMode.Keyword,
                     takes = s.takes,
+                    // 語句庫那一筆的分類跟著存下來，雲端會照它開資料夾。
+                    // 自訂的 entry 帶的是 "Custom"（見 startCustom）。
+                    category = entry.category,
                 )
             }
             _state.value = result.fold(

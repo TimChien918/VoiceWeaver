@@ -81,7 +81,8 @@ object DriveApi {
     }
 
     /** 找資料夾，沒有就建。回 id；失敗回 null。 */
-    private fun ensureFolder(token: String, name: String, parent: String): String? {
+    /** 取得（必要時建立）parent 底下叫 name 的資料夾。聲波模型照分類分層時會用到。 */
+    fun ensureFolder(token: String, name: String, parent: String): String? {
         findId(token, name, parent, folder = true)?.let { return it }
         val meta = JSONObject()
             .put("name", name).put("mimeType", FOLDER_MIME)

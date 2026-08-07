@@ -22,7 +22,7 @@ import androidx.sqlite.execSQL
  */
 @Database(
     entities = [AcousticTemplateEntity::class, PhraseEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AphasiaDatabase : RoomDatabase() {
@@ -40,7 +40,7 @@ abstract class AphasiaDatabase : RoomDatabase() {
                     context.applicationContext,
                     AphasiaDatabase::class.java,
                     NAME,
-                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
             }
 
         /**
@@ -73,11 +73,29 @@ abstract class AphasiaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 → v3：分類欄位。
+         *
+         * 純整理用（雲端照分類開資料夾），比對邏輯不看它，所以既有樣板留在
+         * 預設的 'Custom' 不會影響任何行為——只是那幾筆會落在 Custom 資料夾裡。
+         * 這裡刻意不去猜舊資料的分類：SQL 讀不到語句庫那份 asset，
+         * 猜錯會把使用者的東西歸到錯的地方，比誠實地放 Custom 更糟。
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                // DEFAULT 必須跟 Entity 的 @ColumnInfo(defaultValue) 一字不差，
+                // 否則 Room 啟動時逐欄比對會丟「Migration didn't properly handle」。
+                connection.execSQL(
+                    "ALTER TABLE acoustic_templates ADD COLUMN category TEXT NOT NULL DEFAULT 'Custom'"
+                )
+            }
+        }
+
         /** 給測試用的記憶體內資料庫。 */
         fun inMemory(context: Context): AphasiaDatabase =
             Room.inMemoryDatabaseBuilder(context, AphasiaDatabase::class.java)
                 .allowMainThreadQueries()
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

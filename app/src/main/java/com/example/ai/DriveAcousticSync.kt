@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.aphasia.domain.model.AcousticTemplate
 import org.json.JSONObject
 
 /**
@@ -38,11 +39,20 @@ interface AcousticMirror {
 }
 
 /**
- * 把聲波模型放進使用者自己的 Google Drive：`VoiceWeaver/AcousticModels/<id>.json`。
+ * 把聲波模型放進使用者自己的 Google Drive：
+ * `VoiceWeaver/AcousticModels/<分類>/<id>.json`。
  *
- * 底下不再分帳號 id：這是他自己的雲端硬碟，一個 Google 帳號一個，
+ * 檔名維持內部 id：它是唯一鍵，關鍵字則是使用者隨時會改的東西，
+ * 拿來當檔名的話改一次就多一個孤兒檔。看不看得懂交給**資料夾**負責——
+ * 平放時使用者在雲端硬碟只會看到一排 5.json、6.json，完全認不出哪個是哪一句。
+ *
+ * 底下不分帳號 id：這是他自己的雲端硬碟，一個 Google 帳號一個，
  * 而 Firebase 身分也是同一個 Google 帳號換來的。多包一層永遠只有一個子資料夾，
  * 只是讓他多點一次、還看到一串沒有意義的亂碼。
+ *
+ * **舊版面（檔案平放在 AcousticModels 底下）仍然讀得到**：pull 會同時掃根目錄
+ * 與每個分類資料夾。少掃一層的後果不是「少一筆」——「雲端是主」會把它當成
+ * 已刪除，連本機的錄音一起清掉。既有檔案會在下次 push 時自動歸位。
  *
  * **為什麼 Firestore 之外還要有這一份：** Firestore 那份是「App 內部的同步管道」，
  * 使用者看不到也拿不走；Drive 這份是他自己資料夾裡的檔案，可以自己備份、
@@ -67,12 +77,18 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
     override fun push(t: CloudSync.RemoteTemplate) {
         scope.launch {
             val token = DriveApi.token(appContext) ?: return@launch
-            val folder = DriveApi.acousticFolder(token, create = true) ?: return@launch
+            val root = DriveApi.acousticFolder(token, create = true) ?: return@launch
+            val category = AcousticTemplate.sanitizeCategory(t.category)
+            val folder = DriveApi.ensureFolder(token, category, root) ?: return@launch
             val ok = DriveApi.writeJson(token, "${t.remoteId}.json", folder, toJson(t).toString())
+            // 這一筆以前可能是平放在 AcousticModels 底下（或歸在別的分類）。
+            // 不清掉的話同一個樣板會在雲端出現兩份，而「雲端是主」的規則
+            // 會讓兩份都被拉回手機——使用者就看到重複的觸發詞。
+            if (ok) removeStaleCopies(token, root, keep = folder, name = "${t.remoteId}.json")
             DiagnosticLog.i(
                 DiagnosticLog.Cat.STT,
                 if (ok) "聲波模型已寫進 Drive" else "聲波模型寫進 Drive 失敗（不影響本機）",
-                "「${t.keyword}」→ VoiceWeaver/${DriveApi.ACOUSTIC_DIR}/${t.remoteId}.json",
+                "「${t.keyword}」→ VoiceWeaver/${DriveApi.ACOUSTIC_DIR}/$category/${t.remoteId}.json",
             )
         }
     }
@@ -81,9 +97,22 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
         scope.launch {
             val token = DriveApi.token(appContext) ?: return@launch
             // create=false：使用者從來沒同步過的話，不該為了刪東西反而建一堆空資料夾
-            val folder = DriveApi.acousticFolder(token, create = false) ?: return@launch
-            DriveApi.trash(token, "$id.json", folder)
+            val root = DriveApi.acousticFolder(token, create = false) ?: return@launch
+            // 分類資料夾可能被使用者自己搬過，所以不假設它在哪一層：
+            // 根目錄本身（舊版面）與每個分類資料夾都找一次。
+            DriveApi.trash(token, "$id.json", root)
+            DriveApi.listChildren(token, root, foldersOnly = true).forEach { sub ->
+                DriveApi.trash(token, "$id.json", sub.id)
+            }
         }
+    }
+
+    /** 同一個檔名散落在別的分類（或還平放在根目錄）時，只留 [keep] 那一份。 */
+    private fun removeStaleCopies(token: String, root: String, keep: String, name: String) {
+        DriveApi.trash(token, name, root)
+        DriveApi.listChildren(token, root, foldersOnly = true)
+            .filter { it.id != keep }
+            .forEach { DriveApi.trash(token, name, it.id) }
     }
 
     override suspend fun pull(): AcousticMirror.Outcome = withContext(Dispatchers.IO) {
@@ -91,10 +120,18 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
         val token = DriveApi.token(appContext)
             ?: return@withContext AcousticMirror.Outcome.Unavailable
         // 資料夾不存在＝確定還沒有人放東西上去（跟讀失敗不同）
-        val folder = DriveApi.acousticFolder(token, create = false)
+        val root = DriveApi.acousticFolder(token, create = false)
             ?: return@withContext AcousticMirror.Outcome.Ok(emptyList())
-        val entries = DriveApi.listChildren(token, folder)
-            .filter { !it.isFolder && it.name.endsWith(".json", ignoreCase = true) }
+        // 新版面是 AcousticModels/<分類>/<id>.json，但根目錄底下也要撈：
+        // 舊版面平放在那裡，而且使用者隨時可能自己把檔案拖出來。
+        // 少撈一層的後果不是「少一筆」——「雲端是主」會把它當成已刪除，
+        // 連本機的錄音一起清掉。
+        val roots = DriveApi.listChildren(token, root)
+        val entries = roots.filter { !it.isFolder && it.name.endsWith(".json", ignoreCase = true) } +
+            roots.filter { it.isFolder }.flatMap { sub ->
+                DriveApi.listChildren(token, sub.id)
+                    .filter { !it.isFolder && it.name.endsWith(".json", ignoreCase = true) }
+            }
         val out = ArrayList<CloudSync.RemoteTemplate>(entries.size)
         for (entry in entries) {
             // 讀不到單一檔＝這次的清單不完整。整個算失敗而不是少一筆——
@@ -114,6 +151,7 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
             .put("id", t.remoteId)
             .put("label", t.label)
             .put("keyword", t.keyword)
+            .put("category", t.category)
             .put("spokenPhrase", t.spokenPhrase)
             .put("matchMode", t.matchMode)
             .put("rejectionThreshold", t.rejectionThreshold.toDouble())
@@ -137,6 +175,8 @@ class DriveAcousticMirror(context: Context) : AcousticMirror {
                 marginThreshold = o.optDouble("marginThreshold", 0.15).toFloat(),
                 exemplarBlobB64 = o.optString("exemplarBlob"),
                 createdAt = o.optLong("createdAt", 0L),
+                // 舊檔案沒有這個欄位——歸到 Custom 就好，不影響能不能觸發
+                category = o.optString("category").ifBlank { "Custom" },
             )
         }
 

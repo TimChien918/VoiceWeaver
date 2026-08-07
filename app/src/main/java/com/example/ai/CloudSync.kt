@@ -246,11 +246,14 @@ object CloudSync {
         marginThreshold: Float,
         exemplarBlobB64: String,
         createdAt: Long,
+        /** 語句庫分類，只用來整理（Drive 照它開資料夾）。 */
+        category: String = "Custom",
     ) {
         val u = uid ?: return
         val doc = hashMapOf<String, Any>(
             "label" to label,
             "keyword" to keyword,
+            "category" to category,
             "spokenPhrase" to spokenPhrase,
             "matchMode" to matchMode,
             "rejectionThreshold" to rejectionThreshold.toDouble(),
@@ -283,6 +286,14 @@ object CloudSync {
         val marginThreshold: Float,
         val exemplarBlobB64: String,
         val createdAt: Long,
+        /**
+         * 語句庫分類。只用來整理——決定這一筆在使用者的 Drive 裡放哪個資料夾
+         * （`AcousticModels/<分類>/<id>.json`），比對邏輯完全不看它。
+         *
+         * 舊資料與網頁版建的那些沒有這個欄位，讀回來會是 Custom；
+         * 那只是歸類不同，不影響它能不能觸發。
+         */
+        val category: String = "Custom",
     )
 
     /**
@@ -325,6 +336,7 @@ object CloudSync {
                             marginThreshold = (d.getDouble("marginThreshold") ?: 0.15).toFloat(),
                             exemplarBlobB64 = d.getString("exemplarBlob").orEmpty(),
                             createdAt = d.getLong("createdAt") ?: 0L,
+                            category = d.getString("category").orEmpty().ifBlank { "Custom" },
                         )
                     }
                 ))
