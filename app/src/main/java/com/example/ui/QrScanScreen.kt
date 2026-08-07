@@ -140,7 +140,7 @@ fun QrScanDialog(
                             .background(Color.White.copy(alpha = 0.08f))
                     )
                     Text(
-                        "對準電腦語音中心顯示的 QR Code",
+                        com.example.ui.I18n.tr("對準電腦語音中心顯示的 QR Code"),
                         color = Color.White,
                         fontSize = 13.sp,
                         modifier = Modifier
@@ -150,7 +150,7 @@ fun QrScanDialog(
                 }
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("需要相機權限", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(com.example.ui.I18n.tr("需要相機權限"), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -162,7 +162,7 @@ fun QrScanDialog(
                     .padding(16.dp)
                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
             ) {
-                Icon(Icons.Default.Close, contentDescription = "關閉", tint = Color.White)
+                Icon(Icons.Default.Close, contentDescription = com.example.ui.I18n.tr("關閉視窗"), tint = Color.White)
             }
         }
       }

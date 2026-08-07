@@ -91,7 +91,7 @@ fun PermissionRationaleCard(
                 onClick = onRequest,
                 colors  = ButtonDefaults.buttonColors(containerColor = neonCyan)
             ) {
-                Text("授予權限", fontSize = 12.sp, color = Color.White)
+                Text(I18n.tr("授予權限"), fontSize = 12.sp, color = Color.White)
             }
         }
     }

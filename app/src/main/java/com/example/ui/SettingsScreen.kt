@@ -1220,7 +1220,7 @@ private fun CloudLibraryPanel(
                     Text("${e.character}${e.lang.tag}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = p.textLight)
                     Text(
                         (if (e.downloaded) I18n.tr("✅ 已下載") else I18n.tr("☁️ 未下載")) +
-                            " · ${e.sizeLabel} · ${if (e.emotions.isEmpty()) I18n.tr("無情緒") else e.emotions.joinToString("／")}",
+                            " · ${e.sizeLabel} · ${if (e.emotions.isEmpty()) I18n.tr("無情緒") else e.emotions.joinToString("／") { I18n.tr(it) }}",
                         fontSize = 10.sp, color = p.textMuted
                     )
                 }
@@ -2011,29 +2011,29 @@ private fun GptSovitSection(
             onApiBaseUrlChange = onApiBaseUrl,
             onPickChinese = {
                 importDialog = GptSovitImportDialogState(
-                    title = "匯入中文參考音檔",
-                    message = "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。",
+                    title = I18n.tr("匯入中文參考音檔"),
+                    message = I18n.tr("這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。"),
                     openSystemPicker = { chineseVoicePicker.launch(arrayOf("audio/*")) }
                 )
             },
             onPickEnglish = {
                 importDialog = GptSovitImportDialogState(
-                    title = "匯入英文參考音檔",
-                    message = "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。",
+                    title = I18n.tr("匯入英文參考音檔"),
+                    message = I18n.tr("這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。"),
                     openSystemPicker = { englishVoicePicker.launch(arrayOf("audio/*")) }
                 )
             },
             onPickModelDir = {
                 importDialog = GptSovitImportDialogState(
-                    title = "選擇舊版模型資料夾",
-                    message = "建議改用中文/英文模型資料夾。系統檔案頁若沒有關閉鈕，請用手機返回鍵離開。",
+                    title = I18n.tr("選擇舊版模型資料夾"),
+                    message = I18n.tr("建議改用中文/英文模型資料夾。系統檔案頁若沒有關閉鈕，請用手機返回鍵離開。"),
                     openSystemPicker = { modelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) }
                 )
             },
             onPickChineseModelDir = {
                 importDialog = GptSovitImportDialogState(
-                    title = "匯入中文模型資料夾",
-                    message = "選包含 SoVITS_weights / GPT_weights 的中文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。",
+                    title = I18n.tr("匯入中文模型資料夾"),
+                    message = I18n.tr("選包含 SoVITS_weights / GPT_weights 的中文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。"),
                     openSystemPicker = { chineseModelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) },
                     useDefaultFolder = {
                         val detected = detectGptSovitBundleFromDefaultFolder(context)
@@ -2044,8 +2044,8 @@ private fun GptSovitSection(
             },
             onPickEnglishModelDir = {
                 importDialog = GptSovitImportDialogState(
-                    title = "匯入英文模型資料夾",
-                    message = "選包含 SoVITS_weights / GPT_weights 的英文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。",
+                    title = I18n.tr("匯入英文模型資料夾"),
+                    message = I18n.tr("選包含 SoVITS_weights / GPT_weights 的英文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。"),
                     openSystemPicker = { englishModelDirPicker.launch(defaultGptSovitInitialTreeUri(context)) },
                     useDefaultFolder = {
                         val detected = detectGptSovitBundleFromDefaultFolder(context)
@@ -2056,8 +2056,9 @@ private fun GptSovitSection(
             },
             onAutoImport = {
                 importDialog = GptSovitImportDialogState(
-                    title = "自動匯入整包資料夾",
-                    message = "你可以開系統檔案頁選最外層資料夾，也可以把整包放到預設資料夾後直接掃描。預設資料夾：${defaultGptSovitDir(context).absolutePath}",
+                    title = I18n.tr("自動匯入整包資料夾"),
+                    message = I18n.tr("你可以開系統檔案頁選最外層資料夾，也可以把整包放到預設資料夾後直接掃描。預設資料夾：%s")
+                        .format(defaultGptSovitDir(context).absolutePath),
                     openSystemPicker = { autoImportPicker.launch(defaultGptSovitInitialTreeUri(context)) },
                     useDefaultFolder = {
                         val detected = detectGptSovitBundleFromDefaultFolder(context)

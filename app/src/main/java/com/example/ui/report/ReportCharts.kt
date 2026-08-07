@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.TimeBucket
+import com.example.ui.I18n
 import com.example.ui.theme.AppPalette
 
 /**
@@ -39,7 +40,7 @@ fun LineChartCompose(
     palette: AppPalette,
     modifier: Modifier = Modifier,
     yMax: Float = 100f,
-    title: String = "進步趨勢（平均分數）",
+    title: String = I18n.tr("進步趨勢（平均分數）"),
 ) {
     Column(modifier = modifier) {
         Text(title, color = palette.textLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -118,7 +119,7 @@ fun BarChartCompose(
     data: List<TimeBucket>,
     palette: AppPalette,
     modifier: Modifier = Modifier,
-    title: String = "正向情緒字眼次數",
+    title: String = I18n.tr("正向情緒字眼次數"),
 ) {
     Column(modifier = modifier) {
         Text(title, color = palette.textLight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -133,7 +134,7 @@ fun BarChartCompose(
                 .padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 22.dp)
         ) {
             if (data.isEmpty()) {
-                Text("尚無資料", color = palette.textMuted, fontSize = 12.sp,
+                Text(I18n.tr("尚無資料"), color = palette.textMuted, fontSize = 12.sp,
                      modifier = Modifier.align(Alignment2.Center))
                 return@Box
             }

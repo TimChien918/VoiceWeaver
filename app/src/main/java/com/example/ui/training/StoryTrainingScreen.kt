@@ -139,7 +139,7 @@ fun StoryTrainingScreen(
         ) {
             item {
                 Text(
-                    I18n.tr("請看圖說一段故事：「%s」").format(prompt.title),
+                    I18n.tr("請看圖說一段故事：「%s」").format(I18n.tr(prompt.title)),
                     color = p.textLight, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 8.dp)
                 )
@@ -252,7 +252,8 @@ private fun FrameCard(frame: com.example.data.StoryFrame, idx: Int, modifier: Mo
         Spacer(Modifier.height(4.dp))
         Text(frame.emoji, fontSize = 56.sp)
         Spacer(Modifier.height(6.dp))
-        Text(frame.hint, color = p.textLight, fontSize = 12.sp)
+        // 分鏡文字原本直接顯示原文，整個「看圖說故事」在英日韓介面都是中文
+        Text(I18n.tr(frame.hint), color = p.textLight, fontSize = 12.sp)
     }
 }
 

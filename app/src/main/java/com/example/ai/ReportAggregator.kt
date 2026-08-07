@@ -52,23 +52,30 @@ data class ReportSnapshot(
     val storyAverageScore: Float,
     val generatedAt: Long = System.currentTimeMillis()
 ) {
-    /** 給 Telegram 用的純文字版本（不需要圖片附件）。 */
+    /**
+     * 給 Telegram 用的純文字版本（不需要圖片附件）。
+     *
+     * **整段都要走翻譯層。** 原本每一行都是寫死的中文，所以英日韓介面的使用者，
+     * 推給家人的成績單仍然是一整篇中文——而收到的家人本來就是那個語言的人。
+     * range.displayName 也一樣，原本直接內插沒有經過 tr()。
+     */
     fun toTelegramText(): String = buildString {
-        appendLine("📊 <b>VoiceWeaver 成績單 · ${range.displayName}</b>")
+        val tr = com.example.ui.I18n::tr
+        appendLine("📊 <b>VoiceWeaver ${tr("成績單")} · ${tr(range.displayName)}</b>")
         appendLine("─────────────")
-        appendLine("🎯 復健次數：$totalRehabSessions")
-        appendLine("📈 平均分數：${"%.1f".format(averageScore)} / 100")
-        appendLine("✅ 圖卡正確率：${"%.0f".format(correctRate * 100)}%")
-        appendLine("💖 正向情緒字眼：$positiveEmotionCount 次")
-        appendLine("📖 故事練習：$storyAttempts 次（平均 ${"%.1f".format(storyAverageScore)}）")
+        appendLine("🎯 ${tr("復健次數")}：$totalRehabSessions")
+        appendLine("📈 ${tr("平均分數")}：${"%.1f".format(averageScore)} / 100")
+        appendLine("✅ ${tr("圖卡正確率")}：${"%.0f".format(correctRate * 100)}%")
+        appendLine("💖 ${tr("正向情緒字眼")}：$positiveEmotionCount")
+        appendLine("📖 ${tr("故事練習")}：$storyAttempts（${tr("平均")} ${"%.1f".format(storyAverageScore)}）")
         appendLine()
         val asc = rehabDaily.zipWithNext().count { it.second.value > it.first.value }
         val desc = rehabDaily.zipWithNext().count { it.second.value < it.first.value }
         appendLine(when {
-            rehabDaily.size < 2 -> "尚無趨勢資料，繼續加油 💪"
-            asc > desc -> "趨勢向上 📈 — 持續進步中！"
-            asc < desc -> "趨勢略降 📉 — 適度休息，明天再戰"
-            else -> "保持穩定 ✨"
+            rehabDaily.size < 2 -> tr("尚無趨勢資料，繼續加油 💪")
+            asc > desc -> tr("趨勢向上 📈 — 持續進步中！")
+            asc < desc -> tr("趨勢略降 📉 — 適度休息，明天再戰")
+            else -> tr("保持穩定 ✨")
         })
     }.trim()
 }
@@ -174,7 +181,8 @@ class ReportAggregator(
             val key = when (range) {
                 ReportRange.Today -> "%02d:00".format((cal.get(Calendar.HOUR_OF_DAY) / 2) * 2)
                 ReportRange.Month -> "%d/%d".format(cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
-                ReportRange.Year  -> "%d月".format(cal.get(Calendar.MONTH) + 1)
+                // 「月」原本寫死中文，X 軸標籤在英日韓介面會變成「1月 2月…」
+                ReportRange.Year  -> com.example.ui.I18n.tr("%d月").format(cal.get(Calendar.MONTH) + 1)
             }
             groups.getOrPut(key) { mutableListOf() }.add(v)
         }

@@ -300,7 +300,6 @@ object I18n {
         "重錄上一次" to arrayOf("Redo last recording", "直前の録音をやり直す", "마지막 녹음 다시"),
         "啟用" to arrayOf("Activate", "有効化", "활성화"),
         "取消" to arrayOf("Cancel", "キャンセル", "취소"),
-        "完成" to arrayOf("Done", "完了", "완료"),
         "刪除" to arrayOf("Delete", "削除", "삭제"),
 
         // SafetyGuard.EmergencyAlert.toTelegramMessage() 用。
@@ -345,7 +344,6 @@ object I18n {
         "醫療相關內容，請確認" to arrayOf("Medical content — please confirm", "医療関連の内容、確認してください", "의료 관련 내용, 확인하세요"),
         "「%s」\n\n請患者或照護者確認句子正確（部位、意圖無誤）後再朗讀。" to arrayOf("\"%s\"\n\nPlease have the patient or caregiver confirm the sentence (body part, intent) before speaking.", "「%s」\n\n患者または介護者が文（部位・意図）を確認してから読み上げてください。", "\"%s\"\n\n환자나 보호자가 문장(부위·의도)을 확인한 후 읽어주세요."),
         "確認朗讀" to arrayOf("Confirm & speak", "確認して読み上げ", "확인 후 읽기"),
-        "取消" to arrayOf("Cancel", "キャンセル", "취소"),
         "語音輸出已鎖定" to arrayOf("Voice output locked", "音声出力がロック中", "음성 출력 잠김"),
         "我知道了" to arrayOf("Got it", "了解", "알겠어요"),
         "是這個意思嗎？" to arrayOf("Is this what you mean?", "この意味で合ってる？", "이 뜻이 맞나요?"),
@@ -394,7 +392,6 @@ object I18n {
         "視訊房伺服器（Jitsi，免登入免名字）" to arrayOf("Video server (Jitsi, no login/name)", "ビデオサーバー（Jitsi、ログイン・名前不要）", "영상 서버 (Jitsi, 로그인·이름 불필요)"),
         "🔒 所有金鑰僅存在這支手機（DataStore），不會上傳、也不會被打包進原始碼。\n首次啟動已從本機 .env 自動帶入；留空則用內建預設。改完即時生效。" to arrayOf("🔒 All keys stay on this phone (DataStore) — never uploaded or bundled in source.\nFirst launch imported from local .env; blank uses built-in defaults. Changes apply instantly.", "🔒 全てのキーはこの端末のみ（DataStore）。アップロードもソース同梱もしません。\n初回は .env から取込、空欄は既定値。変更は即時反映。", "🔒 모든 키는 이 기기에만(DataStore) 저장, 업로드·소스 포함 안 됨.\n첫 실행 시 .env에서 가져옴, 비우면 기본값. 변경 즉시 적용."),
         "供應商" to arrayOf("Provider", "提供元", "공급자"),
-        "刪除" to arrayOf("Delete", "削除", "삭제"),
         "API 金鑰" to arrayOf("API key", "API キー", "API 키"),
         "此供應商免金鑰，直接可用" to arrayOf("This provider needs no key", "この提供元はキー不要", "이 공급자는 키 불필요"),
         "隱藏" to arrayOf("Hide", "隠す", "숨기기"),
@@ -442,7 +439,6 @@ object I18n {
         "確認刪除所有歷史紀錄？" to arrayOf("Delete all history?", "全履歴を削除？", "모든 기록 삭제?"),
         "這個動作無法復原。設定值（主題、Chat ID 等）會被保留。" to arrayOf("This can't be undone. Settings (theme, Chat ID, etc.) are kept.", "この操作は元に戻せません。設定（テーマ・Chat ID 等）は保持。", "되돌릴 수 없습니다. 설정(테마·Chat ID 등)은 유지."),
         "確認刪除" to arrayOf("Delete", "削除する", "삭제"),
-        "取消" to arrayOf("Cancel", "キャンセル", "취소"),
         "確認重置所有設定？" to arrayOf("Reset all settings?", "全設定を初期化？", "모든 설정 초기화?"),
         "確認重置" to arrayOf("Reset", "初期化する", "초기화"),
         "提醒時間" to arrayOf("Reminder time", "通知時刻", "알림 시간"),
@@ -463,7 +459,6 @@ object I18n {
         "匿名" to arrayOf("Anonymous", "匿名", "익명"),
         "登出" to arrayOf("Log out", "ログアウト", "로그아웃"),
         "用同一個 Google 帳號登入手機與網頁，API 金鑰／供應商清單／Telegram 會自動雙向同步。" to arrayOf("Sign in with the same Google account on phone and web; API keys, providers, and Telegram sync both ways.", "スマホとウェブで同じ Google アカウントを使うと、API キー・提供元・Telegram が双方向同期。", "휴대폰과 웹에서 같은 Google 계정 사용 시 API 키·공급자·Telegram이 양방향 동기화."),
-        "API 金鑰管理" to arrayOf("API key manager", "API キー管理", "API 키 관리"),
         "管理所有 API 金鑰（LLM / 定位 / 通報；生圖在「AI 生圖」內）" to arrayOf("Manage all API keys (LLM / location / alerts; image is under “AI image”)", "全 API キー管理（LLM／位置／通報；画像は「AI 画像」内）", "모든 API 키 관리 (LLM／위치／알림; 이미지는 ‘AI 이미지’)"),
         "進階功能" to arrayOf("Advanced features", "詳細機能", "고급 기능"),
         "進階設定（緊急聯絡人 / 清歷史 / 重置 / 匯入語料庫）" to arrayOf("Advanced (emergency contact / clear history / reset / import corpus)", "詳細（緊急連絡先／履歴消去／初期化／コーパス取込）", "고급 (긴급 연락처／기록 삭제／초기화／말뭉치 가져오기)"),
@@ -472,7 +467,9 @@ object I18n {
         "尚未設定背景" to arrayOf("No background set", "背景未設定", "배경 미설정"),
         "選擇背景" to arrayOf("Choose background", "背景を選択", "배경 선택"),
         "字體倍率會套用到整個 App，包含 AAC、定位、設定與底部導覽。" to arrayOf("Font scale applies to the whole app, including AAC, location, settings and the bottom bar.", "文字倍率はアプリ全体（AAC・位置・設定・下部バー）に適用。", "글자 배율은 앱 전체(AAC·위치·설정·하단 바)에 적용."),
-        "標準" to arrayOf("Standard", "標準", "표준"),
+        // 「標準」原本有兩筆（字級預設 Normal／效能模式 Standard），後者會蓋掉前者，
+        // 讓字級的「標準」在英文變成 Standard。效能模式走的是 string resource
+        // （power_balanced），不需要這一筆，移除以解決撞鍵。
         "大" to arrayOf("Large", "大", "크게"),
         "特大" to arrayOf("Extra large", "特大", "특대"),
         "鼻子頭控" to arrayOf("Nose head-control", "鼻ヘッドコントロール", "코 헤드 컨트롤"),
@@ -495,7 +492,6 @@ object I18n {
         "啟用 GPT-SoVITS 語音克隆前請確認：\n1. 參考音檔之聲音主體已同意其聲紋被用於本機語音合成。\n2. 合成語音僅供本人輔助溝通之個人非商業用途。\n3. 不得用合成語音冒充他人或散布誤導內容。\n4. 錄音與模型只存於你的手機與自己的電腦，不上傳雲端。" to arrayOf("Before enabling GPT-SoVITS voice cloning, confirm:\n1. The voice owner consents to their voiceprint being used for local synthesis.\n2. Synthesized voice is for your own personal, non-commercial communication aid only.\n3. Do not impersonate others or spread misleading content.\n4. Recordings and models stay only on your phone and your own computer, never uploaded.", "GPT-SoVITS 音声クローンを有効にする前に確認：\n1. 参照音声の本人が声紋の端末内合成利用に同意。\n2. 合成音声は本人の非商用・意思疎通補助のみ。\n3. 他人へのなりすまし・誤情報拡散は禁止。\n4. 録音とモデルは自分のスマホと PC のみに保存、クラウド非送信。", "GPT-SoVITS 음성 복제 사용 전 확인:\n1. 참조 음성 본인이 성문을 로컬 합성에 사용하는 데 동의.\n2. 합성 음성은 본인의 비상업적 의사소통 보조용만.\n3. 타인 사칭·오해 콘텐츠 유포 금지.\n4. 녹음과 모델은 본인 휴대폰과 PC에만 저장, 클라우드 미업로드."),
         "我已閱讀並同意上述條款" to arrayOf("I have read and agree to the above", "上記に同意します", "위 내용을 읽고 동의합니다"),
         "同意並啟用" to arrayOf("Agree & enable", "同意して有効化", "동의하고 사용"),
-        "取消" to arrayOf("Cancel", "キャンセル", "취소"),
         "語言會依輸入文字自動切換（中／英／日／韓），不需手動選。" to arrayOf("Language auto-switches by input text (CN/EN/JA/KO); no manual choice needed.", "言語は入力文字で自動切替（中／英／日／韓）、手動選択不要。", "언어는 입력 문자로 자동 전환(중／영／일／한), 수동 선택 불필요."),
         "模型合成測試（多語言）" to arrayOf("Model synthesis test (multilingual)", "モデル合成テスト（多言語）", "모델 합성 테스트 (다국어)"),
         "合成中…" to arrayOf("Synthesizing…", "合成中…", "합성 중…"),
@@ -1348,5 +1344,181 @@ object I18n {
             "① Put the phone and the Mac on the same Wi-Fi\n② On the Mac, double-click “VoiceWeaver Voice Center.app” to start the server\n③ Read the LAN IP shown in the control center (it opens automatically) and set the API URL above to http://<that IP>:9880\n④ Tap “Test connection” for a green light (for remote access install Tailscale and use the 100.x IP)",
             "① スマホと Mac を同じ Wi-Fi に接続\n②  Mac で「VoiceWeaver語音中心.app」をダブルクリックしてサーバーを起動\n③ 自動で開くコントロールセンターに表示される LAN IP を確認し、上の API URL を http://<その IP>:9880 に変更\n④「接続テスト」が緑になれば完了（外出先からは Tailscale を入れて 100.x の IP を入力）",
             "① 휴대폰과 Mac을 같은 Wi-Fi에 연결\n② Mac에서 ‘VoiceWeaver語音中心.app’을 더블클릭해 서버 시작\n③ 자동으로 열리는 컨트롤 센터에 표시된 LAN IP를 확인하고, 위 API URL을 http://<그 IP>:9880 으로 변경\n④ ‘연결 테스트’ 초록불 확인 (외부에서는 Tailscale 설치 후 100.x IP 입력)"),
+
+        // ── 這一輪掃描補上的：都是已經包了 tr() 卻不在表裡的鍵。
+        //    tr() 找不到鍵會原樣回傳中文，所以英日韓介面看到的一直是中文。 ──
+
+        // 語音辨識供應商（CustomApiFloatingWindow）
+        "語音辨識" to arrayOf("Speech recognition", "音声認識", "음성 인식"),
+        "由上往下試，第一個成功就用它。把最聽得懂你的那家排到最上面。留空＝沿用文字 LLM 附帶的轉寫。" to arrayOf(
+            "Tried from top to bottom; the first one that works is used. Put whichever understands you best at the top. Leave empty to use the transcription that comes with the text LLM.",
+            "上から順に試し、最初に成功したものを使います。いちばん聞き取ってくれる所を先頭に。空欄なら文字 LLM 付属の書き起こしを使います。",
+            "위에서부터 차례로 시도하여 처음 성공한 것을 사용합니다. 가장 잘 알아듣는 곳을 맨 위로 두세요. 비워 두면 텍스트 LLM에 딸린 전사를 사용합니다."),
+        "已停用" to arrayOf("Disabled", "無効", "사용 안 함"),
+        "往上移" to arrayOf("Move up", "上へ", "위로"),
+        "往下移" to arrayOf("Move down", "下へ", "아래로"),
+        "模型" to arrayOf("Model", "モデル", "모델"),
+
+        // 診斷日誌
+        "診斷日誌" to arrayOf("Diagnostic log", "診断ログ", "진단 로그"),
+        "分享診斷日誌" to arrayOf("Share diagnostic log", "診断ログを共有", "진단 로그 공유"),
+        "顯示全部" to arrayOf("Show all", "すべて表示", "전체 보기"),
+        "只看問題" to arrayOf("Problems only", "問題のみ", "문제만"),
+        "目前沒有紀錄。操作一次語音或朗讀之後回來看。" to arrayOf(
+            "No entries yet. Use speech or read-aloud once, then come back.",
+            "まだ記録がありません。音声または読み上げを一度使ってから戻ってきてください。",
+            "아직 기록이 없습니다. 음성이나 읽어주기를 한 번 사용한 뒤 다시 확인하세요."),
+        "檔案位置：Android/data/…/files/diagnostics/（保留 7 天）" to arrayOf(
+            "File location: Android/data/…/files/diagnostics/ (kept for 7 days)",
+            "保存先：Android/data/…/files/diagnostics/（7 日間保持）",
+            "파일 위치: Android/data/…/files/diagnostics/ (7일간 보관)"),
+        "每一次語音辨識、句子重組、語音合成都會記錄在手機本機。回報問題時請按「分享」把它傳出來。" to arrayOf(
+            "Every speech recognition, sentence rebuild and speech synthesis is logged on this phone only. When reporting a problem, tap Share to send it.",
+            "音声認識・文の再構成・音声合成のたびに、この端末内だけに記録します。問題を報告するときは「共有」で送ってください。",
+            "음성 인식·문장 재구성·음성 합성이 있을 때마다 이 휴대폰에만 기록됩니다. 문제를 알릴 때 '공유'를 눌러 보내 주세요."),
+
+        // 「AI 直接聽」音訊來源
+        "AI 直接聽（不轉文字）" to arrayOf(
+            "Let the AI listen directly (no transcription)",
+            "AI が直接聴く（文字にしない）",
+            "AI가 직접 듣기 (문자 변환 없음)"),
+        "自動" to arrayOf("Automatic", "自動", "자동"),
+        "只用電腦本機" to arrayOf("Computer only", "パソコンのみ", "컴퓨터만"),
+        "只用雲端" to arrayOf("Cloud only", "クラウドのみ", "클라우드만"),
+        "電腦端就緒就用電腦，否則用雲端。" to arrayOf(
+            "Uses your computer when it is ready, otherwise the cloud.",
+            "パソコンが使える時はパソコン、それ以外はクラウドを使います。",
+            "컴퓨터가 준비되면 컴퓨터를, 아니면 클라우드를 사용합니다."),
+        "免金鑰、不會用掉雲端額度，語音不離開你的區網。電腦沒開就會直接告訴你，不偷偷改用雲端。" to arrayOf(
+            "No API key, no cloud quota used, and your voice never leaves your local network. If the computer is off it tells you plainly instead of quietly switching to the cloud.",
+            "APIキー不要、クラウドの割り当ても消費せず、音声はローカルネットワークから出ません。パソコンが起動していなければ黙ってクラウドに切り替えず、そのまま知らせます。",
+            "API 키가 필요 없고 클라우드 할당량도 쓰지 않으며, 음성이 내부 네트워크를 벗어나지 않습니다. 컴퓨터가 꺼져 있으면 몰래 클라우드로 바꾸지 않고 그대로 알려 줍니다."),
+        "品質優先。注意：免費額度容易用完（每次會打 3 次 API）。" to arrayOf(
+            "Quality first. Note: the free quota runs out quickly (each run makes 3 API calls).",
+            "品質優先。注意：無料枠はすぐ尽きます（1 回につき API を 3 回呼びます）。",
+            "품질 우선. 참고: 무료 할당량이 금방 소진됩니다(1회에 API를 3번 호출)."),
+        "電腦本機需要在電腦上執行「音訊理解伺服器」（tools/GPT-SoVITS/start_audio_infer.sh，埠 9883）。" to arrayOf(
+            "Computer mode needs the audio understanding server running on your computer (tools/GPT-SoVITS/start_audio_infer.sh, port 9883).",
+            "パソコンで使うには「音声理解サーバー」を起動しておく必要があります（tools/GPT-SoVITS/start_audio_infer.sh、ポート 9883）。",
+            "컴퓨터 모드는 컴퓨터에서 '오디오 이해 서버'가 실행 중이어야 합니다(tools/GPT-SoVITS/start_audio_infer.sh, 포트 9883)."),
+        "電腦本機·直接聽音訊（免金鑰）" to arrayOf(
+            "Your computer · listens to the audio directly (no API key)",
+            "パソコン・音声を直接聴く（APIキー不要）",
+            "내 컴퓨터 · 오디오를 직접 듣기 (API 키 불필요)"),
+
+        // 字級預設
+        "超大" to arrayOf("Huge", "特大", "아주 크게"),
+
+        // 執行期訊息
+        "沒有聽到聲音，請再說一次（或把手機拿近一點）" to arrayOf(
+            "I didn't hear anything. Please say it again, or hold the phone closer.",
+            "音が聞こえませんでした。もう一度話すか、端末を近づけてください。",
+            "소리가 들리지 않았습니다. 다시 말하거나 휴대폰을 가까이 대 주세요."),
+        "AI 回應逾時，請確認網路後再試一次。" to arrayOf(
+            "The AI took too long to answer. Check your connection and try again.",
+            "AI の応答がタイムアウトしました。通信状態を確認してもう一度お試しください。",
+            "AI 응답 시간이 초과되었습니다. 네트워크를 확인한 뒤 다시 시도하세요."),
+        "「AI 直接聽」失敗：%s" to arrayOf(
+            "Direct AI listening failed: %s",
+            "「AI が直接聴く」に失敗しました：%s",
+            "'AI가 직접 듣기'에 실패했습니다: %s"),
+        "語音辨識失敗：%s" to arrayOf(
+            "Speech recognition failed: %s",
+            "音声認識に失敗しました：%s",
+            "음성 인식에 실패했습니다: %s"),
+        "我的專屬發音（離線）" to arrayOf(
+            "My own pronunciation (offline)",
+            "わたし専用の発音（オフライン）",
+            "내 전용 발음 (오프라인)"),
+
+        // ── 看圖說故事：整個模組原本完全沒有走翻譯層 ──
+        "賣一包檳榔給客人" to arrayOf("Sell a pack of betel nut to a customer", "客にビンロウを一袋売る", "손님에게 빈랑 한 봉지 팔기"),
+        "覺得不舒服，找家人幫忙" to arrayOf("Feeling unwell, asking family for help", "具合が悪くて家族に助けを求める", "몸이 안 좋아 가족에게 도움 청하기"),
+        "廟口買一杯結冰水" to arrayOf("Buy an iced drink by the temple", "廟の前で氷入りの飲み物を買う", "사당 앞에서 얼음물 사기"),
+        "客人走到攤位" to arrayOf("A customer walks up to the stall", "客が屋台に来る", "손님이 노점에 온다"),
+        "拿出包葉檳榔" to arrayOf("Take out the wrapped betel nut", "葉で包んだビンロウを出す", "잎에 싼 빈랑을 꺼낸다"),
+        "客人付 100 元" to arrayOf("The customer pays 100 dollars", "客が 100 元払う", "손님이 100원을 낸다"),
+        "找零 50 元給客人" to arrayOf("Give 50 dollars change", "50 元のおつりを渡す", "50원을 거슬러 준다"),
+        "胸口悶悶的" to arrayOf("A tight feeling in the chest", "胸が苦しい", "가슴이 답답하다"),
+        "拿起電話" to arrayOf("Pick up the phone", "電話を取る", "전화를 든다"),
+        "決定去醫院" to arrayOf("Decide to go to the hospital", "病院へ行くことにする", "병원에 가기로 한다"),
+        "家人陪同" to arrayOf("Family goes along", "家族が付き添う", "가족이 함께 간다"),
+        "經過廟口" to arrayOf("Passing by the temple", "廟の前を通る", "사당 앞을 지난다"),
+        "看到飲料攤" to arrayOf("Spot a drink stall", "飲み物の屋台を見つける", "음료 노점을 발견한다"),
+        "拿出 50 元" to arrayOf("Take out 50 dollars", "50 元を出す", "50원을 꺼낸다"),
+        "喝到結冰水" to arrayOf("Drink the iced water", "氷水を飲む", "얼음물을 마신다"),
+
+        // ── 圖表與權限 ──
+        "進步趨勢（平均分數）" to arrayOf("Progress trend (average score)", "上達の推移（平均スコア）", "향상 추이 (평균 점수)"),
+        "正向情緒字眼次數" to arrayOf("Positive-word count", "前向きな言葉の回数", "긍정적 표현 횟수"),
+        "尚無資料" to arrayOf("No data yet", "データがありません", "아직 데이터가 없습니다"),
+        "授予權限" to arrayOf("Grant permission", "権限を許可", "권한 허용"),
+        "需要相機權限" to arrayOf("Camera permission required", "カメラの権限が必要です", "카메라 권한이 필요합니다"),
+        // 注意：既有的「關閉」是開關的 Off，語意不同不能共用同一個鍵——
+        // Kotlin 的 mapOf 後者會覆蓋前者，共用會讓全部開關變成 "Close"。
+        "關閉視窗" to arrayOf("Close", "閉じる", "닫기"),
+        "對準電腦語音中心顯示的 QR Code" to arrayOf(
+            "Point at the QR code shown by the Voice Hub on your computer",
+            "パソコンのボイスハブに表示された QR コードに合わせてください",
+            "컴퓨터의 보이스 허브에 표시된 QR 코드를 비추세요"),
+
+        // ── 推給家人的成績單（Telegram）──
+        "成績單" to arrayOf("Progress report", "成績表", "성적표"),
+        "復健次數" to arrayOf("Practice sessions", "リハビリ回数", "재활 횟수"),
+        "平均分數" to arrayOf("Average score", "平均スコア", "평균 점수"),
+        "圖卡正確率" to arrayOf("Card accuracy", "カード正答率", "카드 정답률"),
+        "正向情緒字眼" to arrayOf("Positive words", "前向きな言葉", "긍정적 표현"),
+        "故事練習" to arrayOf("Story practice", "ストーリー練習", "이야기 연습"),
+        "平均" to arrayOf("avg", "平均", "평균"),
+        "尚無趨勢資料，繼續加油 💪" to arrayOf(
+            "Not enough data for a trend yet — keep going 💪",
+            "傾向を出すにはまだデータが足りません。その調子で 💪",
+            "추세를 볼 만한 데이터가 아직 없습니다. 계속 힘내세요 💪"),
+        "趨勢向上 📈 — 持續進步中！" to arrayOf(
+            "Trending up 📈 — steady progress!",
+            "上向きです 📈 — 着実に伸びています！",
+            "상승세입니다 📈 — 꾸준히 좋아지고 있어요!"),
+        "趨勢略降 📉 — 適度休息，明天再戰" to arrayOf(
+            "Slightly down 📉 — take a rest and try again tomorrow",
+            "やや下がりました 📉 — 少し休んで、また明日",
+            "조금 내려갔습니다 📉 — 잠시 쉬고 내일 다시 해요"),
+        "保持穩定 ✨" to arrayOf("Holding steady ✨", "安定しています ✨", "안정적으로 유지 중 ✨"),
+        // 圖表 X 軸的月份標籤。英文只放數字會跟「12/3」那種日期標籤混淆，加個 M。
+        "%d月" to arrayOf("M%d", "%d月", "%d월"),
+
+        // ── GPT-SoVITS 匯入對話框 ──
+        "匯入中文參考音檔" to arrayOf("Import Chinese reference audio", "中国語の参照音声を取り込む", "중국어 참조 음성 가져오기"),
+        "匯入英文參考音檔" to arrayOf("Import English reference audio", "英語の参照音声を取り込む", "영어 참조 음성 가져오기"),
+        "匯入中文模型資料夾" to arrayOf("Import Chinese model folder", "中国語モデルのフォルダを取り込む", "중국어 모델 폴더 가져오기"),
+        "匯入英文模型資料夾" to arrayOf("Import English model folder", "英語モデルのフォルダを取り込む", "영어 모델 폴더 가져오기"),
+        "選擇舊版模型資料夾" to arrayOf("Choose a legacy model folder", "旧版モデルのフォルダを選ぶ", "구버전 모델 폴더 선택"),
+        "自動匯入整包資料夾" to arrayOf("Auto-import the whole folder", "フォルダ一式を自動で取り込む", "폴더 전체 자동 가져오기"),
+        "這會開啟 Android 系統檔案頁。若不想進檔案頁，請先用模型資料夾或自動匯入整包。" to arrayOf(
+            "This opens the Android file picker. If you would rather not, use the model folder or whole-folder auto-import instead.",
+            "Android のファイル選択画面が開きます。使いたくない場合は、モデルフォルダかフォルダ一式の自動取り込みをお使いください。",
+            "Android 파일 선택 화면이 열립니다. 원치 않으면 모델 폴더나 폴더 전체 자동 가져오기를 사용하세요."),
+        "建議改用中文/英文模型資料夾。系統檔案頁若沒有關閉鈕，請用手機返回鍵離開。" to arrayOf(
+            "The Chinese/English model folders are recommended instead. If the file picker has no close button, use the phone's back button to leave.",
+            "中国語／英語のモデルフォルダをお勧めします。ファイル選択画面に閉じるボタンが無い場合は、端末の戻るボタンで出てください。",
+            "중국어/영어 모델 폴더 사용을 권장합니다. 파일 선택 화면에 닫기 버튼이 없으면 휴대폰 뒤로 가기 버튼으로 나가세요."),
+        "選包含 SoVITS_weights / GPT_weights 的中文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。" to arrayOf(
+            "Choose the licensed Chinese model folder containing SoVITS_weights / GPT_weights. You can also drop the whole folder into the default location and let it scan automatically.",
+            "SoVITS_weights / GPT_weights を含む、ライセンス済みの中国語モデルフォルダを選んでください。既定のフォルダに一式を置いて自動スキャンさせることもできます。",
+            "SoVITS_weights / GPT_weights가 들어 있는 라이선스된 중국어 모델 폴더를 선택하세요. 기본 폴더에 통째로 넣어 자동 검색하게 할 수도 있습니다."),
+        "選包含 SoVITS_weights / GPT_weights 的英文授權模型資料夾。也可以把整包放到預設資料夾後自動掃描。" to arrayOf(
+            "Choose the licensed English model folder containing SoVITS_weights / GPT_weights. You can also drop the whole folder into the default location and let it scan automatically.",
+            "SoVITS_weights / GPT_weights を含む、ライセンス済みの英語モデルフォルダを選んでください。既定のフォルダに一式を置いて自動スキャンさせることもできます。",
+            "SoVITS_weights / GPT_weights가 들어 있는 라이선스된 영어 모델 폴더를 선택하세요. 기본 폴더에 통째로 넣어 자동 검색하게 할 수도 있습니다."),
+        "你可以開系統檔案頁選最外層資料夾，也可以把整包放到預設資料夾後直接掃描。預設資料夾：%s" to arrayOf(
+            "You can pick the top-level folder in the file picker, or drop the whole folder into the default location and scan it directly. Default folder: %s",
+            "ファイル選択画面で最上位のフォルダを選ぶか、既定のフォルダに一式を置いてそのままスキャンできます。既定のフォルダ：%s",
+            "파일 선택 화면에서 최상위 폴더를 고르거나, 기본 폴더에 통째로 넣고 바로 검색할 수 있습니다. 기본 폴더: %s"),
+
+        // ── GPT-SoVITS 情緒名（顯示用；比對用的正規化鍵留在 LocalSovitsHelper 不動）──
+        "中立" to arrayOf("Neutral", "ニュートラル", "중립"),
+        "开心" to arrayOf("Happy", "うれしい", "기쁨"),
+        "难过" to arrayOf("Sad", "かなしい", "슬픔"),
+        "恐惧" to arrayOf("Fearful", "こわい", "두려움"),
+        "吃惊" to arrayOf("Surprised", "おどろき", "놀람"),
     )
 }
