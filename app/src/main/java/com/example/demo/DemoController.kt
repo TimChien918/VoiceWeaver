@@ -50,6 +50,19 @@ object DemoController {
             .flatMap { it.steps }
             .sumOf { stepMillis(it.cap, narrated) + it.holdMs } / 1000).toInt()
 
+    /**
+     * 演示可以對畫面做的事。由 MainActivity 用 ViewModel 實作。
+     *
+     * 沒有這一層的話，演示就只是「切頁面＋旁白」——錄出來會變成旁白在講
+     * 「AI 給了三個候選」，畫面卻從頭到尾沒動過，觀眾看不到旁白說的東西。
+     */
+    interface Stage {
+        fun type(text: String)
+        fun candidates(list: List<String>)
+        fun pick(index: Int)
+        fun clear()
+    }
+
     data class Step(
         /** 字幕／旁白（英文）。空字串＝這一步只換畫面不講話。 */
         val cap: String,
@@ -57,6 +70,16 @@ object DemoController {
         val route: String? = null,
         /** 額外停留毫秒（在旁白講完之後）。 */
         val holdMs: Long = 0,
+        /** 這一步要對畫面做什麼；null＝只切頁面。 */
+        val onStage: (suspend (Stage) -> kotlin.Unit)? = null,
+    )
+
+    /** 示範用的碎詞與候選句（固定樣本，不呼叫任何 AI）。 */
+    private val SAMPLE_FRAGMENTS = "water  rest  now"
+    private val SAMPLE_CANDIDATES = listOf(
+        "I would like some water, and I need to rest now.",
+        "Can I have water? I want to lie down.",
+        "Water please. I am tired.",
     )
 
     data class Unit(
@@ -74,87 +97,91 @@ object DemoController {
 
     val UNITS: List<Unit> = listOf(
         Unit("intro", "🎬", "Title & overview", 12, steps = listOf(
-            Step("VoiceWeaver — a communication aid for people with aphasia."),
-            Step("It turns broken words into whole sentences, and speaks them in a familiar voice."),
-            Step("Here is a walkthrough of the main features."),
+            Step("Imagine knowing exactly what you want to say, and not one word will come out."),
+            Step("That is aphasia. The thought is intact. The bridge to speech is broken."),
+            Step("VoiceWeaver rebuilds that bridge."),
         )),
         Unit("compose", "💬", "Sentence reconstruction", 24, steps = listOf(
-            Step("A person with aphasia can often produce only isolated words.", route = "main"),
-            Step("They type or speak the fragments they can manage."),
-            Step("One tap rebuilds them into a natural sentence."),
-            Step("Three candidates are offered, so the user is never forced to accept a wrong guess.", holdMs = 800),
-            Step("Before anything is spoken aloud, the intent is confirmed on a large picture card."),
+            Step("What comes out is fragments. Water. Rest. Now.", route = "main",
+                onStage = { it.clear() }),
+            Step("The user types, or says, whatever they can manage.",
+                onStage = { typeSlowly(it, SAMPLE_FRAGMENTS) }),
+            Step("One tap turns the fragments into a whole sentence.",
+                onStage = { it.candidates(SAMPLE_CANDIDATES) }, holdMs = 600),
+            Step("Three versions, never one. A wrong guess put in your mouth is worse than silence.",
+                onStage = { it.pick(1); delay(1200); it.pick(2); delay(1200); it.pick(0) }),
+            Step("Only then is it said out loud, in the person's own voice.", holdMs = 600),
         )),
         Unit("aac", "🖼", "Picture cards (AAC)", 22, steps = listOf(
-            Step("For users who cannot type at all, the picture board is the way in.", route = "aac"),
-            Step("Cards are colour-coded by part of speech and grouped by situation.", holdMs = 900),
-            Step("Tapping cards builds a sentence buffer that can be spoken or rewritten."),
-            Step("Card size scales up for low vision and unsteady hands.", holdMs = 900),
+            Step("Some people cannot type at all. For them, the board is the way in.", route = "aac"),
+            Step("Cards are coloured by part of speech, and grouped by where you are.", holdMs = 900),
+            Step("Tap by tap, a sentence takes shape, ready to speak or to rewrite."),
+            Step("Everything scales up, for tired eyes and unsteady hands.", holdMs = 900),
         )),
         Unit("customcards", "📷", "Custom photo cards", 12, steps = listOf(
-            Step("Generic icons mean little to an older adult.", route = "aac"),
-            Step("A family member photographs the person's own things — their cup, their grandchild."),
-            Step("Recognising your own belongings is what builds trust in the device."),
+            Step("A stock drawing of a cup means nothing to someone's grandmother.", route = "aac"),
+            Step("So the family photographs her cup. Her chair. Her grandson."),
+            Step("Recognising your own things is where trust begins."),
         )),
         Unit("acoustic", "🎤", "Personal pronunciation model", 18, steps = listOf(
-            Step("Aphasic speech breaks ordinary speech recognition.", route = "phrase_shortcuts"),
-            Step("So the user records their own way of saying a few key words."),
-            Step("The app keeps an acoustic template per keyword and matches it with dynamic time warping."),
-            Step("It recognises the person in front of it, not an average speaker.", holdMs = 700),
+            Step("Aphasic speech breaks ordinary speech recognition. Every time.", route = "phrase_shortcuts"),
+            Step("So the app learns this person's own way of saying a few key words."),
+            Step("It keeps an acoustic template, and matches it with dynamic time warping."),
+            Step("It listens to the person in front of it, not to an average speaker.", holdMs = 700),
         )),
         Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
-            Step("Losing speech often means losing your own voice as well.", route = "settings"),
-            Step("A GPT-SoVITS model is trained from a short recording made before the illness."),
-            Step("Models live in the user's own Google Drive and sync to phone, web and desktop."),
-            Step("The sentence is then spoken in the person's own voice, with the right emotion."),
+            Step("Losing speech often means losing your voice as well.", route = "settings"),
+            Step("A short recording made before the illness is enough to rebuild it."),
+            Step("The model lives in their own Drive, and follows them to phone, web and desktop."),
+            Step("So the sentence comes out sounding like them, with the right feeling."),
         )),
         Unit("rehab", "🏥", "Speech rehabilitation", 20, steps = listOf(
-            Step("Beyond communication, the app doubles as a daily practice tool.", route = "rehab"),
-            Step("A clinical phrase bank works offline, with no API key required.", holdMs = 900),
-            Step("The user hears the target sentence, then reads it back."),
-            Step("Each attempt is scored per syllable, so progress is visible.", holdMs = 900),
+            Step("Communication is today. Recovery is the long game.", route = "rehab"),
+            Step("A clinical phrase bank works offline, with no API key.", holdMs = 900),
+            Step("Hear the target sentence. Say it back."),
+            Step("Every attempt is scored syllable by syllable, so progress is something you can see.", holdMs = 900),
         )),
         Unit("training", "📖", "Guided training", 14, steps = listOf(
-            Step("Repeating single sentences is not enough for milder cases.", route = "training"),
-            Step("Guided exercises ask the user to organise meaning on their own.", holdMs = 900),
-            Step("The AI comments the way a therapist would, and gives a score."),
+            Step("For milder cases, repeating single sentences is not enough.", route = "training"),
+            Step("Guided exercises ask them to organise the meaning themselves.", holdMs = 900),
+            Step("The AI answers the way a therapist would, and gives a score."),
         )),
         Unit("report", "📊", "Progress report", 18, steps = listOf(
-            Step("Everything the user does feeds a report their therapist can read.", route = "report"),
-            Step("Sessions, average score, streak, and use of positive language.", holdMs = 900),
-            Step("Behavioural metrics show how the person is coping, not just how they scored."),
-            Step("The report exports for a clinical visit."),
+            Step("Everything the person does quietly becomes a report.", route = "report"),
+            Step("Sessions, average score, streak, and how much positive language they use.", holdMs = 900),
+            Step("Behavioural numbers show how they are coping, not only how they scored."),
+            Step("It exports for the next clinic visit."),
         )),
         Unit("history", "🕘", "History", 10, steps = listOf(
-            Step("Every sentence the person managed to say is kept.", route = "history"),
-            Step("Frequent ones can be starred and reused instantly.", holdMs = 900),
+            Step("Every sentence they managed to say is kept.", route = "history"),
+            Step("The ones that matter get starred, and come back with one tap.", holdMs = 900),
         )),
         Unit("crisis", "🆘", "Crisis intervention", 18,
             note = "Described only — nothing is sent.", steps = listOf(
-            Step("Losing speech carries a real risk of depression and self-harm.", route = "main"),
-            Step("Every sentence is screened for crisis signals before it is spoken."),
-            Step("If one is found the app does not simply refuse — it stays with the person:"),
-            Step("a breathing circle, a few large buttons, and the family contacted automatically."),
+            Step("Losing language carries a real risk of depression and self-harm.", route = "main"),
+            Step("So every sentence is screened before it is ever spoken."),
+            Step("When something is found, the app does not refuse and walk away."),
+            Step("It stays. A breathing circle, a few large buttons, and the family already contacted."),
             Step("Nothing is sent during this demo."),
         )),
         Unit("severe", "🔒", "Severe mode", 16, steps = listOf(
-            Step("For the most severely affected, a whole grid of cards is still too much.", route = "aac"),
-            Step("Severe mode turns the device into a single-card board that scans on its own."),
-            Step("Tapping speaks the card and adds it to a clue trail the family can read."),
-            Step("Leaving the mode needs a caregiver PIN, so the patient cannot get lost in the app."),
+            Step("For the most severely affected, a whole grid is still too much.", route = "aac"),
+            Step("So the device becomes one card at a time, scanning on its own."),
+            Step("A tap speaks it, and leaves a trail the family can read."),
+            Step("Getting out needs a caregiver PIN. Nobody gets lost in the app."),
         )),
         Unit("a11y", "♿", "Accessibility & languages", 14, steps = listOf(
-            Step("Text scales across the whole app, including inside settings.", route = "settings"),
-            Step("The interface runs in Traditional Chinese, English, Japanese and Korean."),
-            Step("Voice output follows the same language."),
+            Step("Text scales across the whole app, settings included.", route = "settings"),
+            Step("Traditional Chinese, English, Japanese, Korean."),
+            Step("The voice follows the language."),
         )),
         Unit("cloud", "☁️", "Cloud sync", 12, steps = listOf(
             Step("Phone, web and desktop share one account.", route = "settings"),
-            Step("Voice models stay in the user's own Google Drive, never on a developer server."),
-            Step("Nothing here leaves the user's own account."),
+            Step("The voice models stay in the user's own Google Drive. Never on our server."),
+            Step("Nothing here leaves their account."),
         )),
         Unit("outro", "🏁", "Closing card", 8, steps = listOf(
-            Step("VoiceWeaver — giving words back, in your own voice.", holdMs = 1200),
+            Step("Aphasia takes the words. It does not take the person.", holdMs = 1200),
         )),
     )
 
@@ -180,6 +207,16 @@ object DemoController {
     /** 已預錄好的旁白：句子 → 音檔。跨次執行保留，第二次跑就不用再合成。 */
     private val clips = mutableMapOf<String, java.io.File>()
     private var player: android.media.MediaPlayer? = null
+
+    /** 逐字打進輸入框。一次貼上看起來像作弊，逐字打才看得懂使用者在做什麼。 */
+    private suspend fun typeSlowly(stage: Stage, text: String) {
+        val sb = StringBuilder()
+        for (ch in text) {
+            sb.append(ch)
+            stage.type(sb.toString())
+            delay(70)
+        }
+    }
 
     /** 播一段預錄好的旁白，等它真的播完。 */
     private suspend fun playClip(file: java.io.File) = suspendCancellableCoroutine<kotlin.Unit> { cont ->
@@ -229,6 +266,8 @@ object DemoController {
         ids: Set<String>,
         narrate: Boolean,
         navigate: (String) -> kotlin.Unit,
+        /** 對畫面動手的入口（由 MainActivity 用 ViewModel 實作）。 */
+        stage: Stage,
         /** 預錄一句旁白成音檔（錄影開始前做）。合不出來回 null。 */
         prerecord: (String, (java.io.File?) -> kotlin.Unit) -> kotlin.Unit,
         /** 沒有預錄檔時的退路：照一般流程唸（會是系統語音）。 */
@@ -290,6 +329,9 @@ object DemoController {
                             else -> null
                         }
                         s.route?.let { navigate(it) }
+                        // 畫面動作與旁白同時跑：旁白在講的時候畫面已經在動，
+                        // 而不是講完才動（那樣看起來像投影片配旁白）。
+                        val staging = s.onStage?.let { act -> launch { runCatching { act(stage) } } }
                         _caption.value = if (narrate) s.cap else ""
                         val t0 = System.currentTimeMillis()
                         if (narrate && s.cap.isNotBlank()) {
@@ -298,6 +340,7 @@ object DemoController {
                             else awaitCallback { done -> speakFallback(s.cap, done) }
                             delay(TAIL_PAD_MS)      // 講完再讓畫面多停一下
                         }
+                        staging?.join()
                         if (s.holdMs > 0) delay(s.holdMs)
                         // 補到最短停留；旁白比下限長時這裡是 0，不會拖慢。
                         val floor = if (narrate) MIN_STEP_NARRATED_MS else MIN_STEP_SILENT_MS
@@ -306,6 +349,7 @@ object DemoController {
                     }
                 }
             } finally {
+                runCatching { stage.clear() }   // 演示放上去的碎詞／候選句不留給使用者
                 reset()
                 onFinish()
             }

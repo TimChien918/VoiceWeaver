@@ -396,6 +396,12 @@ class MainActivity : ComponentActivity() {
                                         ids = ids,
                                         narrate = narrate,
                                         navigate = { route -> navController.go(route) },
+                                        stage = object : DemoController.Stage {
+                                            override fun type(text: String) = viewModel.demoTypeFragments(text)
+                                            override fun candidates(list: List<String>) = viewModel.demoShowCandidates(list)
+                                            override fun pick(index: Int) = viewModel.demoPickCandidate(index)
+                                            override fun clear() = viewModel.demoClearScreen()
+                                        },
                                         prerecord = { line, done -> viewModel.demoPrerecord(line, done) },
                                         speakFallback = { line, done -> viewModel.demoSpeak(line, done) },
                                         onReady = {

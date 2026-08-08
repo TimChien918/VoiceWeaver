@@ -1774,6 +1774,45 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // ② 它是靠文字自動判語言再挑模型。旁白是英文，自動判斷不一定挑得到使用者的
     //    GPT-SoVITS 英文角色，掉回系統機器音——那就不是使用者要的聲音了。
     //    所以這裡把模式寫死成 English，強制走 GPT-SoVITS 的英文角色。
+    // ── 自動演示：直接把畫面做給人看 ──────────────────────────────────
+    // 只切頁面、讓旁白在那邊講，錄出來就是「旁白說 AI 給了三個候選」但畫面
+    // 從頭到尾沒動——觀眾看不到旁白在講的東西。這幾個出口把真正的畫面狀態
+    // 推出去（用的是真的元件、真的資料結構），但一律不呼叫 AI、不寫歷史、不存檔。
+
+    /** 演示：把碎詞逐字打進輸入框。 */
+    fun demoTypeFragments(text: String) = onRawTextChanged(text)
+
+    /** 演示：把樣本候選句放進結果區，和真的重組完長得一模一樣。 */
+    fun demoShowCandidates(candidates: List<String>) {
+        if (candidates.isEmpty()) return
+        val alts = candidates.mapIndexed { i, t ->
+            ReconstructedCandidate(t, confidence = 0.92 - i * 0.13)
+        }
+        _reconstructionState.value = ReconstructionUiState.Success(
+            ReconstructedData(
+                originalText = _globalTagsVault.value.rawText,
+                reconstructedText = candidates.first(),
+                confidence = 0.92,
+                engineUsed = "demo",
+                inferenceTimeMs = 0,
+                alternatives = alts,
+                alternativeIndex = 0,
+            )
+        )
+    }
+
+    /** 演示：切到第 i 個候選（示範「不是這句」怎麼換）。 */
+    fun demoPickCandidate(i: Int) {
+        val st = _reconstructionState.value as? ReconstructionUiState.Success ?: return
+        val alt = st.data.alternatives.getOrNull(i) ?: return
+        _reconstructionState.value = ReconstructionUiState.Success(
+            st.data.copy(reconstructedText = alt.text, alternativeIndex = i)
+        )
+    }
+
+    /** 演示結束：把演示放上去的東西清乾淨（不影響使用者原本的資料）。 */
+    fun demoClearScreen() = resetState()
+
     /** 預錄一句旁白成音檔（錄影前做）。合不出來回 null。 */
     fun demoPrerecord(text: String, onDone: (java.io.File?) -> Unit) =
         ttsModule.prerecordDemoLine(text, onDone)
