@@ -558,6 +558,26 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         )
     }
 
+    /**
+     * 演示裡「App 把句子唸出來」那一下——**固定走 Android 系統 TTS**，唸完才回呼。
+     *
+     * 不能走 GPT-SoVITS：CPU 上合成一句要十幾秒，演示早就跳到下一段了，
+     * 聲音才姍姍來遲蓋在別的段落上（使用者實測就是這個現象）。
+     * 旁白是預錄好的檔案所以沒這問題，但這一下是臨時要唸的，只有系統 TTS 夠快。
+     */
+    fun speakDemoInstant(text: String, onComplete: () -> Unit = {}) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { speakDemoInstant(text, onComplete) }
+            return
+        }
+        val engine = tts
+        if (engine == null) { onComplete(); return }
+        runCatching {
+            applyInterfaceLocale(engine)
+            speakTracked(engine, text, onComplete)
+        }.onFailure { onComplete() }
+    }
+
     /** GPT-SoVITS 有沒有開起來（演示要靠它發旁白）。 */
     fun gptSovitReady(): Boolean = gptSovitEnabled
 

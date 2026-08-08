@@ -1885,8 +1885,30 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     val demoPressed: StateFlow<String?> = _demoPressed.asStateFlow()
     fun demoPress(tag: String?) { _demoPressed.value = tag }
 
-    /** 演示：讓 App 真的把這句話唸出來（走使用者平常的朗讀路徑）。 */
-    fun demoSpeakAloud(text: String) = ttsModule.speak(text) {}
+    /** 演示：讓 App 把這句話唸出來，唸完才回呼。固定用系統 TTS（要即時）。 */
+    fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakDemoInstant(text, onDone)
+
+    // ── 危機對話視窗的演示 ────────────────────────────────────────────────
+    // 直接推 _crisisConv 的狀態，用的是真的視窗、真的氣泡元件，但**完全不碰
+    // TelegramClient、不開鏡頭、不建視訊房**。演示一次就吵到家人一次是不行的。
+    fun demoCrisisOpen(status: String) {
+        _crisisConv.value = CrisisConvState(active = true, status = status)
+    }
+    /** who: "me"＝病患、"family"＝家人、其他＝系統訊息。 */
+    fun demoCrisisSay(who: String, text: String) {
+        val from = when (who) {
+            "me" -> CrisisSender.Patient
+            "family" -> CrisisSender.Family
+            else -> CrisisSender.System
+        }
+        _crisisConv.value = _crisisConv.value.copy(
+            messages = _crisisConv.value.messages + CrisisChatMsg(from, text)
+        )
+    }
+    fun demoCrisisStatus(status: String) {
+        _crisisConv.value = _crisisConv.value.copy(status = status)
+    }
+    fun demoCrisisClose() { _crisisConv.value = CrisisConvState() }
 
     /** 演示：把「發聲已鎖定」那個畫面叫出來。
 
@@ -1899,6 +1921,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 演示結束：把演示放上去的東西清乾淨（不影響使用者原本的資料）。 */
     fun demoClearScreen() {
+        _crisisConv.value = CrisisConvState()
         _speakGate.value = SpeakGate.Idle
         resetState()
         _aacState.value = _aacState.value.copy(sentence = emptyList(), selectedCategory = null)

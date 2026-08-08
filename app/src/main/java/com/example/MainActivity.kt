@@ -408,7 +408,13 @@ class MainActivity : ComponentActivity() {
                                             override fun severity(name: String) { viewModel.demoSeverity(name) }
                                             override fun scrollToResult() = viewModel.demoScrollToResult()
                                             override fun press(tag: String?) = viewModel.demoPress(tag)
-                                            override fun speakAloud(text: String) { viewModel.demoSpeakAloud(text) }
+                                            override fun speakAloud(text: String, done: () -> Unit) {
+                                                viewModel.demoSpeakAloud(text, done)
+                                            }
+                                            override fun crisisOpen(status: String) = viewModel.demoCrisisOpen(status)
+                                            override fun crisisSay(who: String, text: String) = viewModel.demoCrisisSay(who, text)
+                                            override fun crisisStatus(status: String) = viewModel.demoCrisisStatus(status)
+                                            override fun crisisClose() = viewModel.demoCrisisClose()
                                             override fun safetyLock(message: String?) = viewModel.demoSafetyLock(message)
                                             override fun snapshotSettings() = viewModel.demoSnapshotSettings()
                                             override fun clear() = viewModel.demoClearScreen()

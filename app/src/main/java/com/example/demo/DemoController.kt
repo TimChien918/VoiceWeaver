@@ -76,8 +76,16 @@ object DemoController {
         fun scrollToResult()
         /** 視覺按壓某顆按鈕（tag；null＝放開）。不會真的觸發它的動作。 */
         fun press(tag: String?)
-        /** 讓 App 真的把這句話唸出來（走使用者平常的朗讀路徑）。 */
-        fun speakAloud(text: String)
+        /** 讓 App 把這句話唸出來（系統 TTS，即時），唸完呼叫 done。 */
+        fun speakAloud(text: String, done: () -> kotlin.Unit)
+        /** 危機對話視窗：開啟。不會通報任何人。 */
+        fun crisisOpen(status: String)
+        /** 危機對話視窗：加一則訊息（who: "me" 病患／"family" 家人／其他 系統）。 */
+        fun crisisSay(who: String, text: String)
+        /** 危機對話視窗：更新上方狀態列。 */
+        fun crisisStatus(status: String)
+        /** 危機對話視窗：關閉。 */
+        fun crisisClose()
         /** 安全閘門：顯示「發聲已鎖定」畫面（傳 null 收起來）。不會通報任何人。 */
         fun safetyLock(message: String?)
         /** 演示開始前先快照會存檔的設定，結束一定還原。 */
@@ -118,6 +126,14 @@ object DemoController {
     data class TitleCard(val main: String, val sub: String)
 
     val UNITS: List<Unit> = listOf(
+        // 順序＝一條敘事線，不是功能清單：
+        //   先讓人理解失語症 → 把碎詞變成句子 → 用他自己的聲音講出來
+        //   → 那如果出事了呢？求救 → 危機介入與家人對話
+        //   → 回到日常的輸入方式（專屬發音、圖卡、自訂卡、重度模式）
+        //   → 它會愈用愈像這個人 → 無障礙與四語言
+        //   → 長期的復健與成績單 → 跨裝置同步 → 收尾。
+        // 語音合成的下一段刻意接求救：剛讓觀眾聽到「他的聲音」，
+        // 緊接著問「那講不出話又出事的時候呢」，情緒是連著的。
         Unit("intro", "🎬", "Title & overview", 12, steps = listOf(
             Step("Imagine knowing exactly what you want to say, and not one word will come out."),
             Step("That is aphasia. The thought is intact. The bridge to speech is broken."),
@@ -140,8 +156,64 @@ object DemoController {
                 onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
             Step("The person picks the one that is actually theirs.",
                 onStage = { it.pick(0) }, holdMs = 700),
-            Step("Only then is it said out loud, in the person's own voice.",
-                onStage = { delay(400); it.speakAloud(SAMPLE_CANDIDATES.first()) }, holdMs = 1400),
+            Step("Only then is it said out loud.",
+                onStage = { delay(300); speakAndWait(it, SAMPLE_CANDIDATES.first()) }, holdMs = 600),
+        )),
+        Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
+            Step("Losing speech often means losing your voice as well.", route = "settings"),
+            Step("A short recording made before the illness is enough to rebuild it."),
+            Step("The model lives in their own Drive, and follows them to phone, web and desktop."),
+            Step("So the sentence comes out sounding like them, with the right feeling."),
+        )),
+        Unit("sos", "🚨", "Emergency SOS", 22,
+            note = "Simulated — nothing is sent.", steps = listOf(
+            Step("Now the other half of the problem: what happens when something goes wrong.",
+                route = "main", onStage = { it.clear() }),
+            Step("In an emergency, building a sentence word by word is far too slow.", holdMs = 600),
+            Step("So a row of fixed phrases sits at the top of the home screen, always there.",
+                onStage = { it.scrollToResult() }, holdMs = 900),
+            Step("One tap, and the phone says it out loud straight away.",
+                onStage = { speakAndWait(it, "我需要幫忙") }, holdMs = 600),
+            Step("The same tap can message the family with the current location. Nothing is sent in this demo.",
+                holdMs = 900),
+        )),
+        Unit("crisis", "🆘", "Crisis intervention", 34,
+            note = "Simulated — nothing is sent.", steps = listOf(
+            Step("Losing language carries a real risk of depression and self-harm.", route = "main",
+                onStage = { it.clear() }),
+            Step("So every sentence is screened before it is ever spoken.",
+                onStage = { typeSlowly(it, "I do not want to go on") }, holdMs = 500),
+            Step("When something is found, the app refuses to say it, and says so plainly.",
+                onStage = { it.safetyLock("偵測到高風險訊息，正在通報緊急聯絡人…") }, holdMs = 1200),
+            Step("But refusing is not enough. It opens a window and stays with the person.",
+                onStage = {
+                    delay(600); it.safetyLock(null); delay(300)
+                    it.crisisOpen("正在通知家人…")
+                }, holdMs = 1200),
+            Step("A breathing circle to slow them down, warm colours, and only a few large buttons.",
+                holdMs = 1600),
+            Step("The family is contacted automatically — no button to find, no words to type.",
+                onStage = {
+                    it.crisisStatus("已通知家人")
+                    it.crisisSay("sys", "已通知家人，請稍等。你並不孤單，我們一起慢慢呼吸。")
+                }, holdMs = 1400),
+            Step("The person can send a short message with one tap.",
+                onStage = { delay(500); it.crisisSay("me", "我好害怕") }, holdMs = 1200),
+            Step("And the family answers, inside the same window.",
+                onStage = { delay(900); it.crisisSay("family", "我在路上了，你先坐下來，我 十分鐘 就到") }, holdMs = 1600),
+            Step("Photos, a voice clip, or a live video call are one tap away if the family asks for them.",
+                onStage = { it.crisisStatus("已通知家人 · 視訊隨時可開") }, holdMs = 1400),
+            Step("The window cannot be closed by the person alone. Only when they say they are better.",
+                onStage = { delay(700); it.crisisSay("me", "我好一點了") }, holdMs = 1400),
+            Step("Then it closes gently, and the app goes back to being an ordinary app.",
+                onStage = { delay(900); it.crisisClose(); it.clear() }, holdMs = 900),
+            Step("In this demo nothing left the phone: no message, no photo, no call.", holdMs = 700),
+        )),
+        Unit("acoustic", "🎤", "Personal pronunciation model", 18, steps = listOf(
+            Step("Aphasic speech breaks ordinary speech recognition. Every time.", route = "phrase_shortcuts"),
+            Step("So the app learns this person's own way of saying a few key words."),
+            Step("It keeps an acoustic template, and matches it with dynamic time warping."),
+            Step("It listens to the person in front of it, not to an average speaker.", holdMs = 700),
         )),
         Unit("aac", "🖼", "Picture cards (AAC)", 22, steps = listOf(
             Step("Some people cannot type at all. For them, the board is the way in.", route = "aac",
@@ -164,17 +236,37 @@ object DemoController {
             Step("So the family photographs her cup. Her chair. Her grandson."),
             Step("Recognising your own things is where trust begins."),
         )),
-        Unit("acoustic", "🎤", "Personal pronunciation model", 18, steps = listOf(
-            Step("Aphasic speech breaks ordinary speech recognition. Every time.", route = "phrase_shortcuts"),
-            Step("So the app learns this person's own way of saying a few key words."),
-            Step("It keeps an acoustic template, and matches it with dynamic time warping."),
-            Step("It listens to the person in front of it, not to an average speaker.", holdMs = 700),
+        Unit("severe", "🔒", "Severe mode", 16, steps = listOf(
+            Step("For the most severely affected, a whole grid is still too much.", route = "aac",
+                onStage = { it.clear(); it.severity("Mild") }),
+            Step("So the device becomes one card at a time, scanning on its own.",
+                onStage = { it.severity("Severe") }, holdMs = 1400),
+            Step("A tap speaks it, and leaves a trail the family can read.", holdMs = 1400),
+            Step("Getting out needs a caregiver PIN. Nobody gets lost in the app.",
+                onStage = { delay(1200); it.severity("Mild") }),
         )),
-        Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
-            Step("Losing speech often means losing your voice as well.", route = "settings"),
-            Step("A short recording made before the illness is enough to rebuild it."),
-            Step("The model lives in their own Drive, and follows them to phone, web and desktop."),
-            Step("So the sentence comes out sounding like them, with the right feeling."),
+        Unit("learning", "🧠", "It learns this person", 20, steps = listOf(
+            Step("No two people with aphasia are the same, so the app refuses to stay generic.",
+                route = "aac", onStage = { it.clear(); it.aacCategory(null) }),
+            Step("The cards you reach for most rise to the top, weighted by time of day and by place.",
+                onStage = { it.aacCategory("food_drink"); delay(1200); it.aacCategory(null) }, holdMs = 800),
+            Step("Which candidate you accept teaches it which phrasing sounds like you.", holdMs = 800),
+            Step("Your pronunciation model, your cards, your voice — it drifts towards you over time.",
+                holdMs = 800),
+        )),
+        Unit("a11y", "♿", "Accessibility & languages", 14, steps = listOf(
+            Step("Many users are elderly, and stroke often takes part of the visual field with it.", route = "settings",
+                onStage = { it.fontScale(1.0f) }),
+            Step("So the text scales all the way up, across every screen, settings included.",
+                onStage = { it.fontScale(1.4f); delay(1500); it.fontScale(1.8f); delay(1500); it.fontScale(2.2f) },
+                holdMs = 900),
+            Step("Nothing is cut off and nothing overlaps, even at the largest size.",
+                onStage = { delay(1200); it.fontScale(1.0f) }, holdMs = 500),
+            Step("The whole interface runs in Traditional Chinese, English, Japanese and Korean.",
+                onStage = { it.language("en"); delay(1800); it.language("ja"); delay(1800); it.language("ko") },
+                holdMs = 900),
+            Step("The voice follows the language — the same person, speaking four of them.",
+                onStage = { delay(1000); it.language("zh") }, holdMs = 600),
         )),
         Unit("rehab", "🏥", "Speech rehabilitation", 20, steps = listOf(
             Step("Communication is today. Recovery is the long game.", route = "rehab"),
@@ -197,50 +289,6 @@ object DemoController {
         Unit("history", "🕘", "History", 10, steps = listOf(
             Step("Every sentence they managed to say is kept.", route = "history"),
             Step("The ones that matter get starred, and come back with one tap.", holdMs = 900),
-        )),
-        Unit("crisis", "🆘", "Crisis intervention", 18,
-            note = "Described only — nothing is sent.", steps = listOf(
-            Step("Losing language carries a real risk of depression and self-harm.", route = "main",
-                onStage = { it.clear() }),
-            Step("So every sentence is screened before it is ever spoken.",
-                onStage = { typeSlowly(it, "I do not want to go on") }),
-            Step("When something is found, the app does not refuse and walk away.",
-                onStage = { it.safetyLock("偵測到高風險訊息，正在通報緊急聯絡人…") }, holdMs = 900),
-            Step("It stays. A breathing circle, a few large buttons, and the family already contacted.", holdMs = 1200),
-            Step("Nothing is sent during this demo.",
-                onStage = { delay(900); it.safetyLock(null); it.clear() }),
-        )),
-        Unit("severe", "🔒", "Severe mode", 16, steps = listOf(
-            Step("For the most severely affected, a whole grid is still too much.", route = "aac",
-                onStage = { it.clear(); it.severity("Mild") }),
-            Step("So the device becomes one card at a time, scanning on its own.",
-                onStage = { it.severity("Severe") }, holdMs = 1400),
-            Step("A tap speaks it, and leaves a trail the family can read.", holdMs = 1400),
-            Step("Getting out needs a caregiver PIN. Nobody gets lost in the app.",
-                onStage = { delay(1200); it.severity("Mild") }),
-        )),
-        Unit("a11y", "♿", "Accessibility & languages", 14, steps = listOf(
-            Step("Many users are elderly, and stroke often takes part of the visual field with it.", route = "settings",
-                onStage = { it.fontScale(1.0f) }),
-            Step("So the text scales all the way up, across every screen, settings included.",
-                onStage = { it.fontScale(1.4f); delay(1500); it.fontScale(1.8f); delay(1500); it.fontScale(2.2f) },
-                holdMs = 900),
-            Step("Nothing is cut off and nothing overlaps, even at the largest size.",
-                onStage = { delay(1200); it.fontScale(1.0f) }, holdMs = 500),
-            Step("The whole interface runs in Traditional Chinese, English, Japanese and Korean.",
-                onStage = { it.language("en"); delay(1800); it.language("ja"); delay(1800); it.language("ko") },
-                holdMs = 900),
-            Step("The voice follows the language — the same person, speaking four of them.",
-                onStage = { delay(1000); it.language("zh") }, holdMs = 600),
-        )),
-        Unit("learning", "🧠", "It learns this person", 20, steps = listOf(
-            Step("No two people with aphasia are the same, so the app refuses to stay generic.",
-                route = "aac", onStage = { it.clear(); it.aacCategory(null) }),
-            Step("The cards you reach for most rise to the top, weighted by time of day and by place.",
-                onStage = { it.aacCategory("food_drink"); delay(1200); it.aacCategory(null) }, holdMs = 800),
-            Step("Which candidate you accept teaches it which phrasing sounds like you.", holdMs = 800),
-            Step("Your pronunciation model, your cards, your voice — it drifts towards you over time.",
-                holdMs = 800),
         )),
         Unit("cloud", "☁️", "Cloud sync", 12, steps = listOf(
             Step("Phone, web and desktop share one account.", route = "settings"),
@@ -274,6 +322,15 @@ object DemoController {
     /** 已預錄好的旁白：句子 → 音檔。跨次執行保留，第二次跑就不用再合成。 */
     private val clips = mutableMapOf<String, java.io.File>()
     private var player: android.media.MediaPlayer? = null
+
+    /** 讓 App 唸一句並等它唸完。不等的話畫面會跳到下一段，聲音才姍姍來遲蓋在別段上。 */
+    private suspend fun speakAndWait(stage: Stage, text: String) =
+        suspendCancellableCoroutine<kotlin.Unit> { cont ->
+            var resumed = false
+            stage.speakAloud(text) {
+                if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
+            }
+        }
 
     /** 逐字打進輸入框。一次貼上看起來像作弊，逐字打才看得懂使用者在做什麼。 */
     private suspend fun typeSlowly(stage: Stage, text: String) {
