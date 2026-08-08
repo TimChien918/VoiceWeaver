@@ -45,6 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.view.WindowManager
+import androidx.compose.runtime.DisposableEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -383,6 +385,14 @@ class MainActivity : ComponentActivity() {
                         // 錄影時畫面上不再有 Stop 鈕（那顆會被錄進影片，做報告很難看）。
                         // 實體返回鍵當中止出口：看不見，但隨時按得到。
                         val demoRunning by DemoController.active.collectAsState()
+                        // 演示會跑好幾分鐘，使用者多半是按下去就走開。螢幕逾時一暗，
+                        // 錄下來就是半段黑畫面——而且畫面暗掉後 VirtualDisplay 也拍不到東西。
+                        // 演示期間強制保持螢幕恆亮，結束立刻還原（不改使用者的系統設定）。
+                        DisposableEffect(demoRunning) {
+                            val w = this@MainActivity.window
+                            if (demoRunning) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            onDispose { w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+                        }
                         androidx.activity.compose.BackHandler(enabled = demoRunning) {
                             DemoController.stop()
                             ScreenRecordService.stopRecording(this@MainActivity)
