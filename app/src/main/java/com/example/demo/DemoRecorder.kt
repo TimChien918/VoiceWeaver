@@ -200,20 +200,39 @@ class DemoRecorder(
                 val n = rec.read(buf, 0, buf.size)
                 if (n <= 0) continue
                 if (startUs < 0) startUs = System.nanoTime() / 1000
-                val inIdx = ac.dequeueInputBuffer(TIMEOUT_US)
-                if (inIdx >= 0) {
-                    // 停止的瞬間 buffer 可能已經被回收 → 這裡拿到 null。以前用 !! 直接炸，
-                    // 音訊執行緒帶著例外結束，最後那一段 EOS 也就沒送出去。
+
+                // 這一整塊 PCM **一個位元組都不能丟**。
+                //
+                // 之前寫成「拿不到輸入緩衝就跳過這一塊」——編碼器忙的時候那一塊就
+                // 直接消失了，剩下的片段黏在一起。時間軸長度沒變（是我自己用取樣數
+                // 算的），但內容少了一截，播出來就是被加速、被切碎、聽不懂；
+                // 而喇叭當下放的是完整的，所以「播的時候正常、錄起來很怪」。
+                //
+                // 另外 put(buf, 0, n) 沒看過緩衝容量：n 比容量大就丟
+                // BufferOverflowException，整條音訊執行緒當場陣亡，之後全是無聲。
+                // 改成分塊寫、拿不到緩衝就先抽輸出再重試，不前進、也不丟。
+                var off = 0
+                while (off < n && running.get()) {
+                    val inIdx = ac.dequeueInputBuffer(TIMEOUT_US)
+                    if (inIdx < 0) {
+                        while (drainOnce(ac, isVideo = false) == WROTE) { /* 騰出空間再試 */ }
+                        continue
+                    }
+                    // 停止的瞬間 buffer 可能已經被回收 → 這裡拿得到 null。
                     val ib = ac.getInputBuffer(inIdx)
                     if (ib == null) { ac.queueInputBuffer(inIdx, 0, 0, 0, 0); continue }
-                    ib.clear(); ib.put(buf, 0, n)
+                    ib.clear()
+                    // 對齊到整數個取樣，免得一個取樣被切成兩半（左右聲道錯位＝雜音）
+                    val room = (ib.remaining() / bytesPerFrame) * bytesPerFrame
+                    val chunk = minOf(room, n - off)
+                    if (chunk <= 0) { ac.queueInputBuffer(inIdx, 0, 0, 0, 0); continue }
+                    ib.put(buf, off, chunk)
                     val pts = startUs + frames * 1_000_000L / rate
-                    ac.queueInputBuffer(inIdx, 0, n, pts, 0)
-                    frames += n / bytesPerFrame
+                    ac.queueInputBuffer(inIdx, 0, chunk, pts, 0)
+                    frames += chunk / bytesPerFrame
+                    off += chunk
+                    while (drainOnce(ac, isVideo = false) == WROTE) { /* 順便抽乾 */ }
                 }
-                // 抽乾，不是抽一次。抽不乾的話編碼器輸出會塞住，下一輪 read 被拖慢，
-                // 擷取就會掉資料——聽起來是斷斷續續的破音。
-                while (drainOnce(ac, isVideo = false) == WROTE) { /* 抽到沒有為止 */ }
             }
             // 收尾：送一個 end-of-stream，把編碼器裡剩下的資料吐乾淨
             val inIdx = ac.dequeueInputBuffer(TIMEOUT_US)
