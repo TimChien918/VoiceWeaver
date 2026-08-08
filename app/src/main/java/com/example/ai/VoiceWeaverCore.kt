@@ -1935,6 +1935,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun demoSpeak(text: String, onDone: () -> Unit) =
         ttsModule.speakDemo(text, onDone)
 
+    /** 這次旁白會用哪個角色。換角色時演示要把預錄快取整批作廢。 */
+    fun demoVoiceTag(): String =
+        (com.example.ai.LocalSovitsHelper.currentVoice()?.displayLabel ?: "") + "|" +
+            settings.value.gptSovitApiBaseUrl
+
     /** 電腦端 GPT-SoVITS 現在能不能用（旁白要靠它；不能用就該讓使用者先知道）。 */
     fun demoVoiceReady(): Boolean = ttsModule.gptSovitReady()
 

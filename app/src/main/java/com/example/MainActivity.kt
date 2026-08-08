@@ -402,6 +402,7 @@ class MainActivity : ComponentActivity() {
                                         scope = demoScope,
                                         ids = ids,
                                         narrate = narrate,
+                                        voiceTag = viewModel.demoVoiceTag(),
                                         navigate = { route -> navController.go(route) },
                                         stage = object : DemoController.Stage {
                                             override fun type(text: String) = viewModel.demoTypeFragments(text)

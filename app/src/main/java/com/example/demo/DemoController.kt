@@ -45,11 +45,15 @@ object DemoController {
         return maxOf(MIN_STEP_NARRATED_MS, (words / 2.6 * 1000).toLong()) + TAIL_PAD_MS
     }
 
-    /** 勾選的單元總長（秒）。 */
+    /** 勾選的單元總長（秒）。
+     *
+     *  含 stageMs：畫面動作裡自己 delay 的時間（例如危機那段在對話之間刻意停頓）。
+     *  不算進去的話，有大量畫面動作的單元會被嚴重低估——使用者是靠這個數字
+     *  決定要不要按下錄影的。 */
     fun estimateSeconds(ids: Set<String>, narrated: Boolean): Int =
         (UNITS.filter { it.id in ids }
             .flatMap { it.steps }
-            .sumOf { stepMillis(it.cap, narrated) + it.holdMs } / 1000).toInt()
+            .sumOf { maxOf(stepMillis(it.cap, narrated), it.stageMs) + it.holdMs } / 1000).toInt()
 
     /**
      * 演示可以對畫面做的事。由 MainActivity 用 ViewModel 實作。
@@ -103,6 +107,8 @@ object DemoController {
         val holdMs: Long = 0,
         /** 這一步要對畫面做什麼；null＝只切頁面。 */
         val onStage: (suspend (Stage) -> kotlin.Unit)? = null,
+        /** onStage 裡大約會自己等多久（估時用；不影響實際執行）。 */
+        val stageMs: Long = 0,
     )
 
     /** 示範用的碎詞與候選句（固定樣本，不呼叫任何 AI）。 */
@@ -220,7 +226,7 @@ object DemoController {
             Step("Some people cannot type at all. For them, the board is the way in.", route = "aac",
                 onStage = { it.clear(); it.aacCategory(null) }),
             Step("Cards are coloured by part of speech, and grouped by where you are.",
-                onStage = { it.aacCategory("food_drink"); delay(1200); it.aacCategory("medical") }, holdMs = 600),
+                onStage = { it.aacCategory("food_drink"); delay(1200); it.aacCategory("medical") }, holdMs = 600, stageMs = 1500L),
             Step("Tap by tap, a sentence takes shape, ready to speak or to rewrite.",
                 onStage = {
                     it.aacCategory("food_drink")
@@ -229,7 +235,7 @@ object DemoController {
                     it.aacSentence(listOf("f_water_cup", "f_warm_water_cup", "f_tea"))
                 }),
             Step("Everything scales up, for tired eyes and unsteady hands.",
-                onStage = { it.fontScale(1.4f); delay(1400); it.fontScale(1.8f) }, holdMs = 700),
+                onStage = { it.fontScale(1.4f); delay(1400); it.fontScale(1.8f) }, holdMs = 700, stageMs = 1600L),
         )),
         Unit("customcards", "📷", "Custom photo cards", 12, steps = listOf(
             Step("A stock drawing of a cup means nothing to someone's grandmother.", route = "aac",
@@ -241,7 +247,7 @@ object DemoController {
             Step("For the most severely affected, a whole grid is still too much.", route = "aac",
                 onStage = { it.clear(); it.severity("Mild") }),
             Step("So the device becomes one card at a time, scanning on its own.",
-                onStage = { it.severity("Severe") }, holdMs = 1400),
+                onStage = { it.severity("Severe") }, holdMs = 1400, stageMs = 400L),
             Step("A tap speaks it, and leaves a trail the family can read.", holdMs = 1400),
             Step("Getting out needs a caregiver PIN. Nobody gets lost in the app.",
                 onStage = { delay(1200); it.severity("Mild") }),
@@ -328,6 +334,14 @@ object DemoController {
 
     /** 已預錄好的旁白：句子 → 音檔。跨次執行保留，第二次跑就不用再合成。 */
     private val clips = mutableMapOf<String, java.io.File>()
+
+    /** 上一次預錄用的是哪個角色。換角色就要整批重錄，否則會播到上一個人的聲音。 */
+    private var clipsVoice: String = ""
+
+    /** 快取檔可能被 TtsModule 的 LRU 清掉 → 播之前再確認一次檔案還在。 */
+    private fun usableClip(line: String): java.io.File? =
+        clips[line]?.takeIf { it.exists() && it.length() > 0 }
+            ?: run { clips.remove(line); null }
     private var player: android.media.MediaPlayer? = null
 
     /** 讓 App 唸一句並等它唸完。不等的話畫面會跳到下一段，聲音才姍姍來遲蓋在別段上。 */
@@ -400,6 +414,8 @@ object DemoController {
         scope: CoroutineScope,
         ids: Set<String>,
         narrate: Boolean,
+        /** 這次旁白用的角色名。換角色時整批快取要作廢。 */
+        voiceTag: String,
         navigate: (String) -> kotlin.Unit,
         /** 對畫面動手的入口（由 MainActivity 用 ViewModel 實作）。 */
         stage: Stage,
@@ -424,9 +440,12 @@ object DemoController {
                     // 先把每一句旁白**錄成檔案**。演示時直接播那個檔，不再走一次 TTS——
                     // 那條路每次都會重新判語言、可能切模型，也可能在任何一步掉回系統機器音。
                     // 錄好的檔案留著，第二次跑完全不用合成。
+                    // 換過角色就把整批快取作廢——不然舊句子會用上一個角色的聲音播，
+                    // 同一支影片裡兩種音色交錯出現。
+                    if (voiceTag != clipsVoice) { clips.clear(); clipsVoice = voiceTag }
                     val lines = units.flatMap { u -> u.steps.map { it.cap } }
                         .filter { it.isNotBlank() }.distinct()
-                    val todo = lines.filter { it !in clips }
+                    val todo = lines.filter { usableClip(it) == null }
                     _prep.value = 0 to todo.size
                     todo.forEachIndexed { i, line ->
                         _prep.value = i to todo.size
@@ -443,7 +462,7 @@ object DemoController {
 
                     // 少一句都不開錄。使用者要的是自己的聲音；用系統機器音頂替，
                     // 只會在錄完整支影片之後才被發現。
-                    val missing = lines.count { it !in clips }
+                    val missing = lines.count { usableClip(it) == null }
                     if (missing > 0) {
                         onNarrationMissing(missing, lines.size)
                         return@launch
@@ -471,9 +490,12 @@ object DemoController {
                         _caption.value = if (narrate) s.cap else ""
                         val t0 = System.currentTimeMillis()
                         if (narrate && s.cap.isNotBlank()) {
-                            val clip = clips[s.cap]
+                            val clip = usableClip(s.cap)
                             if (clip != null) playClip(clip)
-                            else awaitCallback { done -> speakFallback(s.cap, done) }
+                            // 退路也要拿發言權，否則它會和示範發聲疊在一起
+                            else audioFloor.withLock {
+                                awaitCallback { done -> speakFallback(s.cap, done) }
+                            }
                             delay(TAIL_PAD_MS)      // 講完再讓畫面多停一下
                         }
                         staging?.join()
