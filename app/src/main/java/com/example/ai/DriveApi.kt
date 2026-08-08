@@ -80,6 +80,66 @@ object DriveApi {
         return if (arr.length() > 0) arr.getJSONObject(0).optString("id").ifBlank { null } else null
     }
 
+    /**
+     * 在 [parent] 底下找**所有**同名資料夾。
+     *
+     * Drive 沒有「同一層不能同名」這條規則——雲端硬碟最外層可以有兩個 VoiceWeaver，
+     * 在畫面上長得一模一樣。[findId] 只拿第一筆，而這個查詢沒有指定排序，
+     * 等於在兩者之間擲骰子：使用者的曲庫在 A，App 卻一直在看 B。
+     */
+    private fun findFolders(token: String, name: String, parent: String): List<Entry> {
+        val query = "name = ${q(name)} and ${q(parent)} in parents and trashed = false " +
+            "and mimeType = '$FOLDER_MIME'"
+        val out = ArrayList<Entry>()
+        var pageToken: String? = null
+        do {
+            val url = buildString {
+                append("$FILES?q=").append(enc(query))
+                append("&spaces=drive&pageSize=100")
+                append("&fields=").append(enc("nextPageToken, files(id,name)"))
+                if (pageToken != null) append("&pageToken=").append(enc(pageToken!!))
+            }
+            val body = get(token, url) ?: break
+            val o = runCatching { JSONObject(body) }.getOrNull() ?: break
+            val files = o.optJSONArray("files")
+            for (i in 0 until (files?.length() ?: 0)) {
+                val f = files!!.getJSONObject(i)
+                out.add(Entry(f.optString("id"), f.optString("name"), FOLDER_MIME, 0L))
+            }
+            pageToken = o.optString("nextPageToken").ifBlank { null }
+        } while (pageToken != null)
+        return out
+    }
+
+    /**
+     * VoiceWeaver 根資料夾的 id。
+     *
+     * 為什麼不直接 findId：Drive 允許同名資料夾，而這裡**真的會有兩個**——
+     * 某一端建過一個，另一端因為 drive.file 逐檔授權看不到它，於是又自己建了一個。
+     * 之後每次查詢都在兩者之間擲骰子，使用者就會看到「聲波模型存得進去、
+     * 但曲庫永遠是空的」這種前後矛盾的狀態，而兩個資料夾他在 Drive 上都看得到。
+     *
+     * 挑「裝著曲庫的那個」，不是「剛好排第一的那個」。
+     */
+    fun voiceWeaverRoot(token: String, create: Boolean): String? {
+        val cands = findFolders(token, ROOT_FOLDER, "root")
+        if (cands.isEmpty()) return if (create) ensureFolder(token, ROOT_FOLDER, "root") else null
+        if (cands.size == 1) return cands[0].id
+        var best: String? = null
+        var bestScore = -1
+        for (c in cands) {
+            val kids = listChildren(token, c.id, foldersOnly = true).map { it.name.uppercase() }
+            val score = when {
+                MODELS_DIR.uppercase() in kids -> 3
+                kids.any { it in LANG_DIRS } -> 2          // 舊版面
+                ACOUSTIC_DIR.uppercase() in kids -> 1      // 只有聲波模型，沒有曲庫
+                else -> 0
+            }
+            if (score > bestScore) { bestScore = score; best = c.id }
+        }
+        return best
+    }
+
     /** 找資料夾，沒有就建。回 id；失敗回 null。 */
     /** 取得（必要時建立）parent 底下叫 name 的資料夾。聲波模型照分類分層時會用到。 */
     fun ensureFolder(token: String, name: String, parent: String): String? {
@@ -123,8 +183,14 @@ object DriveApi {
      * 而 Firebase 身分本來就是同一個 Google 帳號換來的，多包一層永遠只有一個子資料夾，
      * 只是讓他在 Drive 裡多點一次、還看到一串沒有意義的亂碼。
      */
-    fun acousticFolder(token: String, create: Boolean): String? =
-        folderPath(token, listOf(ROOT_FOLDER, ACOUSTIC_DIR), create)
+    // 一定要從 voiceWeaverRoot() 走，不能 folderPath(listOf(ROOT_FOLDER, ...))：
+    // 有兩個同名根時，兩條路徑會各自挑到不同的那一個，於是專屬發音存進 A、
+    // 專屬聲音卻在 B——兩份資料在同一個 Drive 裡分家，而畫面上完全看不出來。
+    fun acousticFolder(token: String, create: Boolean): String? {
+        val root = voiceWeaverRoot(token, create) ?: return null
+        return if (create) ensureFolder(token, ACOUSTIC_DIR, root)
+               else findId(token, ACOUSTIC_DIR, root, folder = true)
+    }
 
     /**
      * 語音模型資料夾。新版面是 VoiceWeaver/Models，
@@ -132,12 +198,15 @@ object DriveApi {
      * 與 Mac 端 emotion_models.models_root 是同一條規則。
      */
     fun modelsFolder(token: String): String? {
-        val root = folderPath(token, listOf(ROOT_FOLDER), create = false) ?: return null
+        val root = voiceWeaverRoot(token, create = false) ?: return null
         findId(token, MODELS_DIR, root, folder = true)?.let { return it }
         val hasLegacy = listChildren(token, root, foldersOnly = true)
-            .any { it.name.uppercase() in setOf("ZH", "EN", "JA", "KO") }
+            .any { it.name.uppercase() in LANG_DIRS }
         return if (hasLegacy) root else null
     }
+
+    /** 語言資料夾名。與 Mac 端 drive_uploader.LANG_DIRS、網頁版 LANG_DIRS 一致。 */
+    private val LANG_DIRS = setOf("ZH", "EN", "JA", "KO")
 
     /** Drive 上的一個項目。 */
     data class Entry(val id: String, val name: String, val mimeType: String, val size: Long) {

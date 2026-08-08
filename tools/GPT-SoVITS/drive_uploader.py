@@ -328,6 +328,55 @@ def _ensure_path(svc, parts):
     return parent
 
 
+def _find_folders(svc, name, parent):
+    """同名資料夾**全部**列出來。
+
+    Drive 沒有「同一層不能同名」這條規則——雲端硬碟最外層可以有兩個 VoiceWeaver，
+    在畫面上長得一模一樣。_find_folder 只拿 files[0]，而這個查詢沒有指定排序，
+    等於在兩者之間擲骰子：使用者的曲庫在 A，程式卻一直在看 B。
+    """
+    q = (f"name = {_q(name)} and {_q(parent)} in parents and "
+         f"mimeType = '{FOLDER_MIME}' and trashed = false")
+    out, page = [], None
+    while True:
+        r = _retry(lambda p=page: svc.files().list(
+            q=q, spaces="drive", fields="nextPageToken, files(id,name)",
+            pageSize=100, pageToken=p).execute())
+        out.extend(r.get("files", []))
+        page = r.get("nextPageToken")
+        if not page:
+            break
+    return out
+
+
+def _root_folder(svc, create=False):
+    """VoiceWeaver 根資料夾 id。
+
+    有兩個同名根時挑「裝著曲庫的那個」，不是「剛好排第一的那個」——
+    否則會出現「聲波模型存得進去、但曲庫永遠是空的」這種前後矛盾的狀態，
+    而兩個資料夾使用者在 Drive 上都看得到。三端（Mac／App／網頁）同一條規則。
+    """
+    cands = _find_folders(svc, ROOT_FOLDER, "root")
+    if not cands:
+        return _ensure_folder(svc, ROOT_FOLDER, "root") if create else None
+    if len(cands) == 1:
+        return cands[0]["id"]
+    best, best_score = None, -1
+    for c in cands:
+        kids = {f["name"].upper() for f in _list_children(svc, c["id"], folders_only=True)}
+        if MODELS_DIR.upper() in kids:
+            score = 3
+        elif kids & LANG_DIRS:
+            score = 2                       # 舊版面
+        elif ACOUSTIC_DIR.upper() in kids:
+            score = 1                       # 只有聲波模型，沒有曲庫
+        else:
+            score = 0
+        if score > best_score:
+            best, best_score = c["id"], score
+    return best
+
+
 def _models_parent(svc, create=False):
     """Drive 上語音模型的父資料夾 id。
 
@@ -337,11 +386,9 @@ def _models_parent(svc, create=False):
     [create] 為真時（上傳路徑）會把 Models/ 建出來——新上傳一律進新版面，
     但**不會**把舊版面的既有角色搬過去，那是 [migrate_drive_layout] 的事。
     """
-    root_id = _find_folder(svc, ROOT_FOLDER, "root")
+    root_id = _root_folder(svc, create=create)
     if not root_id:
-        if not create:
-            return None, False
-        root_id = _ensure_path(svc, [ROOT_FOLDER])
+        return None, False
     models_id = _find_folder(svc, MODELS_DIR, root_id)
     if models_id:
         return models_id, False
@@ -369,7 +416,7 @@ def migrate_drive_layout(creds=None, progress=None):
         if not creds:
             res["error"] = "尚未登入 Google"; return res
         svc = _service(creds)
-        root_id = _find_folder(svc, ROOT_FOLDER, "root")
+        root_id = _root_folder(svc)
         if not root_id:
             res["ok"] = True; return res          # Drive 上還沒有曲庫，沒得搬
         langs = [f for f in _list_children(svc, root_id, folders_only=True)
@@ -695,11 +742,9 @@ def _acoustic_parent(svc, create=False):
     而 Firebase 身分也是同一個 Google 帳號換來的——多包一層永遠只有一個子資料夾，
     只是讓他在 Drive 裡多點一次、還看到一串沒有意義的亂碼。
     """
-    root_id = _find_folder(svc, ROOT_FOLDER, "root")
+    root_id = _root_folder(svc, create=create)
     if not root_id:
-        if not create:
-            return None
-        root_id = _ensure_path(svc, [ROOT_FOLDER])
+        return None
     return (_ensure_folder(svc, ACOUSTIC_DIR, root_id) if create
             else _find_folder(svc, ACOUSTIC_DIR, root_id))
 
@@ -917,7 +962,7 @@ def upload_catalog(root, creds=None):
         if not creds:
             return False
         svc = _service(creds)
-        leaf = _ensure_path(svc, [ROOT_FOLDER])
+        leaf = _root_folder(svc, create=True)
         _upload_file(svc, p, leaf)
         return True
     except Exception:
