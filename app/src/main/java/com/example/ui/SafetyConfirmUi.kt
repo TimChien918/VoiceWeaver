@@ -78,7 +78,18 @@ fun SpeakGateDialogs(viewModel: VoiceWeaverViewModel, p: AppPalette) {
             },
             containerColor = p.surface
         )
-        is VoiceWeaverViewModel.SpeakGate.Locked -> AlertDialog(
+        is VoiceWeaverViewModel.SpeakGate.Locked -> {
+            // 演示進行中把對話框視窗的「壓暗」關掉。
+            // 那層暗是整個視窗的 dim，會連字幕一起壓黑——而字幕是影片的一部分，
+            // 必須維持可讀。App 畫面本身要不要看起來變暗，交給演示自己畫的遮罩處理。
+            if (com.example.demo.DemoController.active.collectAsState().value) {
+                val view = androidx.compose.ui.platform.LocalView.current
+                androidx.compose.runtime.SideEffect {
+                    ((view.parent as? androidx.compose.ui.window.DialogWindowProvider))
+                        ?.window?.setDimAmount(0f)
+                }
+            }
+            AlertDialog(
             onDismissRequest = { viewModel.dismissSpeakGate() },
             icon = { Icon(Icons.Default.Block, null, tint = p.dangerRose) },
             title = { Text(I18n.tr("語音輸出已鎖定"), color = p.dangerRose) },
@@ -89,7 +100,8 @@ fun SpeakGateDialogs(viewModel: VoiceWeaverViewModel, p: AppPalette) {
                 }
             },
             containerColor = p.surface
-        )
+            )
+        }
         else -> Unit
     }
 }

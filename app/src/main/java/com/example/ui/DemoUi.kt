@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -204,8 +205,12 @@ fun DemoOverlay(onStop: () -> Unit) {
             }
         }
 
-        // 進度＋停止：靠上，避開底部字幕
-        Row(
+        // 進度＋停止：**錄影時整個不顯示**。
+        // 它們是給操作者看的，不是影片內容；錄進去就是一顆紅色 Stop 和
+        // 「56/71」壓在 App 標題上，拿去做報告很難看。
+        // 錄影中要中止改按實體返回鍵（見 MainActivity）。
+        val recording by com.example.demo.ScreenRecordService.recording.collectAsState()
+        if (!recording) Row(
             Modifier.align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(8.dp),
@@ -226,7 +231,15 @@ fun DemoOverlay(onStop: () -> Unit) {
             }
         }
 
-        if (caption.isNotBlank()) {
+        // 字幕的字級**固定**，不跟著 App 的字級設定跑。
+        // 演示裡有一段就是在示範字級從 1.0 拉到 2.2 倍，字幕跟著一起放大縮小的話
+        // 會忽大忽小、還會撐破自己的底框——那是影片的字幕，不是 App 的介面。
+        // 同理，鎖定畫面把畫面壓暗時字幕也不該跟著變暗（見下面自己畫的遮罩）。
+        if (caption.isNotBlank()) androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+                density = LocalDensity.current.density, fontScale = 1f
+            )
+        ) {
             Surface(
                 shape = RoundedCornerShape(12.dp), color = Color(0xD1000000),
                 modifier = Modifier.align(Alignment.BottomCenter)

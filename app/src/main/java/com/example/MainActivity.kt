@@ -380,6 +380,13 @@ class MainActivity : ComponentActivity() {
                         GazeCursorOverlay(eyeState = eyeState, activity = this@MainActivity)
                         BlinkScanOverlay(viewModel = viewModel, eyeState = eyeState)
 
+                        // 錄影時畫面上不再有 Stop 鈕（那顆會被錄進影片，做報告很難看）。
+                        // 實體返回鍵當中止出口：看不見，但隨時按得到。
+                        val demoRunning by DemoController.active.collectAsState()
+                        androidx.activity.compose.BackHandler(enabled = demoRunning) {
+                            DemoController.stop()
+                            ScreenRecordService.stopRecording(this@MainActivity)
+                        }
                         DemoOverlay(onStop = {
                             DemoController.stop()
                             ScreenRecordService.stopRecording(this@MainActivity)
