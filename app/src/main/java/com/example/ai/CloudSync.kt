@@ -68,11 +68,30 @@ object CloudSync {
     /** 登入合一：同一次 Google 登入既是 Firebase 身分，也要到 Drive（drive.file）權限。 */
     const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 
+    /**
+     * 只讀「檔案清單」的權限。**列出專屬聲音一定要有這個。**
+     *
+     * drive.file 是逐檔授權：只看得到「本 App 自己建立的檔案」。專屬發音是 App
+     * 自己寫上去的，所以讀得回來；但語音模型是別的途徑進 Drive 的——Colab 掛載
+     * Drive 寫的、或使用者自己在 Drive 網頁上拖進去的——對 drive.file 而言，
+     * 那些檔案等同不存在。同一個帳號、同一個資料夾，差別只在「誰建立的」。
+     * 這正是「專屬發音收得到、專屬聲音收不到」的原因，怎麼改資料夾邏輯都沒用。
+     *
+     * 為什麼是 metadata.readonly 而不是 drive.readonly：這個畫面要回答的問題
+     * 只是「我有哪些聲音、哪些能用」——角色名、語言、情緒（從參考音檔名讀）、
+     * 大小，全部都是 metadata。合成本來就在電腦或 Colab 上跑，手機不需要、
+     * 也不該有能力讀出使用者 Drive 裡任何一個檔案的**內容**。
+     */
+    const val DRIVE_METADATA_SCOPE = "https://www.googleapis.com/auth/drive.metadata.readonly"
+
     fun googleClient(ctx: Context): GoogleSignInClient {
         val opt = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(ctx.getString(R.string.default_web_client_id))
             .requestEmail()
-            .requestScopes(com.google.android.gms.common.api.Scope(DRIVE_SCOPE))
+            .requestScopes(
+                com.google.android.gms.common.api.Scope(DRIVE_SCOPE),
+                com.google.android.gms.common.api.Scope(DRIVE_METADATA_SCOPE),
+            )
             .build()
         return GoogleSignIn.getClient(ctx, opt)
     }
@@ -83,12 +102,31 @@ object CloudSync {
             ?.any { it.scopeUri == DRIVE_SCOPE } == true
 
     /**
+     * 是否拿到了「讀檔案清單」的權限。
+     *
+     * 舊版登入的人**不會**有——授權是登入當下決定的，改了程式碼不會回頭生效。
+     * 這種人打開專屬聲音會看到空清單，而他的曲庫好端端在 Drive 上。所以要能
+     * 問得出來，畫面才有辦法叫他重新登入一次，而不是丟一句「還沒有語音模型」。
+     */
+    fun hasDriveMetadataScope(ctx: Context): Boolean =
+        GoogleSignIn.getLastSignedInAccount(ctx)?.grantedScopes
+            ?.any { it.scopeUri == DRIVE_METADATA_SCOPE } == true
+
+    /**
      * 取 Drive API 用的 access token（阻塞，需在背景執行緒呼叫）。
      * 依附同一個已登入的 Google 帳號 → 存取的是「使用者自己的」Drive。
+     *
+     * 兩個範圍一起要。**只要到其中一個是不夠的**：少了 drive.file 存不了
+     * 專屬發音，少了 metadata.readonly 看不到別的程式建立的語音模型。
+     * 舊帳號沒授權過 metadata 時，要 token 會失敗——退回只要 drive.file，
+     * 至少專屬發音那條路還活著，不要整個雲端功能一起倒。
      */
     fun driveAccessToken(ctx: Context): String? {
         val acct = GoogleSignIn.getLastSignedInAccount(ctx)?.account ?: return null
+        val both = "oauth2:$DRIVE_SCOPE $DRIVE_METADATA_SCOPE"
         return runCatching {
+            com.google.android.gms.auth.GoogleAuthUtil.getToken(ctx, acct, both)
+        }.getOrNull() ?: runCatching {
             com.google.android.gms.auth.GoogleAuthUtil.getToken(ctx, acct, "oauth2:$DRIVE_SCOPE")
         }.getOrNull()
     }
