@@ -48,6 +48,12 @@ class DemoRecorder(
         private const val AUDIO_BITRATE = 128_000
         private const val TIMEOUT_US = 10_000L
 
+        // drainOnce 的三種結果。原本只回 Boolean（是不是 EOS），呼叫端就分不出
+        // 「這次有抽到東西」和「暫時沒有東西」——想抽乾也寫不出正確的迴圈條件。
+        private const val NOTHING = 0    // 這次沒有輸出（先讓出去，等下再來）
+        private const val WROTE = 1      // 抽到並處理了一筆
+        private const val EOS = 2        // 收到 end-of-stream，這一軌結束
+
         /** 這台裝置能不能把 App 自己的聲音直接錄進去。 */
         fun canCapturePlayback(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     }
@@ -135,7 +141,14 @@ class DemoRecorder(
             .setAudioPlaybackCaptureConfig(cfg)
             .build()
 
-        val aFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, 1).apply {
+        // ⚠️ 編碼器一定要用 AudioRecord **實際**拿到的取樣率與聲道數，不能用我們要求的。
+        // 播放擷取（REMOTE_SUBMIX）是照裝置的混音率走的，多半是 48000；
+        // 我們要 44100、它給 48000，卻還是標成 44100 寫進檔案，播出來就會整段
+        // 變慢、音調變低——聽起來就是「聲音很奇怪」。
+        val realRate = rec.sampleRate
+        val realCh = rec.channelCount
+        Log.i(TAG, "音訊擷取：${realRate} Hz / ${realCh} 聲道（要求 $SAMPLE_RATE / 1）")
+        val aFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, realRate, realCh).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BITRATE)
             setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, minBuf * 2)
@@ -147,16 +160,27 @@ class DemoRecorder(
         audioRecord = rec
         audioCodec = ac
         rec.startRecording()
-        audioThread = Thread({ pumpAudio(rec, ac, minBuf) }, "vw-rec-audio").apply { start() }
+        audioThread = Thread({ pumpAudio(rec, ac, minBuf, realRate, realCh) }, "vw-rec-audio").apply { start() }
     }
 
-    /** PCM → AAC 編碼器；同一條執行緒順便把編好的資料抽出去寫檔。 */
-    private fun pumpAudio(rec: AudioRecord, ac: MediaCodec, bufSize: Int) {
+    /**
+     * PCM → AAC 編碼器；同一條執行緒順便把編好的資料抽出去寫檔。
+     *
+     * 時間戳用「累計取樣數」算，不是用讀到的當下時間。read() 是一陣一陣回來的
+     * （有時卡一下、有時連兩包），拿 wall clock 當時間戳等於把這些抖動寫進音軌，
+     * 播出來會忽快忽慢、有顫音。從第一次讀到的時刻起算，之後每一包都是
+     * 「起點 + 已累計取樣 / 取樣率」——間隔一定均勻，也和影像共用同一個時鐘原點。
+     */
+    private fun pumpAudio(rec: AudioRecord, ac: MediaCodec, bufSize: Int, rate: Int, channels: Int) {
         val buf = ByteArray(bufSize)
+        val bytesPerFrame = 2 * channels          // PCM 16-bit
+        var startUs = -1L
+        var frames = 0L
         try {
             while (running.get()) {
                 val n = rec.read(buf, 0, buf.size)
                 if (n <= 0) continue
+                if (startUs < 0) startUs = System.nanoTime() / 1000
                 val inIdx = ac.dequeueInputBuffer(TIMEOUT_US)
                 if (inIdx >= 0) {
                     // 停止的瞬間 buffer 可能已經被回收 → 這裡拿到 null。以前用 !! 直接炸，
@@ -164,16 +188,20 @@ class DemoRecorder(
                     val ib = ac.getInputBuffer(inIdx)
                     if (ib == null) { ac.queueInputBuffer(inIdx, 0, 0, 0, 0); continue }
                     ib.clear(); ib.put(buf, 0, n)
-                    // 用與影像編碼器同一個時鐘（CLOCK_MONOTONIC），才對得起來
-                    ac.queueInputBuffer(inIdx, 0, n, System.nanoTime() / 1000, 0)
+                    val pts = startUs + frames * 1_000_000L / rate
+                    ac.queueInputBuffer(inIdx, 0, n, pts, 0)
+                    frames += n / bytesPerFrame
                 }
-                drainOnce(ac, isVideo = false)
+                // 抽乾，不是抽一次。抽不乾的話編碼器輸出會塞住，下一輪 read 被拖慢，
+                // 擷取就會掉資料——聽起來是斷斷續續的破音。
+                while (drainOnce(ac, isVideo = false) == WROTE) { /* 抽到沒有為止 */ }
             }
             // 收尾：送一個 end-of-stream，把編碼器裡剩下的資料吐乾淨
             val inIdx = ac.dequeueInputBuffer(TIMEOUT_US)
             if (inIdx >= 0) {
-                ac.queueInputBuffer(inIdx, 0, 0, System.nanoTime() / 1000,
-                    MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                val pts = (if (startUs < 0) System.nanoTime() / 1000 else startUs) +
+                    frames * 1_000_000L / rate
+                ac.queueInputBuffer(inIdx, 0, 0, pts, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
             }
             drain(ac, isVideo = false)
         } catch (t: Throwable) {
@@ -183,18 +211,18 @@ class DemoRecorder(
 
     private fun drain(codec: MediaCodec, isVideo: Boolean) {
         while (true) {
-            if (drainOnce(codec, isVideo)) return       // 收到 EOS
+            if (drainOnce(codec, isVideo) == EOS) return
             if (!running.get() && isVideo) {
                 // 影像沒有「送 EOS」的入口（輸入是 Surface），只能用 signalEndOfInputStream
                 runCatching { codec.signalEndOfInputStream() }
-                while (!drainOnce(codec, isVideo)) { /* 抽到 EOS 為止 */ }
+                while (drainOnce(codec, isVideo) != EOS) { /* 抽到 EOS 為止 */ }
                 return
             }
         }
     }
 
-    /** 抽一次輸出。回傳 true 表示收到 end-of-stream。 */
-    private fun drainOnce(codec: MediaCodec, isVideo: Boolean): Boolean {
+    /** 抽一次輸出。回傳 NOTHING / WROTE / EOS。 */
+    private fun drainOnce(codec: MediaCodec, isVideo: Boolean): Int {
         val info = MediaCodec.BufferInfo()
         val idx = codec.dequeueOutputBuffer(info, TIMEOUT_US)
         when {
@@ -223,7 +251,7 @@ class DemoRecorder(
                                 // 留著就得把它塞在負的時間軸上，播放器的行為各家不同。
                                 if (ptsBase < 0) {
                                     codec.releaseOutputBuffer(idx, false)
-                                    return false
+                                    return WROTE   // 有處理（丟掉），可以繼續抽下一筆
                                 }
                                 info.presentationTimeUs -= ptsBase
                                 if (info.presentationTimeUs >= 0) writeSample(track, out, info)
@@ -235,10 +263,11 @@ class DemoRecorder(
                     }
                 }
                 codec.releaseOutputBuffer(idx, false)
-                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return true
+                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return EOS
+                return WROTE
             }
         }
-        return false
+        return if (idx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) WROTE else NOTHING
     }
 
     private fun writeSample(track: Int, buf: ByteBuffer, info: MediaCodec.BufferInfo) {
