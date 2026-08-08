@@ -611,6 +611,20 @@ object I18n {
         "準備旁白中…" to arrayOf("Preparing narration…", "ナレーションを準備中…", "내레이션 준비 중…"),
         "句" to arrayOf("lines", "行", "문장"),
         "停止" to arrayOf("Stop", "停止", "중지"),
+        // 自動演示注入危機視窗的內容。介面是英文、訊息卻是中文的話，
+        // 錄出來就是一頁中英夾雜——這些一定要跟著介面語言走。
+        "正在通知家人…" to arrayOf("Contacting your family…", "家族に連絡しています…", "가족에게 연락 중…"),
+        "已通知家人" to arrayOf("Family notified", "家族に通知しました", "가족에게 알렸습니다"),
+        "已通知家人 · 視訊隨時可開" to arrayOf(
+            "Family notified · video call ready", "家族に通知済み・ビデオ通話可能", "가족에게 알림 · 영상통화 가능"),
+        "我好害怕" to arrayOf("I am scared", "こわいです", "무서워요"),
+        "我在路上了，你先坐下來，我十分鐘就到" to arrayOf(
+            "I am on my way. Sit down for me — ten minutes.",
+            "今向かっています。座って待っていて、あと10分です。",
+            "지금 가는 중이에요. 앉아서 기다려요, 10분이면 도착해요."),
+        "我好一點了" to arrayOf("I feel a little better", "少し落ち着きました", "조금 나아졌어요"),
+        "我需要幫忙" to arrayOf("I need help", "助けてください", "도와주세요"),
+        "我想要喝一杯水" to arrayOf("I would like a glass of water", "水を一杯ください", "물 한 잔 주세요"),
         "旁白錄不起來（{n}/{total} 句）：連不到電腦端的 GPT-SoVITS。請確認語音中心開著、位址設定正確，再試一次。" to arrayOf(
             "Could not record the narration ({n} of {total} lines): the computer's GPT-SoVITS is unreachable. Check that the voice centre is running and the address is correct, then try again.",
             "ナレーションを録音できません（{n}/{total} 行）：PCのGPT-SoVITSに接続できません。ボイスセンターが起動しているか、アドレスが正しいか確認してから再試行してください。",

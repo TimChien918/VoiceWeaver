@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -173,7 +174,7 @@ object DemoController {
             Step("So a row of fixed phrases sits at the top of the home screen, always there.",
                 onStage = { it.scrollToResult() }, holdMs = 900),
             Step("One tap, and the phone says it out loud straight away.",
-                onStage = { speakAndWait(it, "我需要幫忙") }, holdMs = 600),
+                onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
             Step("The same tap can message the family with the current location. Nothing is sent in this demo.",
                 holdMs = 900),
         )),
@@ -184,27 +185,27 @@ object DemoController {
             Step("So every sentence is screened before it is ever spoken.",
                 onStage = { typeSlowly(it, "I do not want to go on") }, holdMs = 500),
             Step("When something is found, the app refuses to say it, and says so plainly.",
-                onStage = { it.safetyLock("偵測到高風險訊息，正在通報緊急聯絡人…") }, holdMs = 1200),
+                onStage = { it.safetyLock(com.example.ui.I18n.tr("偵測到高風險訊息，正在通報緊急聯絡人…")) }, holdMs = 1200),
             Step("But refusing is not enough. It opens a window and stays with the person.",
                 onStage = {
                     delay(600); it.safetyLock(null); delay(300)
-                    it.crisisOpen("正在通知家人…")
+                    it.crisisOpen(com.example.ui.I18n.tr("正在通知家人…"))
                 }, holdMs = 1200),
             Step("A breathing circle to slow them down, warm colours, and only a few large buttons.",
                 holdMs = 1600),
             Step("The family is contacted automatically — no button to find, no words to type.",
                 onStage = {
-                    it.crisisStatus("已通知家人")
-                    it.crisisSay("sys", "已通知家人，請稍等。你並不孤單，我們一起慢慢呼吸。")
+                    it.crisisStatus(com.example.ui.I18n.tr("已通知家人"))
+                    it.crisisSay("sys", com.example.ui.I18n.tr("已通知家人，請稍等。你並不孤單，我們一起慢慢呼吸。"))
                 }, holdMs = 1400),
             Step("The person can send a short message with one tap.",
-                onStage = { delay(500); it.crisisSay("me", "我好害怕") }, holdMs = 1200),
+                onStage = { delay(500); it.crisisSay("me", com.example.ui.I18n.tr("我好害怕")) }, holdMs = 1200),
             Step("And the family answers, inside the same window.",
-                onStage = { delay(900); it.crisisSay("family", "我在路上了，你先坐下來，我 十分鐘 就到") }, holdMs = 1600),
+                onStage = { delay(900); it.crisisSay("family", com.example.ui.I18n.tr("我在路上了，你先坐下來，我十分鐘就到")) }, holdMs = 1600),
             Step("Photos, a voice clip, or a live video call are one tap away if the family asks for them.",
-                onStage = { it.crisisStatus("已通知家人 · 視訊隨時可開") }, holdMs = 1400),
+                onStage = { it.crisisStatus(com.example.ui.I18n.tr("已通知家人 · 視訊隨時可開")) }, holdMs = 1400),
             Step("The window cannot be closed by the person alone. Only when they say they are better.",
-                onStage = { delay(700); it.crisisSay("me", "我好一點了") }, holdMs = 1400),
+                onStage = { delay(700); it.crisisSay("me", com.example.ui.I18n.tr("我好一點了")) }, holdMs = 1400),
             Step("Then it closes gently, and the app goes back to being an ordinary app.",
                 onStage = { delay(900); it.crisisClose(); it.clear() }, holdMs = 900),
             Step("In this demo nothing left the phone: no message, no photo, no call.", holdMs = 700),
@@ -272,7 +273,7 @@ object DemoController {
             Step("Communication is today. Recovery is the long game.", route = "rehab"),
             Step("A clinical phrase bank works offline, with no API key.", holdMs = 900),
             Step("Hear the target sentence. Say it back.",
-                onStage = { it.rehabTarget("我想要喝一杯水") }, holdMs = 700),
+                onStage = { it.rehabTarget(com.example.ui.I18n.tr("我想要喝一杯水")) }, holdMs = 700),
             Step("Every attempt is scored syllable by syllable, so progress is something you can see.", holdMs = 900),
         )),
         Unit("training", "📖", "Guided training", 14, steps = listOf(
@@ -319,16 +320,24 @@ object DemoController {
 
     private var job: Job? = null
 
+    // 「同一時間只准一個聲音」。畫面動作與旁白是並行跑的（畫面才不會等旁白講完
+    // 才動），但**聲音不能並行**——App 的示範發聲會直接疊在旁白上，變成兩個人同時講話。
+    // 這把鎖就是發言權：旁白拿著的時候示範發聲要排隊，反之亦然。
+    // 不用「打斷旁白」的做法，那會把句子切一半；排隊只是晚幾秒，聽起來自然得多。
+    private val audioFloor = kotlinx.coroutines.sync.Mutex()
+
     /** 已預錄好的旁白：句子 → 音檔。跨次執行保留，第二次跑就不用再合成。 */
     private val clips = mutableMapOf<String, java.io.File>()
     private var player: android.media.MediaPlayer? = null
 
     /** 讓 App 唸一句並等它唸完。不等的話畫面會跳到下一段，聲音才姍姍來遲蓋在別段上。 */
     private suspend fun speakAndWait(stage: Stage, text: String) =
-        suspendCancellableCoroutine<kotlin.Unit> { cont ->
-            var resumed = false
-            stage.speakAloud(text) {
-                if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
+        audioFloor.withLock {
+            suspendCancellableCoroutine<kotlin.Unit> { cont ->
+                var resumed = false
+                stage.speakAloud(text) {
+                    if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
+                }
             }
         }
 
@@ -343,7 +352,8 @@ object DemoController {
     }
 
     /** 播一段預錄好的旁白，等它真的播完。 */
-    private suspend fun playClip(file: java.io.File) = suspendCancellableCoroutine<kotlin.Unit> { cont ->
+    private suspend fun playClip(file: java.io.File) = audioFloor.withLock {
+      suspendCancellableCoroutine<kotlin.Unit> { cont ->
         var resumed = false
         val finish = {
             if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
@@ -359,6 +369,7 @@ object DemoController {
             }
         }.onFailure { finish() }     // 播不出來也要放行，不然整段演示卡在這裡
         cont.invokeOnCancellation { runCatching { player?.release() }; player = null }
+      }
     }
 
     fun stop() {
