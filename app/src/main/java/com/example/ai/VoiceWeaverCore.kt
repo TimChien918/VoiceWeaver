@@ -1101,6 +1101,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // ── 雲端同步（Firebase，與網頁版共用 users/{uid}）──────────────
     private val _cloudUser = MutableStateFlow(CloudSync.displayName)
     val cloudUser: StateFlow<String?> = _cloudUser.asStateFlow()
+
+    // 信箱獨立一條：兩個 Google 帳號的顯示名稱常常一模一樣（同一個人），
+    // 只有信箱分得出「雲端是空的」還是「登錯帳號」。
+    private val _cloudEmail = MutableStateFlow(CloudSync.email)
+    val cloudEmail: StateFlow<String?> = _cloudEmail.asStateFlow()
     private val _cloudUserPhoto = MutableStateFlow(CloudSync.photoUrl)
     val cloudUserPhoto: StateFlow<String?> = _cloudUserPhoto.asStateFlow()
     private val _cloudStatus = MutableStateFlow(if (CloudSync.isSignedIn) "已登入" else "未登入")
@@ -1123,18 +1128,18 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         }
         CloudSync.signInWithGoogle(idToken) { ok, msg ->
             _cloudStatus.value = msg
-            if (ok) { _cloudUser.value = CloudSync.displayName; _cloudUserPhoto.value = CloudSync.photoUrl; pullCloud() }
+            if (ok) { _cloudUser.value = CloudSync.displayName; _cloudEmail.value = CloudSync.email; _cloudUserPhoto.value = CloudSync.photoUrl; pullCloud() }
         }
     }
     fun cloudSignInAnon() {
         CloudSync.signInAnon { ok, msg ->
             _cloudStatus.value = msg
-            if (ok) { _cloudUser.value = CloudSync.displayName; _cloudUserPhoto.value = CloudSync.photoUrl; pullCloud() }
+            if (ok) { _cloudUser.value = CloudSync.displayName; _cloudEmail.value = CloudSync.email; _cloudUserPhoto.value = CloudSync.photoUrl; pullCloud() }
         }
     }
     fun cloudSignOut() {
         CloudSync.signOut(getApplication())
-        _cloudUser.value = null; _cloudUserPhoto.value = null; _cloudStatus.value = "已登出"
+        _cloudUser.value = null; _cloudEmail.value = null; _cloudUserPhoto.value = null; _cloudStatus.value = "已登出"
     }
     private fun pullCloud() {
         CloudSync.pull { llm, img, tg, chat, places ->

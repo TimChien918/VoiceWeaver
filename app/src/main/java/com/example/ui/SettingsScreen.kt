@@ -106,6 +106,7 @@ fun SettingsScreen(
 
     // 雲端同步（Firebase）：Google 登入 launcher + 狀態
     val cloudUser by viewModel.cloudUser.collectAsState()
+    val cloudEmail by viewModel.cloudEmail.collectAsState()
     val cloudUserPhoto by viewModel.cloudUserPhoto.collectAsState()
     val cloudStatus by viewModel.cloudStatus.collectAsState()
     val googleLauncher = rememberLauncherForActivityResult(
@@ -284,6 +285,7 @@ fun SettingsScreen(
                 actions = {
                     AccountAvatarButton(
                         cloudUser = cloudUser,
+                        cloudEmail = cloudEmail,
                         cloudUserPhoto = cloudUserPhoto,
                         cloudStatus = cloudStatus,
                         onSignInGoogle = { googleLauncher.launch(com.example.ai.CloudSync.googleClient(context).signInIntent) },
@@ -2517,6 +2519,7 @@ private fun IosTextActionRow(
 @Composable
 private fun AccountAvatarButton(
     cloudUser: String?,
+    cloudEmail: String?,
     cloudUserPhoto: String?,
     cloudStatus: String,
     onSignInGoogle: () -> Unit,
@@ -2554,6 +2557,12 @@ private fun AccountAvatarButton(
             if (cloudUser != null) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).widthIn(min = 180.dp)) {
                     Text(cloudUser, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = iosC.label)
+                    // 名字底下一定要有信箱。兩個 Google 帳號的顯示名稱與大頭貼
+                    // 常常一模一樣（同一個人），只有信箱看得出現在登的是哪一個——
+                    // 而雲端上的曲庫與專屬發音只存在其中一個帳號裡。
+                    if (!cloudEmail.isNullOrBlank() && cloudEmail != cloudUser) {
+                        Text(cloudEmail, fontSize = 12.sp, color = iosC.secondary, lineHeight = 16.sp)
+                    }
                     if (cloudStatus.isNotBlank()) {
                         Text(cloudStatus, fontSize = 12.sp, color = iosC.secondary, lineHeight = 16.sp)
                     }

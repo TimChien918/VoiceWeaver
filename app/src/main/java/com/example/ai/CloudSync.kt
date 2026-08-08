@@ -49,6 +49,18 @@ object CloudSync {
     val displayName: String?
         get() = auth.currentUser?.let { it.displayName ?: it.email ?: if (it.isAnonymous) "匿名使用者" else "已登入" }
 
+    /**
+     * 登入的 Google 信箱（匿名或拿不到時為 null）。
+     *
+     * 為什麼不能只顯示 [displayName]：Drive 的權限是 drive.file，只看得到
+     * 「本 App 在**這個帳號**建立的檔案」。一個人有兩個 Google 帳號很平常，
+     * 而曲庫、專屬發音只存在其中一個。偏偏兩個帳號的顯示名稱和大頭貼常常
+     * 一模一樣（同一個人），光看名字完全分不出現在登的是哪一個——
+     * 「雲端上沒有東西」與「登錯帳號」在畫面上長得一樣。信箱才分得出來。
+     */
+    val email: String?
+        get() = auth.currentUser?.takeIf { !it.isAnonymous }?.email?.ifBlank { null }
+
     /** Google 帳號頭像（Firebase 會自動從 Google 登入帶入）；匿名/無頭像時為 null。 */
     val photoUrl: String?
         get() = auth.currentUser?.photoUrl?.toString()
