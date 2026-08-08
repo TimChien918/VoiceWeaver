@@ -5,15 +5,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,9 +31,8 @@ import java.util.Locale
  * 丟 SecurityException。所以流程固定是「先啟動這個服務 → 服務裡才取 projection」，
  * 不能在 Activity 裡先拿 projection 再啟動服務。
  *
- * 聲音走麥克風。要錄到 App 自己播出來的旁白，正規做法是 AudioPlaybackCapture，
- * 但那條路 MediaRecorder 接不上（得自己 AudioRecord + MediaCodec + Muxer 混流），
- * 為了一個演示功能不值得。手機喇叭放旁白、麥克風收音，安靜的房間裡就夠用。
+ * 聲音**不走麥克風**：旁白是 App 自己播出去的，用 AudioPlaybackCapture 直接接起來
+ * （見 DemoRecorder），錄到的是乾淨的原始音訊，不會混進房間雜音。
  */
 class ScreenRecordService : Service() {
 
@@ -52,12 +50,16 @@ class ScreenRecordService : Service() {
         private const val EXTRA_DPI = "dpi"
         private const val EXTRA_AUDIO = "audio"
 
-        /** 錄完的檔案（給 UI 顯示存到哪）。 */
-        private val _lastFile = MutableStateFlow<File?>(null)
-        val lastFile: StateFlow<File?> = _lastFile.asStateFlow()
+        /** 錄完之後檔案在相簿裡的位置（給 UI 顯示存到哪）；失敗為 null。 */
+        private val _lastPath = MutableStateFlow<String?>(null)
+        val lastPath: StateFlow<String?> = _lastPath.asStateFlow()
 
         private val _recording = MutableStateFlow(false)
         val recording: StateFlow<Boolean> = _recording.asStateFlow()
+
+        /** 畫面是否**已經真的**開始寫進檔案（不是「已呼叫 start」）。 */
+        private val _capturing = MutableStateFlow(false)
+        val capturing: StateFlow<Boolean> = _capturing.asStateFlow()
 
         /** 只啟動前景服務（還不取 projection）——Android 14 要求的先後順序。 */
         fun startForegroundOnly(ctx: Context) {
@@ -87,8 +89,7 @@ class ScreenRecordService : Service() {
     }
 
     private var projection: MediaProjection? = null
-    private var display: VirtualDisplay? = null
-    private var recorder: MediaRecorder? = null
+    private var recorder: DemoRecorder? = null
     private var outFile: File? = null
 
     // Android 14 起 createVirtualDisplay 之前一定要註冊 callback，否則丟例外。
@@ -159,57 +160,71 @@ class ScreenRecordService : Service() {
         projection = mpm.getMediaProjection(code, data)?.also { it.registerCallback(projectionCallback, null) }
             ?: throw IllegalStateException("拿不到 MediaProjection")
 
-        val dir = getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: filesDir
-        dir.mkdirs()
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
-        val f = File(dir, "VoiceWeaver-Demo-$stamp.mp4")
+        // 先寫進 App 私有的快取，停止時再複製到相簿看得到的 Movies/VoiceWeaver。
+        // 直接寫 MediaStore 的 fd 也可以，但中途被砍時會留下一個 pending 的空項目
+        // 掛在相簿裡；寫本地檔、成功才發布，失敗就什麼都不會出現。
+        val f = File(cacheDir, "demo-recording.mp4")
+        runCatching { f.delete() }
         outFile = f
 
-        // 編碼尺寸取偶數：H.264 不吃奇數寬高，某些機型會直接 configure 失敗。
-        val vw = (w / 2) * 2
-        val vh = (h / 2) * 2
-
-        recorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()).apply {
-            if (withAudio) setAudioSource(MediaRecorder.AudioSource.MIC)
-            setVideoSource(MediaRecorder.VideoSource.SURFACE)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setOutputFile(f.absolutePath)
-            setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-            setVideoSize(vw, vh)
-            setVideoFrameRate(30)
-            setVideoEncodingBitRate(8_000_000)
-            if (withAudio) {
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(44_100)
-                setAudioEncodingBitRate(128_000)
-            }
-            prepare()
-        }
-
-        display = projection!!.createVirtualDisplay(
-            "VoiceWeaverDemo", vw, vh, dpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            recorder!!.surface, null, null
-        )
-        recorder!!.start()
+        _capturing.value = false
+        val r = DemoRecorder(projection!!, w, h, dpi, withAudio, f) { _capturing.value = true }
+        r.start()
+        recorder = r
         _recording.value = true
-        Log.i(TAG, "開始錄影 → ${f.absolutePath}")
+        Log.i(TAG, "開始錄影（音訊=${if (withAudio && DemoRecorder.canCapturePlayback()) "App 播放直錄" else "無"}）")
+    }
+
+    /**
+     * 把錄好的檔案發布到相簿的 Movies/VoiceWeaver，回使用者看得到的顯示名稱。
+     *
+     * 放 MediaStore 而不是 Android/data/<套件>/files——後者在檔案管理員裡幾乎找不到，
+     * 而這支影片的用途就是「拿出去給別人看」。
+     */
+    private fun publish(src: File): String? {
+        val name = "VoiceWeaver-Demo-" +
+            SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".mp4"
+        return runCatching {
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, name)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/VoiceWeaver")
+                    put(MediaStore.Video.Media.IS_PENDING, 1)
+                }
+            }
+            val uri = contentResolver.insert(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values
+            ) ?: return@runCatching null
+            contentResolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentResolver.update(uri, ContentValues().apply {
+                    put(MediaStore.Video.Media.IS_PENDING, 0)
+                }, null, null)
+            }
+            src.delete()
+            "Movies/VoiceWeaver/$name"
+        }.getOrElse {
+            Log.e(TAG, "發布到相簿失敗：${it.message}")
+            null
+        }
     }
 
     private fun teardown() {
-        // 這一段每一步都可能丟例外（沒錄到任何影格就 stop 一定失敗），
-        // 但一步失敗不能擋住後面的釋放，否則 projection 會一直掛著。
-        runCatching { recorder?.stop() }.onFailure { Log.w(TAG, "stop 失敗：${it.message}") }
-        runCatching { recorder?.reset() }
-        runCatching { recorder?.release() }
+        // 每一步都可能丟例外（沒錄到任何影格時尤其），但一步失敗不能擋住後面的釋放，
+        // 否則 MediaProjection 會一直掛著、狀態列的錄影圖示也不會消失。
+        val done = runCatching { recorder?.stop() }.getOrNull()
         recorder = null
-        runCatching { display?.release() }
-        display = null
         runCatching { projection?.unregisterCallback(projectionCallback) }
         runCatching { projection?.stop() }
         projection = null
         _recording.value = false
-        _lastFile.value = outFile?.takeIf { it.exists() && it.length() > 0 }
+        _capturing.value = false
+        _lastPath.value = done?.let { publish(it) }
+        if (done != null && _lastPath.value == null) {
+            // 發布失敗也不要把檔案丟掉，至少留在快取裡還救得回來
+            Log.w(TAG, "影片留在 ${done.absolutePath}")
+        }
     }
 
     override fun onDestroy() {

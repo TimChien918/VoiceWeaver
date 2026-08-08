@@ -223,16 +223,16 @@ object I18n {
             "Cannot reach the cloud (check you are signed in and online)",
             "クラウドに接続できません（ログインとネットワークを確認してください）",
             "클라우드에 연결할 수 없습니다 (로그인과 네트워크를 확인하세요)"),
-        "取回 %1\$d 筆；另有 %2\$d 筆只有文字設定，要在這支手機錄過音才會生效" to arrayOf(
-            "Restored %1\$d. Another %2\$d have text only — record them on this phone to activate.",
-            "%1\$d 件を復元。他に %2\$d 件はテキストのみ — この端末で録音すると有効になります。",
-            "%1\$d개 복원. 다른 %2\$d개는 텍스트만 있습니다 — 이 기기에서 녹음하면 활성화됩니다."),
+        "取回 {n} 筆；另有 {total} 筆只有文字設定，要在這支手機錄過音才會生效" to arrayOf(
+            "Restored {n}. Another {total} have text only — record them on this phone to activate.",
+            "{n} 件を復元。他に {total} 件はテキストのみ — この端末で録音すると有効になります。",
+            "{n}개 복원. 다른 {total}개는 텍스트만 있습니다 — 이 기기에서 녹음하면 활성화됩니다."),
         "VoiceWeaver 復健成績報告" to arrayOf(
             "VoiceWeaver rehab report", "VoiceWeaver リハビリ成績表", "VoiceWeaver 재활 리포트"),
-        "總練習 %1\$d 次    平均 %2\$d / 100" to arrayOf(
-            "%1\$d sessions    average %2\$d / 100",
-            "練習 %1\$d 回    平均 %2\$d / 100",
-            "연습 %1\$d회    평균 %2\$d / 100"),
+        "總練習 {n} 次    平均 {total} / 100" to arrayOf(
+            "{n} sessions    average {total} / 100",
+            "練習 {n} 回    平均 {total} / 100",
+            "연습 {n}회    평균 {total} / 100"),
         // 復健成績報告的 CSV 表頭
         "時間" to arrayOf("Time", "時刻", "시간"),
         "場景" to arrayOf("Place", "場面", "장소"),
@@ -580,6 +580,46 @@ object I18n {
         "請貼上 HTTPS 模型 URL" to arrayOf("Please paste an HTTPS model URL", "HTTPS モデル URL を貼付してください", "HTTPS 모델 URL을 붙여넣으세요"),
         "重組" to arrayOf("Compose", "再構成", "재구성"),
         "圖卡" to arrayOf("Cards", "カード", "카드"),
+
+        // ── 自動演示 ＋ 螢幕錄影 ──
+        // 面板本身跟著介面語言走；影片裡的旁白與字幕一律英文（報告用途），
+        // 所以單元名稱刻意不翻——那是影片的段落名，不是介面文字。
+        "自動演示" to arrayOf("Auto demo", "自動デモ", "자동 데모"),
+        "自動演示與螢幕錄影" to arrayOf(
+            "Demo & screen recording", "デモと画面録画", "데모 및 화면 녹화"),
+        "自動走過主要功能並錄影。全程不寫入資料、不送出任何訊息——危機介入與求救只是講解，不會真的觸發。" to arrayOf(
+            "Walks through the app on its own and records the screen. Nothing is written and no messages are sent — the crisis and SOS sections are described, not triggered.",
+            "アプリを自動で一巡し、画面を録画します。データは書き込まれず、メッセージも送信されません（危機介入とSOSは説明のみ）。",
+            "앱을 자동으로 한 바퀴 돌며 화면을 녹화합니다. 데이터는 기록되지 않고 메시지도 전송되지 않습니다(위기 개입과 SOS는 설명만)."),
+        "全選" to arrayOf("Select all", "すべて選択", "전체 선택"),
+        "清除" to arrayOf("Clear", "クリア", "지우기"),
+        "個單元" to arrayOf("sections", "セクション", "섹션"),
+        "英文旁白與字幕" to arrayOf(
+            "Narration + subtitles (English)", "英語ナレーションと字幕", "영어 내레이션 및 자막"),
+        "每一句都在開始錄影前先合成好，影片裡不會有等待。電腦用 CPU 跑 GPT-SoVITS 時，第一次每句約 10～30 秒；合成過的會留著，第二次幾乎不用等。" to arrayOf(
+            "Every line is synthesised before recording starts, so the video has no waiting in it. With GPT-SoVITS on a computer CPU that takes roughly 10–30 s per line the first time; lines are cached, so a second run starts almost immediately.",
+            "各行は録画開始前に合成されるため、動画に待ち時間は入りません。GPT-SoVITSをCPUで動かす場合、初回は1行あたり約10〜30秒。合成済みは保持されるので2回目はほぼ待ちません。",
+            "각 문장은 녹화 시작 전에 합성되므로 영상에 대기 시간이 없습니다. 컴퓨터 CPU로 GPT-SoVITS를 돌리면 처음에는 문장당 약 10~30초 걸리며, 합성한 것은 보관되어 두 번째부터는 거의 기다리지 않습니다."),
+        "把畫面錄成影片" to arrayOf(
+            "Record the screen to a video file", "画面を動画ファイルに録画", "화면을 동영상 파일로 녹화"),
+        "把旁白一起錄進影片" to arrayOf(
+            "Include the narration in the video", "ナレーションを動画に含める", "내레이션을 영상에 포함"),
+        "Android 規定 App 錄自己的畫面要你同意，會跳出系統視窗。旁白是直接取自 App 自己的音訊，不經過麥克風，所以不會錄到房間裡的聲音。影片會存到 Movies/VoiceWeaver，在相簿裡看得到。" to arrayOf(
+            "Android only lets an app record its own screen with your permission — a system prompt will appear. The narration is taken straight from the app's own audio, not through the microphone, so nothing in the room is recorded.\nThe finished video is saved to Movies/VoiceWeaver and shows up in your gallery.",
+            "Androidではアプリが自分の画面を録画するのに許可が必要で、システムの確認画面が出ます。ナレーションはアプリ自身の音声から直接取得し、マイクは使わないため周囲の音は入りません。\n動画は Movies/VoiceWeaver に保存され、ギャラリーに表示されます。",
+            "Android에서는 앱이 자기 화면을 녹화하려면 권한이 필요해 시스템 창이 나타납니다. 내레이션은 앱 자체 오디오에서 직접 가져오며 마이크를 쓰지 않으므로 주변 소리는 녹음되지 않습니다.\n영상은 Movies/VoiceWeaver에 저장되어 갤러리에 표시됩니다."),
+        "準備旁白中…" to arrayOf("Preparing narration…", "ナレーションを準備中…", "내레이션 준비 중…"),
+        "句" to arrayOf("lines", "行", "문장"),
+        "停止" to arrayOf("Stop", "停止", "중지"),
+        "旁白錄不起來（{n}/{total} 句）：連不到電腦端的 GPT-SoVITS。請確認語音中心開著、位址設定正確，再試一次。" to arrayOf(
+            "Could not record the narration ({n} of {total} lines): the computer's GPT-SoVITS is unreachable. Check that the voice centre is running and the address is correct, then try again.",
+            "ナレーションを録音できません（{n}/{total} 行）：PCのGPT-SoVITSに接続できません。ボイスセンターが起動しているか、アドレスが正しいか確認してから再試行してください。",
+            "내레이션을 녹음할 수 없습니다({n}/{total} 문장): 컴퓨터의 GPT-SoVITS에 연결할 수 없습니다. 보이스 센터가 실행 중인지, 주소가 올바른지 확인한 뒤 다시 시도하세요."),
+        "電腦端語音（GPT-SoVITS）沒有啟用，旁白會用手機的系統語音唸。要用你自己的角色語音，請先到設定把電腦端語音打開並連上。" to arrayOf(
+            "Computer voice (GPT-SoVITS) is off, so the narration will use the phone's system voice. To hear your own voice, turn on the computer voice in Settings and connect first.",
+            "PC音声（GPT-SoVITS）が無効なため、ナレーションは端末のシステム音声になります。自分の声を使うには設定でPC音声を有効にして接続してください。",
+            "컴퓨터 음성(GPT-SoVITS)이 꺼져 있어 내레이션은 휴대폰 시스템 음성으로 재생됩니다. 본인 목소리를 쓰려면 설정에서 컴퓨터 음성을 켜고 연결하세요."),
+        "開始" to arrayOf("Start", "開始", "시작"),
         "常用" to arrayOf("For you", "よく使う", "자주 사용"),
         "語音復健" to arrayOf("Rehab", "発話リハビリ", "언어 재활"),
         "報告" to arrayOf("Report", "レポート", "리포트"),

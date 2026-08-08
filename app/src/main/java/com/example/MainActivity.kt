@@ -74,6 +74,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
 import com.example.demo.DemoController
 import com.example.demo.ScreenRecordService
 import com.example.ui.DemoOverlay
@@ -385,6 +386,7 @@ class MainActivity : ComponentActivity() {
                         })
                         if (showDemoPicker) {
                             DemoPickerDialog(
+                                voiceReady = viewModel.demoVoiceReady(),
                                 onDismiss = { showDemoPicker = false },
                                 onStart = { ids, narrate, record, audio ->
                                     showDemoPicker = false
@@ -394,8 +396,8 @@ class MainActivity : ComponentActivity() {
                                         ids = ids,
                                         narrate = narrate,
                                         navigate = { route -> navController.go(route) },
-                                        speak = { line, done -> viewModel.demoSpeak(line, done) },
-                                        prewarm = { line, done -> viewModel.demoPrewarm(line, done) },
+                                        prerecord = { line, done -> viewModel.demoPrerecord(line, done) },
+                                        speakFallback = { line, done -> viewModel.demoSpeak(line, done) },
                                         onReady = {
                                             if (!record) return@start
                                             ScreenRecordService.startForegroundOnly(act)
@@ -412,13 +414,27 @@ class MainActivity : ComponentActivity() {
                                                     act, granted.first, granted.second,
                                                     m.widthPixels, m.heightPixels, m.densityDpi, audio
                                                 )
-                                                // 錄影從第一格開始就該是內容，不是還在轉的授權框
-                                                kotlinx.coroutines.delay(700)
+                                                // 等畫面真的開始寫進檔案才開演。編碼器從啟動到吐出
+                                                // 第一張要一兩秒（依機型而異），固定 delay 不是猜太短
+                                                // 就是白等；猜太短的話演示開頭連同第一句旁白會被切掉。
+                                                kotlinx.coroutines.withTimeoutOrNull(5000) {
+                                                    ScreenRecordService.capturing.first { it }
+                                                }
+                                                kotlinx.coroutines.delay(300)
                                             } else {
                                                 ScreenRecordService.stopRecording(act)
                                             }
                                         },
                                         onFinish = { if (record) ScreenRecordService.stopRecording(act) },
+                                        onNarrationMissing = { missing, total ->
+                                            android.widget.Toast.makeText(
+                                                act,
+                                                I18n.tr("旁白錄不起來（{n}/{total} 句）：連不到電腦端的 GPT-SoVITS。請確認語音中心開著、位址設定正確，再試一次。")
+                                                    .replace("{n}", missing.toString())
+                                                    .replace("{total}", total.toString()),
+                                                android.widget.Toast.LENGTH_LONG
+                                            ).show()
+                                        },
                                     )
                                 }
                             )

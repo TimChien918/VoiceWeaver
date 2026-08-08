@@ -27,6 +27,29 @@ import kotlin.coroutines.resume
  */
 object DemoController {
 
+    // 每一步的最短停留。沒有下限的話動作做完就立刻跳下一步——十幾個單元五十幾步
+    // 會在一分鐘內衝完，觀眾連畫面變了什麼都看不清楚。有旁白時通常是旁白比較長
+    // （下限很少生效）；純演示時它就是實際節奏。
+    private const val MIN_STEP_NARRATED_MS = 3200L
+    private const val MIN_STEP_SILENT_MS = 4200L
+
+    // 旁白唸完之後，畫面再多停一下才換。零間隔看起來像「話還沒講完就跳掉」——
+    // 最後一個字的尾音、加上人腦讀完字幕需要的一點時間，都落在這一段裡。
+    private const val TAIL_PAD_MS = 900L
+
+    /** 給 UI 估時用：一步大概多久（英文約每秒 2.6 個字）。 */
+    fun stepMillis(cap: String, narrated: Boolean): Long {
+        if (!narrated) return MIN_STEP_SILENT_MS
+        val words = cap.split(Regex("\\s+")).count { it.isNotBlank() }
+        return maxOf(MIN_STEP_NARRATED_MS, (words / 2.6 * 1000).toLong()) + TAIL_PAD_MS
+    }
+
+    /** 勾選的單元總長（秒）。 */
+    fun estimateSeconds(ids: Set<String>, narrated: Boolean): Int =
+        (UNITS.filter { it.id in ids }
+            .flatMap { it.steps }
+            .sumOf { stepMillis(it.cap, narrated) + it.holdMs } / 1000).toInt()
+
     data class Step(
         /** 字幕／旁白（英文）。空字串＝這一步只換畫面不講話。 */
         val cap: String,
@@ -154,6 +177,29 @@ object DemoController {
 
     private var job: Job? = null
 
+    /** 已預錄好的旁白：句子 → 音檔。跨次執行保留，第二次跑就不用再合成。 */
+    private val clips = mutableMapOf<String, java.io.File>()
+    private var player: android.media.MediaPlayer? = null
+
+    /** 播一段預錄好的旁白，等它真的播完。 */
+    private suspend fun playClip(file: java.io.File) = suspendCancellableCoroutine<kotlin.Unit> { cont ->
+        var resumed = false
+        val finish = {
+            if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
+        }
+        runCatching {
+            player?.release()
+            player = android.media.MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnCompletionListener { finish() }
+                setOnErrorListener { _, _, _ -> finish(); true }
+                prepare()
+                start()
+            }
+        }.onFailure { finish() }     // 播不出來也要放行，不然整段演示卡在這裡
+        cont.invokeOnCancellation { runCatching { player?.release() }; player = null }
+    }
+
     fun stop() {
         job?.cancel()
         job = null
@@ -161,6 +207,7 @@ object DemoController {
     }
 
     private fun reset() {
+        runCatching { player?.release() }; player = null
         _active.value = false
         _caption.value = ""
         _progress.value = ""
@@ -182,12 +229,14 @@ object DemoController {
         ids: Set<String>,
         narrate: Boolean,
         navigate: (String) -> kotlin.Unit,
-        /** 唸一句並在唸完時回呼（由 ViewModel 提供）。 */
-        speak: (String, () -> kotlin.Unit) -> kotlin.Unit,
-        /** 只合成進快取、不出聲。 */
-        prewarm: (String, () -> kotlin.Unit) -> kotlin.Unit,
+        /** 預錄一句旁白成音檔（錄影開始前做）。合不出來回 null。 */
+        prerecord: (String, (java.io.File?) -> kotlin.Unit) -> kotlin.Unit,
+        /** 沒有預錄檔時的退路：照一般流程唸（會是系統語音）。 */
+        speakFallback: (String, () -> kotlin.Unit) -> kotlin.Unit,
         onReady: suspend () -> kotlin.Unit = {},
         onFinish: () -> kotlin.Unit = {},
+        /** 有旁白錄不起來（連不到電腦端語音）→ 中止並回報，缺幾句 / 共幾句。 */
+        onNarrationMissing: (Int, Int) -> kotlin.Unit = { _, _ -> },
     ) {
         if (_active.value) return
         val units = UNITS.filter { it.id in ids }
@@ -197,15 +246,33 @@ object DemoController {
         job = scope.launch {
             try {
                 if (narrate) {
+                    // 先把每一句旁白**錄成檔案**。演示時直接播那個檔，不再走一次 TTS——
+                    // 那條路每次都會重新判語言、可能切模型，也可能在任何一步掉回系統機器音。
+                    // 錄好的檔案留著，第二次跑完全不用合成。
                     val lines = units.flatMap { u -> u.steps.map { it.cap } }
                         .filter { it.isNotBlank() }.distinct()
-                    _prep.value = 0 to lines.size
-                    lines.forEachIndexed { i, line ->
-                        _prep.value = i to lines.size
-                        awaitCallback { done -> prewarm(line, done) }
+                    val todo = lines.filter { it !in clips }
+                    _prep.value = 0 to todo.size
+                    todo.forEachIndexed { i, line ->
+                        _prep.value = i to todo.size
+                        val f = suspendCancellableCoroutine<java.io.File?> { cont ->
+                            var resumed = false
+                            prerecord(line) { file ->
+                                if (!resumed) { resumed = true; if (cont.isActive) cont.resume(file) }
+                            }
+                        }
+                        if (f != null && f.exists() && f.length() > 0) clips[line] = f
                     }
-                    _prep.value = lines.size to lines.size
+                    _prep.value = todo.size to todo.size
                     _prep.value = null
+
+                    // 少一句都不開錄。使用者要的是自己的聲音；用系統機器音頂替，
+                    // 只會在錄完整支影片之後才被發現。
+                    val missing = lines.count { it !in clips }
+                    if (missing > 0) {
+                        onNarrationMissing(missing, lines.size)
+                        return@launch
+                    }
                 }
 
                 onReady()
@@ -224,8 +291,18 @@ object DemoController {
                         }
                         s.route?.let { navigate(it) }
                         _caption.value = if (narrate) s.cap else ""
-                        if (narrate && s.cap.isNotBlank()) awaitCallback { done -> speak(s.cap, done) } else delay(1200)
+                        val t0 = System.currentTimeMillis()
+                        if (narrate && s.cap.isNotBlank()) {
+                            val clip = clips[s.cap]
+                            if (clip != null) playClip(clip)
+                            else awaitCallback { done -> speakFallback(s.cap, done) }
+                            delay(TAIL_PAD_MS)      // 講完再讓畫面多停一下
+                        }
                         if (s.holdMs > 0) delay(s.holdMs)
+                        // 補到最短停留；旁白比下限長時這裡是 0，不會拖慢。
+                        val floor = if (narrate) MIN_STEP_NARRATED_MS else MIN_STEP_SILENT_MS
+                        val left = floor - (System.currentTimeMillis() - t0)
+                        if (left > 0) delay(left)
                     }
                 }
             } finally {

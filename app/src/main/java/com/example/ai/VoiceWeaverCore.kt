@@ -1768,11 +1768,21 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun speak(text: String) = ttsModule.speak(text)
 
     // ── 自動演示（做報告用）的兩個語音出口 ──
-    // 演示要「唸完再走下一步」，字幕與畫面才跟得上旁白；一般的 speak() 沒有完成回呼。
-    /** 唸一句，唸完回呼。 */
-    fun demoSpeak(text: String, onDone: () -> Unit) = ttsModule.speak(text, onDone)
-    /** 只合成進快取、不出聲（錄影前把整段旁白備妥用）。 */
-    fun demoPrewarm(text: String, onDone: () -> Unit) = ttsModule.prewarm(text, onDone)
+    //
+    // 兩個地方不能用一般的 speak()：
+    // ① 它沒有「唸完了」的回呼，演示會在聲音還在播的時候就跳下一步。
+    // ② 它是靠文字自動判語言再挑模型。旁白是英文，自動判斷不一定挑得到使用者的
+    //    GPT-SoVITS 英文角色，掉回系統機器音——那就不是使用者要的聲音了。
+    //    所以這裡把模式寫死成 English，強制走 GPT-SoVITS 的英文角色。
+    /** 預錄一句旁白成音檔（錄影前做）。合不出來回 null。 */
+    fun demoPrerecord(text: String, onDone: (java.io.File?) -> Unit) =
+        ttsModule.prerecordDemoLine(text, onDone)
+    /** 沒有預錄檔可用時的退路：照一般流程唸（會是系統語音）。 */
+    fun demoSpeak(text: String, onDone: () -> Unit) =
+        ttsModule.speakDemo(text, onDone)
+
+    /** 電腦端 GPT-SoVITS 現在能不能用（旁白要靠它；不能用就該讓使用者先知道）。 */
+    fun demoVoiceReady(): Boolean = ttsModule.gptSovitReady()
 
     /** 多語朗讀：把一句話用指定語言唸出（重組結果一鍵中/英/日/韓）。 */
     fun speakIn(text: String, lang: AppLanguage) {

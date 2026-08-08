@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Log
 import com.example.data.GptSovitVoiceMode
@@ -57,6 +58,41 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         .build()
     private var mediaPlayer: MediaPlayer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // ── 系統 TTS 的「唸完了」回呼 ──────────────────────────────────────────
+    // TextToSpeech.speak() 是非同步的：呼叫完只代表「已排進佇列」，不是唸完了。
+    // 原本兩處都在 speak() 之後就直接呼叫 onComplete()，於是任何等待朗讀結束的
+    // 呼叫端（自動演示逐句推進就是）會瞬間跑完——整段演示用衝的、聲音全被切掉。
+    // 改成掛 UtteranceProgressListener，用 utteranceId 對回各自的回呼。
+    private val pendingUtterances = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
+    private var utteranceSeq = 0
+
+    private fun installUtteranceListener(engine: TextToSpeech) {
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(id: String?) {}
+            override fun onDone(id: String?) = finishUtterance(id)
+            @Deprecated("舊版 API 仍會呼叫這個多載")
+            override fun onError(id: String?) = finishUtterance(id)
+            override fun onError(id: String?, errorCode: Int) = finishUtterance(id)
+            override fun onStop(id: String?, interrupted: Boolean) = finishUtterance(id)
+        })
+    }
+
+    /** 回呼只會被叫一次（ConcurrentHashMap.remove 保證），而且一定在主執行緒。 */
+    private fun finishUtterance(id: String?) {
+        val cb = pendingUtterances.remove(id ?: return) ?: return
+        mainHandler.post { cb() }
+    }
+
+    /** 用系統 TTS 唸一句，唸完（或失敗、被打斷）才回呼。回傳這次的 utteranceId。 */
+    private fun speakTracked(engine: TextToSpeech, text: String, onComplete: () -> Unit): String {
+        val id = "vw-utt-${++utteranceSeq}"
+        pendingUtterances[id] = onComplete
+        val r = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
+        // 排不進佇列就不會有 onDone，得自己收尾，否則呼叫端永遠等不到。
+        if (r != TextToSpeech.SUCCESS) finishUtterance(id)
+        return id
+    }
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
@@ -191,11 +227,12 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         if (status == TextToSpeech.SUCCESS) {
             val engine = tts
             if (engine != null) {
+                installUtteranceListener(engine)
                 configureLanguage(engine)
             } else {
                 // Failsafe delay post to avoid synchronous initialization race condition where tts is still null
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    tts?.let { configureLanguage(it) }
+                    tts?.let { installUtteranceListener(it); configureLanguage(it) }
                 }
             }
         } else {
@@ -492,6 +529,35 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
+     * 自動演示的旁白：**強制**用 GPT-SoVITS 的英文角色唸，不走自動語言判斷。
+     * 旁白全是英文，讓 detectLang 自己猜的話，挑不到英文角色就會掉回系統機器音。
+     */
+    fun speakDemo(text: String, onComplete: () -> Unit = {}) {
+        speakInternal(text = text, forcedGptSovitMode = GptSovitVoiceMode.English,
+            expressiveTest = false, onComplete = onComplete)
+    }
+
+    /**
+     * 演示旁白「預錄」：用 GPT-SoVITS 英文角色合成一句，**存成檔案**，回報檔案位置。
+     *
+     * 演示播放時直接播這個檔，不再走一次 TTS 管線——那條路會重新判語言、可能切模型、
+     * 也可能在任何一步掉回系統機器音。預錄好的檔案沒有這些變數，而且第二次跑完全免合成。
+     * 合成不出來時回 null，呼叫端自己決定要不要退而求其次。
+     */
+    fun prerecordDemoLine(text: String, onDone: (File?) -> Unit) {
+        var file: File? = null
+        speakInternal(
+            text = text, forcedGptSovitMode = GptSovitVoiceMode.English,
+            expressiveTest = false, prewarmOnly = true,
+            onAudioFile = { file = it },
+            onComplete = { onDone(file) },
+        )
+    }
+
+    /** GPT-SoVITS 有沒有開起來（演示要靠它發旁白）。 */
+    fun gptSovitReady(): Boolean = gptSovitEnabled
+
+    /**
      * 先把一句話合成好放進快取，但**不發出聲音**。自動演示用：
      * 錄影開始前把整段旁白備妥，錄的時候每一句都是快取命中、瞬間播放。
      * 非 GPT-SoVITS 的路徑不需要預熱（系統／雲端 TTS 沒有這種延遲），直接回呼。
@@ -536,6 +602,8 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         forcedGptSovitMode: GptSovitVoiceMode?,
         expressiveTest: Boolean,
         onComplete: () -> Unit = {},
+        /** 合成成功時回報實際的音檔（自動演示要把它存起來，之後直接播這個檔）。 */
+        onAudioFile: ((File) -> Unit)? = null,
         /**
          * 只合成進快取、不播放。自動演示的旁白要在開始錄影**之前**全部合成完——
          * GPT-SoVITS 在 CPU 上一句要 10～30 秒，邊演邊合成等於把等待錄進影片裡。
@@ -568,7 +636,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             val modelDir = if (resolvedMode == GptSovitVoiceMode.English) gptSovitEnglishModelDirUri else gptSovitChineseModelDirUri
             addLog("[GPT-SoVITS] ${resolvedMode.displayName}：${if (sampleUri.isBlank()) "使用 Mac 端預設參考音檔槽位" else "使用自備樣本槽位"}")
             addLog("[GPT-SoVITS] ${resolvedMode.displayName}模型資料夾：${if (modelDir.isBlank()) "由 Mac server 目前載入模型決定" else "已指定"}")
-            if (tryGptSovitApiSynthesis(text, resolvedMode, sampleUri, expressiveTest, onComplete, prewarmOnly)) return
+            if (tryGptSovitApiSynthesis(text, resolvedMode, sampleUri, expressiveTest, onComplete, prewarmOnly, onAudioFile)) return
             addLog("[GPT-SoVITS] 未送出 API 請求；已停止，避免改用 Android TTS")
             onComplete()
             return
@@ -589,12 +657,17 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
         try {
             // Emit physical audio using native TTS Engine
-            tts?.let { applyInterfaceLocale(it) }
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AphasiaAssistTtsId")
+            val engine = tts
+            if (engine != null) {
+                applyInterfaceLocale(engine)
+                speakTracked(engine, text, onComplete)   // 唸完才回呼
+            } else {
+                onComplete()
+            }
         } catch (t: Throwable) {
             Log.e("TtsModule", "Exception during tts.speak: ${t.message}")
+            onComplete()
         }
-        onComplete()
     }
 
     private fun tryGptSovitApiSynthesis(
@@ -603,7 +676,8 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         refAudioPath: String,
         expressiveTest: Boolean,
         onComplete: () -> Unit,
-        prewarmOnly: Boolean = false
+        prewarmOnly: Boolean = false,
+        onAudioFile: ((File) -> Unit)? = null
     ): Boolean {
         val apiBaseUrl = gptSovitApiBaseUrl.ifBlank {
             addLog("[GPT-SoVITS] API 位址未填，改用預設 ${LocalSovitsHelper.DEFAULT_LOCAL_URL}")
@@ -631,13 +705,16 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             if (!reachable && !expressiveTest) {
                 addLog("[GPT-SoVITS] 連不到伺服器（離線），改用 Android 本機 TTS")
                 _synthesisStatus.value = "⚠️ 語音伺服器離線，改用本機 TTS"
-                speakWithSystemTts(text, onComplete)
+                // 預錄（自動演示）時不能偷偷改用系統音——那支影片整段旁白就不是
+                // 使用者自己的聲音了，而且要錄完才會發現。這裡直接回報失敗，
+                // 由呼叫端決定要不要繼續。
+                if (prewarmOnly) onComplete() else speakWithSystemTts(text, onComplete)
                 return@launch
             }
             if (!LocalSovitsHelper.hasModels()) {
                 addLog("[GPT-SoVITS] 電腦上沒有模型，已禁用 GPT-SoVITS，改用系統 TTS")
                 _synthesisStatus.value = "❌ 電腦上沒有語音模型（請在控制中心匯入）；本次改用系統 TTS"
-                speakWithSystemTts(text, onComplete)
+                if (prewarmOnly) onComplete() else speakWithSystemTts(text, onComplete)
                 return@launch
             }
             // ① 自動切換：確保 server 載入的模型語言 == 要講的語言（_ZH/_EN/_JA/_KO）。
@@ -724,7 +801,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             } else {
                 DiagnosticLog.i(DiagnosticLog.Cat.TTS, "參考音／逐字稿配對", pairDetail)
             }
-            sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text, prewarmOnly = prewarmOnly)
+            sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text, prewarmOnly = prewarmOnly, onAudioFile = onAudioFile)
         }
         return true
     }
@@ -741,7 +818,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         /** 失敗 fallback 給系統 TTS 用的原文（繁體），預設用 speakText。 */
         originalText: String = speakText,
         /** 只寫進快取、不播放，且失敗時不退回系統 TTS（預熱不該發出任何聲音）。 */
-        prewarmOnly: Boolean = false
+        prewarmOnly: Boolean = false,
+        /** 合成成功時回報音檔位置。 */
+        onAudioFile: ((File) -> Unit)? = null
     ) {
         val speedFactor = if (expressiveTest) {
             _speechRate.value.coerceAtLeast(1.03f).toDouble()
@@ -786,6 +865,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             hit.setLastModified(System.currentTimeMillis())   // LRU：用到就往後排
             addLog("[GPT-SoVITS] 快取命中，直接播放（${hit.length() / 1024} KB）")
             _synthesisStatus.value = "⚡ 這句已經合成過，直接播放"
+            onAudioFile?.invoke(hit)
             if (prewarmOnly) onComplete() else playSynthesizedAudio(hit, onComplete)
             return
         }
@@ -865,6 +945,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                         if (prewarmOnly) onComplete() else speakWithSystemTts(originalText, onComplete)
                     } else {
                         _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
+                        onAudioFile?.invoke(out)
                         if (prewarmOnly) onComplete() else playSynthesizedAudio(out, onComplete)
                     }
                 }
@@ -912,12 +993,17 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             return
         }
         try {
-            tts?.let { applyInterfaceLocale(it) }
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AphasiaAssistTtsId")
+            val engine = tts
+            if (engine != null) {
+                applyInterfaceLocale(engine)
+                speakTracked(engine, text, onComplete)   // 唸完才回呼
+            } else {
+                onComplete()
+            }
         } catch (t: Throwable) {
             Log.e("TtsModule", "Exception during tts.speak: ${t.message}")
+            onComplete()
         }
-        onComplete()
     }
 
     private fun resolveGptSovitMode(text: String): GptSovitVoiceMode {
