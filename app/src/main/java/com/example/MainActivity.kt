@@ -400,6 +400,17 @@ class MainActivity : ComponentActivity() {
                                             override fun type(text: String) = viewModel.demoTypeFragments(text)
                                             override fun candidates(list: List<String>) = viewModel.demoShowCandidates(list)
                                             override fun pick(index: Int) = viewModel.demoPickCandidate(index)
+                                            override fun aacCategory(key: String?) = viewModel.demoAacCategory(key)
+                                            override fun aacSentence(ids: List<String>) = viewModel.demoAacSentence(ids)
+                                            override fun rehabTarget(sentence: String) = viewModel.demoRehabTarget(sentence)
+                                            override fun fontScale(scale: Float) { viewModel.demoFontScale(scale) }
+                                            override fun language(tag: String) { viewModel.demoLanguage(tag) }
+                                            override fun severity(name: String) { viewModel.demoSeverity(name) }
+                                            override fun scrollToResult() = viewModel.demoScrollToResult()
+                                            override fun press(tag: String?) = viewModel.demoPress(tag)
+                                            override fun speakAloud(text: String) { viewModel.demoSpeakAloud(text) }
+                                            override fun safetyLock(message: String?) = viewModel.demoSafetyLock(message)
+                                            override fun snapshotSettings() = viewModel.demoSnapshotSettings()
                                             override fun clear() = viewModel.demoClearScreen()
                                         },
                                         prerecord = { line, done -> viewModel.demoPrerecord(line, done) },

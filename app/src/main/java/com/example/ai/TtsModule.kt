@@ -182,6 +182,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     /** 手動情緒覆寫（""＝自動偵測）。UI 可切「開心/難過/…」強制語氣。 */
     @Volatile var manualEmotionOverride: String = ""
 
+    /** 正在合成自動演示的旁白（語氣固定中立，不跟著句子的情緒跑）。 */
+    @Volatile private var demoNarration: Boolean = false
+
     // ─── 雲端語音合成多供應商（跟生圖／文字 LLM 同一套模式）───────────────
     /** 使用者在「API 金鑰管理 → 語音合成」設定的清單。 */
     private var ttsEntries: List<TtsApiEntry> = emptyList()
@@ -546,11 +549,12 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
      */
     fun prerecordDemoLine(text: String, onDone: (File?) -> Unit) {
         var file: File? = null
+        demoNarration = true
         speakInternal(
             text = text, forcedGptSovitMode = GptSovitVoiceMode.English,
             expressiveTest = false, prewarmOnly = true,
             onAudioFile = { file = it },
-            onComplete = { onDone(file) },
+            onComplete = { demoNarration = false; onDone(file) },
         )
     }
 
@@ -728,7 +732,11 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             }
             // ② 情緒感知參考音：手動覆寫優先，否則從文字自動偵測情緒 → 挑該情緒的參考音。
             //    伺服器沒提供情緒對照（舊電腦端）時 refForEmotion 會自動退回單一 refPath。
-            val emotion = manualEmotionOverride.ifBlank { LocalSovitsHelper.detectEmotion(text) }
+            // 旁白固定中立。放給情緒偵測去猜的話，講到「自傷」「憂鬱」那幾句會挑到
+            // 難過的參考音——整段旁白的語氣就一句輕一句沉，聽起來像換了個人在唸。
+            // 解說的語氣本來就該是穩定的。
+            val emotion = if (demoNarration) LocalSovitsHelper.NEUTRAL
+                else manualEmotionOverride.ifBlank { LocalSovitsHelper.detectEmotion(text) }
             val emoRef = activeVoice?.refForEmotion(emotion)
             if (activeVoice != null && activeVoice.emotions.isNotEmpty()) {
                 addLog("[GPT-SoVITS] 情緒：$emotion${if (manualEmotionOverride.isNotBlank()) "（手動）" else "（自動）"} → ${emoRef?.ref?.substringAfterLast('/')}")

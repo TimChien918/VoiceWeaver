@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -164,7 +165,18 @@ fun VoiceWeaverScreen(
     ) { innerPadding ->
         // 發聲風險閘門：醫療內容確認 / 高風險鎖定（全畫面共用）
         SpeakGateDialogs(viewModel = viewModel, p = p)
+        // 自動演示要能把畫面捲到結果那一段——候選句在螢幕下方，不捲就等於沒演。
+        val demoListState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val demoScroll by viewModel.demoScroll.collectAsState()
+        val demoPressed by viewModel.demoPressed.collectAsState()
+        LaunchedEffect(demoScroll) {
+            if (demoScroll > 0) {
+                val last = demoListState.layoutInfo.totalItemsCount - 1
+                if (last >= 0) runCatching { demoListState.animateScrollToItem(last) }
+            }
+        }
         LazyColumn(
+            state = demoListState,
             modifier = Modifier
                 .fillMaxSize()
                 .then(
@@ -924,6 +936,8 @@ fun VoiceWeaverScreen(
                                 modifier = Modifier
                                     .weight(1.8f)
                                     .height(52.dp)   // 主要 CTA：加高，最容易按
+                                    // 自動演示：被「按」到時縮一下，讓影片看得出這一步是按了這顆鍵
+                                    .scale(if (demoPressed == "reconstruct") 0.94f else 1f)
                                     .testTag("weaver_reconstruct_button")
                             ) {
                                 Box(

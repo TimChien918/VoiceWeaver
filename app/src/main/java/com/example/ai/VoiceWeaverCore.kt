@@ -1810,8 +1810,100 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         )
     }
 
+    /** 演示：把幾張圖卡放進句子緩衝。
+
+     *  直接改 _aacState，不走 aacAppendItem——那一支會把每一次點擊餵給「常用」
+     *  排序器。演示按了十張卡，使用者的常用牆就被演示內容洗掉了。 */
+    fun demoAacSentence(ids: List<String>) {
+        val items = ids.mapNotNull { id -> com.example.data.DefaultAacItems.firstOrNull { it.id == id } }
+        if (items.isEmpty()) return
+        _aacState.value = _aacState.value.copy(sentence = items)
+    }
+
+    /** 演示：切到某個圖卡分類（純畫面）。 */
+    fun demoAacCategory(key: String?) {
+        val cat = key?.let { k -> com.example.data.AacCategory.entries.firstOrNull { it.key == k } }
+        _aacState.value = _aacState.value.copy(selectedCategory = cat, flashcardIndex = 0)
+    }
+
+    /** 演示：復健畫面帶一句目標句進去。 */
+    fun demoRehabTarget(sentence: String) = startRehab(sentence)
+
+    // ── 演示會動到的「會存檔」設定：先快照，結束一定還原 ──
+    // 字級、語言、嚴重度都是寫進 DataStore 的。演示為了好看去改它們沒問題，
+    // 但不能改完就留在那裡——使用者的 App 不該因為看了一次演示就變成韓文特大字。
+    private data class DemoSettingsSnapshot(
+        val fontScale: Float,
+        val language: com.example.data.AppLanguage,
+        val severity: com.example.data.SeverityMode,
+    )
+    private var demoSnapshot: DemoSettingsSnapshot? = null
+
+    fun demoSnapshotSettings() {
+        val s = settings.value
+        demoSnapshot = DemoSettingsSnapshot(s.fontScale, s.language, s.severityMode)
+    }
+
+    fun demoRestoreSettings() {
+        val snap = demoSnapshot ?: return
+        demoSnapshot = null
+        viewModelScope.launch {
+            settingsRepo.setFontScale(snap.fontScale)
+            settingsRepo.setSeverityMode(snap.severity)
+            settingsRepo.setLanguage(snap.language)
+        }
+    }
+
+    fun demoFontScale(scale: Float) = viewModelScope.launch { settingsRepo.setFontScale(scale) }
+    fun demoLanguage(tag: String) = viewModelScope.launch {
+        val lang = when (tag) {
+            "en" -> com.example.data.AppLanguage.En
+            "ja" -> com.example.data.AppLanguage.Ja
+            "ko" -> com.example.data.AppLanguage.Ko
+            else -> com.example.data.AppLanguage.ZhTW
+        }
+        settingsRepo.setLanguage(lang)
+    }
+    fun demoSeverity(name: String) = viewModelScope.launch {
+        val mode = runCatching { com.example.data.SeverityMode.valueOf(name) }
+            .getOrDefault(com.example.data.SeverityMode.Mild)
+        settingsRepo.setSeverityMode(mode)
+    }
+
+    // 演示的捲動訊號。把候選句塞進狀態沒有用——結果卡在畫面下方，
+    // 不捲下去觀眾根本看不到，影片就會變成「旁白在講看不到的東西」。
+    // 用遞增的計數當事件，畫面那邊 LaunchedEffect 收到就捲。
+    private val _demoScroll = MutableStateFlow(0)
+    val demoScroll: StateFlow<Int> = _demoScroll.asStateFlow()
+    /** 演示：把主畫面捲到底（結果／候選句所在的位置）。 */
+    fun demoScrollToResult() { _demoScroll.value = _demoScroll.value + 1 }
+
+    // 「哪一顆按鈕正被按下」。演示不能真的呼叫 onClick——重組那顆會去打 LLM，
+    // 錄影途中網路一抖就毀了整支影片。但畫面上一定要看得到「他按了那顆鍵」，
+    // 否則旁白說「一按就重組」而畫面毫無反應。所以只做視覺按壓。
+    private val _demoPressed = MutableStateFlow<String?>(null)
+    val demoPressed: StateFlow<String?> = _demoPressed.asStateFlow()
+    fun demoPress(tag: String?) { _demoPressed.value = tag }
+
+    /** 演示：讓 App 真的把這句話唸出來（走使用者平常的朗讀路徑）。 */
+    fun demoSpeakAloud(text: String) = ttsModule.speak(text) {}
+
+    /** 演示：把「發聲已鎖定」那個畫面叫出來。
+
+     *  用的是真的 SpeakGate.Locked 與真的對話框，但**只改狀態**——
+     *  不呼叫 checkAndSpeak、不通報緊急聯絡人、不開危機視窗、不傳任何訊息。
+     *  傳 null 收起來。 */
+    fun demoSafetyLock(message: String?) {
+        _speakGate.value = if (message == null) SpeakGate.Idle else SpeakGate.Locked(message)
+    }
+
     /** 演示結束：把演示放上去的東西清乾淨（不影響使用者原本的資料）。 */
-    fun demoClearScreen() = resetState()
+    fun demoClearScreen() {
+        _speakGate.value = SpeakGate.Idle
+        resetState()
+        _aacState.value = _aacState.value.copy(sentence = emptyList(), selectedCategory = null)
+        demoRestoreSettings()
+    }
 
     /** 預錄一句旁白成音檔（錄影前做）。合不出來回 null。 */
     fun demoPrerecord(text: String, onDone: (java.io.File?) -> Unit) =

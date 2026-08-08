@@ -60,6 +60,28 @@ object DemoController {
         fun type(text: String)
         fun candidates(list: List<String>)
         fun pick(index: Int)
+        /** 圖卡：切分類。 */
+        fun aacCategory(key: String?)
+        /** 圖卡：把幾張卡放進句子緩衝（傳 AacItem 的 id）。 */
+        fun aacSentence(ids: List<String>)
+        /** 復健：帶一句目標句進練習畫面。 */
+        fun rehabTarget(sentence: String)
+        /** 無障礙：字級倍率。 */
+        fun fontScale(scale: Float)
+        /** 無障礙：介面語言（zh / en / ja / ko）。 */
+        fun language(tag: String)
+        /** 嚴重度模式（Mild / Moderate / Severe）——重度會把圖卡換成全螢幕大卡。 */
+        fun severity(name: String)
+        /** 主畫面捲到結果那一段（候選句在下面，不捲就看不到）。 */
+        fun scrollToResult()
+        /** 視覺按壓某顆按鈕（tag；null＝放開）。不會真的觸發它的動作。 */
+        fun press(tag: String?)
+        /** 讓 App 真的把這句話唸出來（走使用者平常的朗讀路徑）。 */
+        fun speakAloud(text: String)
+        /** 安全閘門：顯示「發聲已鎖定」畫面（傳 null 收起來）。不會通報任何人。 */
+        fun safetyLock(message: String?)
+        /** 演示開始前先快照會存檔的設定，結束一定還原。 */
+        fun snapshotSettings()
         fun clear()
     }
 
@@ -107,19 +129,38 @@ object DemoController {
             Step("The user types, or says, whatever they can manage.",
                 onStage = { typeSlowly(it, SAMPLE_FRAGMENTS) }),
             Step("One tap turns the fragments into a whole sentence.",
-                onStage = { it.candidates(SAMPLE_CANDIDATES) }, holdMs = 600),
+                onStage = {
+                    it.scrollToResult(); delay(700)          // 先捲到按鈕看得到的位置
+                    it.press("reconstruct"); delay(320)      // 按下去（視覺）
+                    it.press(null); delay(200)
+                    it.candidates(SAMPLE_CANDIDATES); delay(300)
+                    it.scrollToResult()                      // 再捲到結果
+                }, holdMs = 700),
             Step("Three versions, never one. A wrong guess put in your mouth is worse than silence.",
-                onStage = { it.pick(1); delay(1200); it.pick(2); delay(1200); it.pick(0) }),
-            Step("Only then is it said out loud, in the person's own voice.", holdMs = 600),
+                onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
+            Step("The person picks the one that is actually theirs.",
+                onStage = { it.pick(0) }, holdMs = 700),
+            Step("Only then is it said out loud, in the person's own voice.",
+                onStage = { delay(400); it.speakAloud(SAMPLE_CANDIDATES.first()) }, holdMs = 1400),
         )),
         Unit("aac", "🖼", "Picture cards (AAC)", 22, steps = listOf(
-            Step("Some people cannot type at all. For them, the board is the way in.", route = "aac"),
-            Step("Cards are coloured by part of speech, and grouped by where you are.", holdMs = 900),
-            Step("Tap by tap, a sentence takes shape, ready to speak or to rewrite."),
-            Step("Everything scales up, for tired eyes and unsteady hands.", holdMs = 900),
+            Step("Some people cannot type at all. For them, the board is the way in.", route = "aac",
+                onStage = { it.clear(); it.aacCategory(null) }),
+            Step("Cards are coloured by part of speech, and grouped by where you are.",
+                onStage = { it.aacCategory("food_drink"); delay(1200); it.aacCategory("medical") }, holdMs = 600),
+            Step("Tap by tap, a sentence takes shape, ready to speak or to rewrite.",
+                onStage = {
+                    it.aacCategory("food_drink")
+                    it.aacSentence(listOf("f_water_cup")); delay(900)
+                    it.aacSentence(listOf("f_water_cup", "f_warm_water_cup")); delay(900)
+                    it.aacSentence(listOf("f_water_cup", "f_warm_water_cup", "f_tea"))
+                }),
+            Step("Everything scales up, for tired eyes and unsteady hands.",
+                onStage = { it.fontScale(1.4f); delay(1400); it.fontScale(1.8f) }, holdMs = 700),
         )),
         Unit("customcards", "📷", "Custom photo cards", 12, steps = listOf(
-            Step("A stock drawing of a cup means nothing to someone's grandmother.", route = "aac"),
+            Step("A stock drawing of a cup means nothing to someone's grandmother.", route = "aac",
+                onStage = { it.fontScale(1.0f); it.aacCategory("people") }),
             Step("So the family photographs her cup. Her chair. Her grandson."),
             Step("Recognising your own things is where trust begins."),
         )),
@@ -138,7 +179,8 @@ object DemoController {
         Unit("rehab", "🏥", "Speech rehabilitation", 20, steps = listOf(
             Step("Communication is today. Recovery is the long game.", route = "rehab"),
             Step("A clinical phrase bank works offline, with no API key.", holdMs = 900),
-            Step("Hear the target sentence. Say it back."),
+            Step("Hear the target sentence. Say it back.",
+                onStage = { it.rehabTarget("我想要喝一杯水") }, holdMs = 700),
             Step("Every attempt is scored syllable by syllable, so progress is something you can see.", holdMs = 900),
         )),
         Unit("training", "📖", "Guided training", 14, steps = listOf(
@@ -158,22 +200,47 @@ object DemoController {
         )),
         Unit("crisis", "🆘", "Crisis intervention", 18,
             note = "Described only — nothing is sent.", steps = listOf(
-            Step("Losing language carries a real risk of depression and self-harm.", route = "main"),
-            Step("So every sentence is screened before it is ever spoken."),
-            Step("When something is found, the app does not refuse and walk away."),
-            Step("It stays. A breathing circle, a few large buttons, and the family already contacted."),
-            Step("Nothing is sent during this demo."),
+            Step("Losing language carries a real risk of depression and self-harm.", route = "main",
+                onStage = { it.clear() }),
+            Step("So every sentence is screened before it is ever spoken.",
+                onStage = { typeSlowly(it, "I do not want to go on") }),
+            Step("When something is found, the app does not refuse and walk away.",
+                onStage = { it.safetyLock("偵測到高風險訊息，正在通報緊急聯絡人…") }, holdMs = 900),
+            Step("It stays. A breathing circle, a few large buttons, and the family already contacted.", holdMs = 1200),
+            Step("Nothing is sent during this demo.",
+                onStage = { delay(900); it.safetyLock(null); it.clear() }),
         )),
         Unit("severe", "🔒", "Severe mode", 16, steps = listOf(
-            Step("For the most severely affected, a whole grid is still too much.", route = "aac"),
-            Step("So the device becomes one card at a time, scanning on its own."),
-            Step("A tap speaks it, and leaves a trail the family can read."),
-            Step("Getting out needs a caregiver PIN. Nobody gets lost in the app."),
+            Step("For the most severely affected, a whole grid is still too much.", route = "aac",
+                onStage = { it.clear(); it.severity("Mild") }),
+            Step("So the device becomes one card at a time, scanning on its own.",
+                onStage = { it.severity("Severe") }, holdMs = 1400),
+            Step("A tap speaks it, and leaves a trail the family can read.", holdMs = 1400),
+            Step("Getting out needs a caregiver PIN. Nobody gets lost in the app.",
+                onStage = { delay(1200); it.severity("Mild") }),
         )),
         Unit("a11y", "♿", "Accessibility & languages", 14, steps = listOf(
-            Step("Text scales across the whole app, settings included.", route = "settings"),
-            Step("Traditional Chinese, English, Japanese, Korean."),
-            Step("The voice follows the language."),
+            Step("Many users are elderly, and stroke often takes part of the visual field with it.", route = "settings",
+                onStage = { it.fontScale(1.0f) }),
+            Step("So the text scales all the way up, across every screen, settings included.",
+                onStage = { it.fontScale(1.4f); delay(1500); it.fontScale(1.8f); delay(1500); it.fontScale(2.2f) },
+                holdMs = 900),
+            Step("Nothing is cut off and nothing overlaps, even at the largest size.",
+                onStage = { delay(1200); it.fontScale(1.0f) }, holdMs = 500),
+            Step("The whole interface runs in Traditional Chinese, English, Japanese and Korean.",
+                onStage = { it.language("en"); delay(1800); it.language("ja"); delay(1800); it.language("ko") },
+                holdMs = 900),
+            Step("The voice follows the language — the same person, speaking four of them.",
+                onStage = { delay(1000); it.language("zh") }, holdMs = 600),
+        )),
+        Unit("learning", "🧠", "It learns this person", 20, steps = listOf(
+            Step("No two people with aphasia are the same, so the app refuses to stay generic.",
+                route = "aac", onStage = { it.clear(); it.aacCategory(null) }),
+            Step("The cards you reach for most rise to the top, weighted by time of day and by place.",
+                onStage = { it.aacCategory("food_drink"); delay(1200); it.aacCategory(null) }, holdMs = 800),
+            Step("Which candidate you accept teaches it which phrasing sounds like you.", holdMs = 800),
+            Step("Your pronunciation model, your cards, your voice — it drifts towards you over time.",
+                holdMs = 800),
         )),
         Unit("cloud", "☁️", "Cloud sync", 12, steps = listOf(
             Step("Phone, web and desktop share one account.", route = "settings"),
@@ -281,6 +348,7 @@ object DemoController {
         val units = UNITS.filter { it.id in ids }
         if (units.isEmpty()) return
 
+        stage.snapshotSettings()   // 演示會動字級／語言／嚴重度，結束一定還原
         _active.value = true
         job = scope.launch {
             try {
