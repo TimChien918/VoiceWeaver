@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""把曲庫上傳到「使用者自己的」Google Drive（OAuth，drive.file 範圍）。
+"""把曲庫上傳到「使用者自己的」Google Drive（OAuth）。
 
 - 每個使用者用自己的 Google 帳號登入授權 → 檔案進他自己的 Drive，不經開發者。
-- drive.file 範圍：App 只能看到／管理「它自己建立的檔案」，碰不到使用者 Drive 其他東西
-  （最保護隱私、也免 Google 敏感權限審核）。App 建立的資料夾樹在重跑時找得回來（冪等）。
+- drive.file 範圍：App 只能看到／管理「它自己建立的檔案」，碰不到使用者 Drive 其他東西。
+  上傳／改動一律走這一個範圍。App 建立的資料夾樹在重跑時找得回來（冪等）。
+- drive.metadata.readonly：只多拿「看得到別人放進來的檔案叫什麼、多大」的能力
+  （Colab 訓練後直接寫進 Drive 的權重就屬於這類），沒有它曲庫會掃成空的。
+  不含檔案內容 → 這類檔案列得出來、但下載不了，UI 會明講。
 - 與 Colab 一致：Colab drive.mount 掛的是同一位登入者的 Drive → 上傳到這、Colab 讀得到。
 
 憑證檔位置（App 執行時讀，密鑰不進原始碼）：
@@ -19,8 +22,15 @@ import urllib.request
 
 # 一次登入要到「Drive + 身分」兩件事：drive.file 給曲庫上傳，openid/email/profile 換 id_token
 # 再去換 Firebase 身分（signInWithIdp）→ Firebase 與 Drive 共用同一個 Google 帳號。
+#
+# ⚠️ drive.file 是「只看得到自己建立的檔案」——這是曲庫掃描掃出 0 個角色的真正原因：
+# Models/ 底下的權重多半是 Colab 訓練完直接寫進 Drive、或使用者自己拖進去的，
+# 都不是這支程式建的，於是連 Models/ 資料夾本身都隱形（只看得到自己建的 AcousticModels/）。
+# 加 drive.metadata.readonly 才掃得到。它只給 metadata（名稱／大小／資料夾結構），
+# 不含檔案內容——列曲庫夠用，也不必動到 drive.readonly 那種受限範圍。
 SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
@@ -599,6 +609,14 @@ def _fetch_range(creds, file_id, tmp_path, start, total, name="", progress=None)
     url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
     headers = {"Range": f"bytes={start}-"} if start else {}
     with sess.get(url, headers=headers, stream=True, timeout=300) as r:
+        # 403＝metadata 看得到、內容拿不到。drive.metadata.readonly 只給名稱／大小，
+        # 檔案內容仍受 drive.file 管（＝只有自己上傳的抓得下來）。講清楚是哪一種失敗，
+        # 否則使用者只會看到「HTTP 403」而不知道該怎麼辦。
+        if r.status_code == 403:
+            raise RuntimeError(
+                f"沒有權限下載「{name}」——這個檔案不是語音中心上傳的"
+                "（通常是 Colab 訓練完直接寫進 Drive）。曲庫列得出來，但內容抓不下來。"
+                "請在這台電腦用「匯入模型」加入一次，之後它就歸語音中心管、各裝置都同步得到。")
         if r.status_code not in (200, 206):
             raise RuntimeError(f"下載 {name} 失敗 HTTP {r.status_code}")
         # 200＝伺服器不接受 Range（整包重來）→ 覆寫；206＝真的續傳 → 接在後面
@@ -883,6 +901,12 @@ def save_cached_catalog(chars):
         pass
 
 
+# 「沒有快取檔」的年齡哨兵。空清單也是一種有效答案（雲端真的沒東西），
+# 不能用 chars 是不是空的來判斷有沒有快取——否則曲庫一空，每次刷新都會
+# 同步走一次 Drive 目錄樹（實測 ~30 秒），畫面等於整個凍住。
+NO_CACHE_AGE = 1e9
+
+
 def load_cached_catalog(with_age=False):
     """回上次成功讀到的雲端曲庫；沒有回 []。with_age=True 時回 (chars, 秒數)。"""
     try:
@@ -891,7 +915,7 @@ def load_cached_catalog(with_age=False):
         chars = d.get("characters", [])
         age = max(0.0, time.time() - d.get("updatedAt", 0) / 1000.0)
     except (OSError, ValueError):
-        chars, age = [], 1e9
+        chars, age = [], NO_CACHE_AGE
     return (chars, age) if with_age else chars
 
 
@@ -937,7 +961,7 @@ def cloud_catalog(local_root=None, max_age_s=300, force=False):
     """
     local_root = local_root or emotion_root()
     chars, age = load_cached_catalog(with_age=True)
-    if chars and not force:
+    if age < NO_CACHE_AGE and not force:
         if age > max_age_s:
             refresh_cloud_catalog_async(local_root)      # 背景更新，這次先回舊的
         return {"ok": True, "offline": False, "stale": age > max_age_s,

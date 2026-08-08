@@ -2283,29 +2283,31 @@ class App:
         self.adv_reload()
 
     def adv_reload(self):
-        """清單來源＝雲端曲庫（Drive）。本機只是快取，用 downloaded 旗標標示。
+        """清單＝雲端曲庫（Drive）∪ 本機快取，用 downloaded 旗標標示。
 
-        離線時回上次記住的清單（只有已下載的能用）。不再讀 model_history。
+        以前這裡是「純雲端」：沒登入、模組沒載入、或雲端讀到 0 個，清單就一律清空。
+        結果本機快取裡明明有十幾個可以立刻合成的角色，畫面卻一個都不列——
+        「沒有顯示任何 Voice Model」就是這樣來的。本機有的一定看得到（離線可用），
+        雲端狀況只影響狀態列的提示字，不再決定清單有沒有東西。
         """
         if not CC_OK: return
         self.adv_offline = False
+        note = ""
         if gdrive is None or not gdrive.deps_ok():
-            self.adv_history = []
-            self.set_adv_status(self.t("Google Drive 模組未載入"))
+            note = self.t("Google Drive 模組未載入")
         elif not gdrive.is_signed_in():
-            self.adv_history = []
-            self.set_adv_status(self.t("請先登入 Google 才能看到雲端曲庫"))
+            note = self.t("請先登入 Google 才能看到雲端曲庫")
         else:
             root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
             try:
-                r = gdrive.cloud_catalog(root)
-                self.adv_history = r.get("characters", [])
-                self.adv_offline = r.get("offline", False)
+                self.adv_offline = bool(gdrive.cloud_catalog(root).get("offline", False))
                 if self.adv_offline:
-                    self.set_adv_status(self.t("離線：顯示上次的曲庫，只有已下載的可用"))
+                    note = self.t("離線：顯示上次的曲庫，只有已下載的可用")
             except Exception as exc:
-                self.adv_history = []
-                self.set_adv_status(self.t("讀取雲端曲庫失敗：%s") % (exc))
+                note = self.t("讀取雲端曲庫失敗：%s") % (exc)
+        self.adv_history = self._cloud_characters()
+        if note:
+            self.set_adv_status(note)
 
         # 套用語言篩選（雲端項目本身就有 lang）
         if self.lang_filter == "ALL":
@@ -2496,20 +2498,46 @@ class App:
         return os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
 
     def _cloud_characters(self):
-        """雲端曲庫角色清單（含 downloaded）。沒登入/沒 Drive 就退回本機快取掃描，
-        讓「還沒登入」時網頁至少還看得到已下載的角色。"""
+        """曲庫角色清單＝雲端 ∪ 本機快取（含 downloaded）。
+
+        以前只在「沒登入／沒 Drive」時才退回本機掃描。可是登入成功、Drive 也回
+        ok 卻讀到 0 個角色（權限不足、版面不同、對到別的帳號）一樣會發生，
+        那時畫面就整個空了——但本機快取裡明明躺著十幾個可以立刻合成的角色。
+        本機有的一律列得出來（離線也能用），雲端多出來的補在後面。
+        """
         root = self._cache_root()
+        out = []
         if gdrive is not None and gdrive.deps_ok() and gdrive.is_signed_in():
             try:
-                return gdrive.cloud_catalog(root).get("characters", [])
+                out = list(gdrive.cloud_catalog(root).get("characters", []) or [])
             except Exception:
-                pass
+                out = []
         if em is None:
-            return []
-        return [{"name": m["name"], "character": m.get("character", ""), "lang": m.get("lang", ""),
-                 "emotions": sorted(m.get("emotions", {}).keys()),
-                 "bytes": 0, "files": 0, "downloaded": True}
-                for m in em.scan_emotion_models(root)]
+            return out
+        key = lambda c: ((c.get("lang") or "").upper(),
+                         (c.get("character") or c.get("name") or "").strip())
+        seen = {key(c) for c in out}
+        for m in em.scan_emotion_models(root):
+            # 大小要自己算：雲端項目的 bytes 來自 Drive，本機項目沒有就會在卡片上
+            # 顯示「約 0 MB」，看起來像壞掉的模型。角色資料夾就在手邊，走一次很便宜。
+            cdir = os.path.dirname(m.get("gpt") or "")
+            nbytes = nfiles = 0
+            for r, _d, fs in os.walk(cdir):
+                for f in fs:
+                    try:
+                        nbytes += os.path.getsize(os.path.join(r, f)); nfiles += 1
+                    except OSError:
+                        pass
+            local = {"name": m["name"], "character": m.get("character", ""),
+                     "lang": (m.get("lang") or "").upper(),
+                     "emotions": sorted(m.get("emotions", {}).keys()),
+                     "bytes": nbytes, "files": nfiles, "downloaded": True}
+            if key(local) in seen:
+                continue
+            seen.add(key(local))
+            out.append(local)
+        out.sort(key=key)
+        return out
 
     def _dl_progress(self, char):
         """回一個 progress callback：把下載進度即時寫到狀態列（節流，避免洗版）。"""
