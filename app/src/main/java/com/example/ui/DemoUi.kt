@@ -127,7 +127,7 @@ fun DemoPickerDialog(
                 }
                 ToggleLine(I18n.tr("把畫面錄成影片"), record) { record = it }
                 if (record) {
-                    ToggleLine(I18n.tr("把旁白一起錄進影片"), audio) { audio = it }
+                    ToggleLine(I18n.tr("把旁白一起錄進影片（同時產生一份無旁白版）"), audio) { audio = it }
                     Text(
                         I18n.tr("Android 規定 App 錄自己的畫面要你同意，會跳出系統視窗。旁白是直接取自 App 自己的音訊，不經過麥克風，所以不會錄到房間裡的聲音。影片會存到 Movies/VoiceWeaver，在相簿裡看得到。"),
                         color = Color(0xFF9A9AA4), fontSize = 11.sp,

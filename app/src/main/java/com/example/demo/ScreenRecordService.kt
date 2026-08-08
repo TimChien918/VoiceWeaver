@@ -91,6 +91,7 @@ class ScreenRecordService : Service() {
     private var projection: MediaProjection? = null
     private var recorder: DemoRecorder? = null
     private var outFile: File? = null
+    private var silentFile: File? = null
 
     // Android 14 起 createVirtualDisplay 之前一定要註冊 callback，否則丟例外。
     private val projectionCallback = object : MediaProjection.Callback() {
@@ -166,9 +167,15 @@ class ScreenRecordService : Service() {
         val f = File(cacheDir, "demo-recording.mp4")
         runCatching { f.delete() }
         outFile = f
+        // 有旁白時，同一次錄影再多出一份無聲版（簡報時自己口頭講解用）。
+        // 影像只編碼一次、同一批樣本寫進兩個 muxer，第二份幾乎不花成本，
+        // 也不必再錄一次、再等一次旁白預錄。
+        val silent = if (withAudio && DemoRecorder.canCapturePlayback())
+            File(cacheDir, "demo-recording-silent.mp4").also { runCatching { it.delete() } } else null
+        silentFile = silent
 
         _capturing.value = false
-        val r = DemoRecorder(projection!!, w, h, dpi, withAudio, f) { _capturing.value = true }
+        val r = DemoRecorder(projection!!, w, h, dpi, withAudio, f, silent) { _capturing.value = true }
         r.start()
         recorder = r
         _recording.value = true
@@ -181,9 +188,9 @@ class ScreenRecordService : Service() {
      * 放 MediaStore 而不是 Android/data/<套件>/files——後者在檔案管理員裡幾乎找不到，
      * 而這支影片的用途就是「拿出去給別人看」。
      */
-    private fun publish(src: File): String? {
+    private fun publish(src: File, suffix: String = ""): String? {
         val name = "VoiceWeaver-Demo-" +
-            SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".mp4"
+            SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + suffix + ".mp4"
         return runCatching {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, name)
@@ -220,7 +227,11 @@ class ScreenRecordService : Service() {
         projection = null
         _recording.value = false
         _capturing.value = false
-        _lastPath.value = done?.let { publish(it) }
+        // 兩份一起發布。無聲版沒錄到東西就安靜跳過（例如 Android 10 以下沒有音訊擷取）。
+        val hasSilent = silentFile?.takeIf { it.exists() && it.length() > 0 }
+        _lastPath.value = done?.let { publish(it, if (hasSilent != null) "-narrated" else "") }
+        hasSilent?.let { publish(it, "-silent") }
+        silentFile = null
         if (done != null && _lastPath.value == null) {
             // 發布失敗也不要把檔案丟掉，至少留在快取裡還救得回來
             Log.w(TAG, "影片留在 ${done.absolutePath}")

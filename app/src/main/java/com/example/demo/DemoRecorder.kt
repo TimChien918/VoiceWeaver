@@ -39,6 +39,14 @@ class DemoRecorder(
     private val dpi: Int,
     private val withAudio: Boolean,
     private val outFile: File,
+    /**
+     * 另外輸出一份**沒有聲音**的同一支影片（給簡報時自己口頭講解用）。
+     *
+     * 影像只編碼一次：同一批編好的 H.264 樣本同時寫進兩個 muxer，
+     * 一個帶音訊、一個不帶。等於白拿第二個版本，不必再錄一次、也不必再等一次預錄。
+     * 傳 null 就只輸出一份。
+     */
+    private val silentFile: File? = null,
     /** 第一張畫面真的寫進檔案時呼叫一次。演示要等到這時才開演，否則開頭會被吃掉。 */
     private val onFirstFrame: () -> Unit = {},
 ) {
@@ -63,6 +71,12 @@ class DemoRecorder(
     private var audioTrack = -1
     private var muxerStarted = false
     private val muxLock = Any()
+
+    // 無聲版：只有影像那一軌。它比主檔早一步就能開始（不必等音訊格式），
+    // 但為了兩支影片起點一致，仍然用同一個 ptsBase。
+    private var muxerB: MediaMuxer? = null
+    private var videoTrackB = -1
+    private var muxerBStarted = false
 
     // 時間原點。**兩軌一定要共用同一個**，這是 A/V 同步的關鍵。
     //
@@ -94,6 +108,11 @@ class DemoRecorder(
         val h = (heightPx / 2) * 2
 
         muxer = MediaMuxer(outFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        muxerB = silentFile?.let {
+            runCatching { MediaMuxer(it.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4) }
+                .onFailure { e -> Log.w(TAG, "無聲版建立失敗，只輸出一份：${e.message}") }
+                .getOrNull()
+        }
 
         val vFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
@@ -232,6 +251,13 @@ class DemoRecorder(
                     if (isVideo) videoTrack = track else audioTrack = track
                     val ready = videoTrack >= 0 && (!wantAudio || audioTrack >= 0)
                     if (ready && !muxerStarted) { muxer.start(); muxerStarted = true }
+                    // 無聲版只收影像那一軌，加完就能開始
+                    if (isVideo) muxerB?.let { mb ->
+                        runCatching {
+                            videoTrackB = mb.addTrack(codec.outputFormat)
+                            mb.start(); muxerBStarted = true
+                        }.onFailure { Log.w(TAG, "無聲版起不來：${it.message}") }
+                    }
                 }
             }
             idx >= 0 -> {
@@ -254,7 +280,18 @@ class DemoRecorder(
                                     return WROTE   // 有處理（丟掉），可以繼續抽下一筆
                                 }
                                 info.presentationTimeUs -= ptsBase
-                                if (info.presentationTimeUs >= 0) writeSample(track, out, info)
+                                if (info.presentationTimeUs >= 0) {
+                                    writeSample(track, out, info)
+                                    // 同一份影像樣本再寫一次給無聲版。writeSample 會動到
+                                    // buffer 的 position/limit，所以要重設過才能再寫一次。
+                                    if (isVideo && muxerBStarted && videoTrackB >= 0) {
+                                        muxerB?.let { mb ->
+                                            out.position(info.offset)
+                                            out.limit(info.offset + info.size)
+                                            runCatching { mb.writeSampleData(videoTrackB, out, info) }
+                                        }
+                                    }
+                                }
                             }
                         }
                         // muxer 還沒 start（另一軌的格式還沒來）就丟掉這幾格。
@@ -293,6 +330,12 @@ class DemoRecorder(
                 muxerStarted = false
             }
             runCatching { muxer.release() }
+            if (muxerBStarted) {
+                runCatching { muxerB?.stop() }.onFailure { Log.w(TAG, "無聲版 stop 失敗：${it.message}") }
+                muxerBStarted = false
+            }
+            runCatching { muxerB?.release() }
+            muxerB = null
         }
         return outFile.takeIf { it.exists() && it.length() > 0 }
     }

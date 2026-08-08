@@ -624,6 +624,10 @@ object I18n {
             "지금 가는 중이에요. 앉아서 기다려요, 10분이면 도착해요."),
         "我好一點了" to arrayOf("I feel a little better", "少し落ち着きました", "조금 나아졌어요"),
         "我需要幫忙" to arrayOf("I need help", "助けてください", "도와주세요"),
+        "把旁白一起錄進影片（同時產生一份無旁白版）" to arrayOf(
+            "Include the narration — and save a silent copy too",
+            "ナレーションを含める（無音版も同時に保存）",
+            "내레이션 포함 — 무음 버전도 함께 저장"),
         "我想要喝一杯水" to arrayOf("I would like a glass of water", "水を一杯ください", "물 한 잔 주세요"),
         "旁白錄不起來（{n}/{total} 句）：連不到電腦端的 GPT-SoVITS。請確認語音中心開著、位址設定正確，再試一次。" to arrayOf(
             "Could not record the narration ({n} of {total} lines): the computer's GPT-SoVITS is unreachable. Check that the voice centre is running and the address is correct, then try again.",
