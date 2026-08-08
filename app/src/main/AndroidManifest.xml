@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- 自動演示的螢幕錄影。Android 14 起 MediaProjection 一定要跑在
+         foregroundServiceType="mediaProjection" 的前景服務裡才拿得到。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- 每日復健提醒通知（Android 13+ 需執行期授權）-->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -98,6 +101,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <service
+            android:name="com.example.demo.ScreenRecordService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
     </application>
 
 </manifest>

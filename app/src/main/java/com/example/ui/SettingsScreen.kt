@@ -72,7 +72,9 @@ fun SettingsScreen(
     onAdvanced: () -> Unit = {},
     onStartCalibration: () -> Unit = {},
     /** 開啟「教一個聲音」（聲學樣板登錄）。 */
-    onTeachSound: () -> Unit = {}
+    onTeachSound: () -> Unit = {},
+    /** 開啟「一鍵自動演示 ＋ 螢幕錄影」的挑選面板（做報告用）。 */
+    onOpenDemo: () -> Unit = {}
 ) {
     val settings by viewModel.settings.collectAsState()
     val deviceRam by viewModel.deviceRam.collectAsState()
@@ -328,6 +330,19 @@ fun SettingsScreen(
                         label = I18n.tr("設定觸發詞與句子"),
                         onClick = onTeachSound, p = p,
                         icon = Icons.Filled.Mic, iconTint = IosCategory.Green
+                    )
+                }
+            }
+
+            // 自動演示：一鍵把主要功能走一遍並錄影，做報告／簡報用。
+            // 標題與內容刻意是英文——錄出來的影片旁白與字幕都是英文，
+            // 入口跟著英文才不會一半中文一半英文。
+            item {
+                Section(title = "Auto demo", icon = Icons.Default.Movie, p = p) {
+                    AdvancedEntryRow(
+                        label = "Demo & screen recording",
+                        onClick = onOpenDemo, p = p,
+                        icon = Icons.Filled.Movie, iconTint = IosCategory.Blue
                     )
                 }
             }

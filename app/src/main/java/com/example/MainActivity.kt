@@ -65,6 +65,19 @@ import com.example.ui.training.StoryTrainingScreen
 import com.example.ui.theme.LocalAppPalette
 import com.example.ui.theme.MyApplicationTheme
 import coil.compose.AsyncImage
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CompletableDeferred
+import com.example.demo.DemoController
+import com.example.demo.ScreenRecordService
+import com.example.ui.DemoOverlay
+import com.example.ui.DemoPickerDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -119,6 +132,24 @@ class MainActivity : ComponentActivity() {
                             VoiceWeaverViewModel.ScanTarget(label) { navController.go(route) }
                         })
                     }
+                    // ── 一鍵自動演示 ＋ 螢幕錄影 ──
+                    // 順序是被 Android 14 綁死的：先啟動 foregroundServiceType="mediaProjection"
+                    // 的前景服務，之後才拿得到 MediaProjection。而且授權那張系統對話框只能
+                    // 由使用者手勢觸發，所以旁白要先合成完（可能好幾分鐘）、再要授權、再開錄，
+                    // 否則授權票券放太久會失效。
+                    var showDemoPicker by rememberSaveable { mutableStateOf(false) }
+                    val demoScope = rememberCoroutineScope()
+                    val projectionConsent = remember { mutableStateOf<CompletableDeferred<Pair<Int, Intent>?>?>(null) }
+                    val projectionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.StartActivityForResult()
+                    ) { res ->
+                        val data = res.data
+                        projectionConsent.value?.complete(
+                            if (res.resultCode == RESULT_OK && data != null) res.resultCode to data else null
+                        )
+                        projectionConsent.value = null
+                    }
+
                     val palette = LocalAppPalette.current
                     val hasCustomBackground = settings.customBackgroundUri.isNotBlank()
 
@@ -278,6 +309,7 @@ class MainActivity : ComponentActivity() {
                                     viewModel = viewModel,
                                     onAdvanced = { navController.go("settings_extended") },
                                     onTeachSound = { navController.go("phrase_shortcuts") },
+                                    onOpenDemo = { showDemoPicker = true },
                                     onStartCalibration = {
                                         // 呼叫 EyeGestures JS 重置校準
                                         eyeGesturesWebViewRef?.evaluateJavascript("window.egRecalibrate && window.egRecalibrate();", null)
@@ -346,6 +378,51 @@ class MainActivity : ComponentActivity() {
                         // 鼻控游標（覆蓋整個畫面，含底部導覽列）
                         GazeCursorOverlay(eyeState = eyeState, activity = this@MainActivity)
                         BlinkScanOverlay(viewModel = viewModel, eyeState = eyeState)
+
+                        DemoOverlay(onStop = {
+                            DemoController.stop()
+                            ScreenRecordService.stopRecording(this@MainActivity)
+                        })
+                        if (showDemoPicker) {
+                            DemoPickerDialog(
+                                onDismiss = { showDemoPicker = false },
+                                onStart = { ids, narrate, record, audio ->
+                                    showDemoPicker = false
+                                    val act = this@MainActivity
+                                    DemoController.start(
+                                        scope = demoScope,
+                                        ids = ids,
+                                        narrate = narrate,
+                                        navigate = { route -> navController.go(route) },
+                                        speak = { line, done -> viewModel.demoSpeak(line, done) },
+                                        prewarm = { line, done -> viewModel.demoPrewarm(line, done) },
+                                        onReady = {
+                                            if (!record) return@start
+                                            ScreenRecordService.startForegroundOnly(act)
+                                            val waiter = CompletableDeferred<Pair<Int, Intent>?>()
+                                            projectionConsent.value = waiter
+                                            val mpm = act.getSystemService(MediaProjectionManager::class.java)
+                                            projectionLauncher.launch(mpm.createScreenCaptureIntent())
+                                            val granted = waiter.await()
+                                            if (granted != null) {
+                                                val m = android.util.DisplayMetrics()
+                                                @Suppress("DEPRECATION")
+                                                act.windowManager.defaultDisplay.getRealMetrics(m)
+                                                ScreenRecordService.beginRecording(
+                                                    act, granted.first, granted.second,
+                                                    m.widthPixels, m.heightPixels, m.densityDpi, audio
+                                                )
+                                                // 錄影從第一格開始就該是內容，不是還在轉的授權框
+                                                kotlinx.coroutines.delay(700)
+                                            } else {
+                                                ScreenRecordService.stopRecording(act)
+                                            }
+                                        },
+                                        onFinish = { if (record) ScreenRecordService.stopRecording(act) },
+                                    )
+                                }
+                            )
+                        }
                     }
             }
         }

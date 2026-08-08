@@ -491,6 +491,16 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         speakInternal(text = text, forcedGptSovitMode = null, expressiveTest = false, onComplete = onComplete)
     }
 
+    /**
+     * 先把一句話合成好放進快取，但**不發出聲音**。自動演示用：
+     * 錄影開始前把整段旁白備妥，錄的時候每一句都是快取命中、瞬間播放。
+     * 非 GPT-SoVITS 的路徑不需要預熱（系統／雲端 TTS 沒有這種延遲），直接回呼。
+     */
+    fun prewarm(text: String, onComplete: () -> Unit = {}) {
+        speakInternal(text = text, forcedGptSovitMode = null, expressiveTest = false,
+            onComplete = onComplete, prewarmOnly = true)
+    }
+
     fun speakGptSovitTest(text: String, mode: GptSovitVoiceMode, onComplete: () -> Unit = {}) {
         speakInternal(text = text, forcedGptSovitMode = mode, expressiveTest = true, onComplete = onComplete)
     }
@@ -525,7 +535,13 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         text: String,
         forcedGptSovitMode: GptSovitVoiceMode?,
         expressiveTest: Boolean,
-        onComplete: () -> Unit = {}
+        onComplete: () -> Unit = {},
+        /**
+         * 只合成進快取、不播放。自動演示的旁白要在開始錄影**之前**全部合成完——
+         * GPT-SoVITS 在 CPU 上一句要 10～30 秒，邊演邊合成等於把等待錄進影片裡。
+         * 走的是與正常朗讀完全相同的請求與快取鍵，所以之後真的要唸時必定命中快取。
+         */
+        prewarmOnly: Boolean = false
     ) {
         // 手機內建 TTS 沒就緒不代表發不出聲音——雲端語音和 GPT-SoVITS 都不靠它
         if (!_isInitialized.value && !gptSovitEnabled && cloudTtsPlan(text).isEmpty()) {
@@ -537,6 +553,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
         // 雲端語音優先於手機內建（自然度差很多），但仍讓 GPT-SoVITS 走它自己的克隆流程：
         // 使用者特地錄了家人的聲音，就不該被雲端通用嗓音蓋過去。
+        if (prewarmOnly && !gptSovitEnabled) { onComplete(); return }   // 只有 GPT-SoVITS 需要預熱
         if (!gptSovitEnabled && !expressiveTest) {
             val plan = cloudTtsPlan(text)
             if (plan.isNotEmpty()) {
@@ -551,7 +568,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             val modelDir = if (resolvedMode == GptSovitVoiceMode.English) gptSovitEnglishModelDirUri else gptSovitChineseModelDirUri
             addLog("[GPT-SoVITS] ${resolvedMode.displayName}：${if (sampleUri.isBlank()) "使用 Mac 端預設參考音檔槽位" else "使用自備樣本槽位"}")
             addLog("[GPT-SoVITS] ${resolvedMode.displayName}模型資料夾：${if (modelDir.isBlank()) "由 Mac server 目前載入模型決定" else "已指定"}")
-            if (tryGptSovitApiSynthesis(text, resolvedMode, sampleUri, expressiveTest, onComplete)) return
+            if (tryGptSovitApiSynthesis(text, resolvedMode, sampleUri, expressiveTest, onComplete, prewarmOnly)) return
             addLog("[GPT-SoVITS] 未送出 API 請求；已停止，避免改用 Android TTS")
             onComplete()
             return
@@ -585,7 +602,8 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         mode: GptSovitVoiceMode,
         refAudioPath: String,
         expressiveTest: Boolean,
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        prewarmOnly: Boolean = false
     ): Boolean {
         val apiBaseUrl = gptSovitApiBaseUrl.ifBlank {
             addLog("[GPT-SoVITS] API 位址未填，改用預設 ${LocalSovitsHelper.DEFAULT_LOCAL_URL}")
@@ -706,7 +724,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             } else {
                 DiagnosticLog.i(DiagnosticLog.Cat.TTS, "參考音／逐字稿配對", pairDetail)
             }
-            sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text)
+            sendSynthesisRequest(url, speakText, lang, serverSidePath, promptText, expressiveTest, onComplete, originalText = text, prewarmOnly = prewarmOnly)
         }
         return true
     }
@@ -721,7 +739,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         expressiveTest: Boolean,
         onComplete: () -> Unit,
         /** 失敗 fallback 給系統 TTS 用的原文（繁體），預設用 speakText。 */
-        originalText: String = speakText
+        originalText: String = speakText,
+        /** 只寫進快取、不播放，且失敗時不退回系統 TTS（預熱不該發出任何聲音）。 */
+        prewarmOnly: Boolean = false
     ) {
         val speedFactor = if (expressiveTest) {
             _speechRate.value.coerceAtLeast(1.03f).toDouble()
@@ -766,7 +786,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             hit.setLastModified(System.currentTimeMillis())   // LRU：用到就往後排
             addLog("[GPT-SoVITS] 快取命中，直接播放（${hit.length() / 1024} KB）")
             _synthesisStatus.value = "⚡ 這句已經合成過，直接播放"
-            playSynthesizedAudio(hit, onComplete)
+            if (prewarmOnly) onComplete() else playSynthesizedAudio(hit, onComplete)
             return
         }
 
@@ -785,7 +805,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                     !expressiveTest -> {
                         addLog("[GPT-SoVITS] API 失敗：${e.message}；改用 Android 本機 TTS")
                         _synthesisStatus.value = "⚠️ 連不到語音伺服器，改用本機 TTS"
-                        speakWithSystemTts(originalText, onComplete)
+                        if (prewarmOnly) onComplete() else speakWithSystemTts(originalText, onComplete)
                     }
                     else -> {
                         addLog("[GPT-SoVITS] API 失敗：${e.message}；測試模式不改用 Android TTS")
@@ -811,7 +831,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                             !expressiveTest -> {
                                 addLog("[GPT-SoVITS] API HTTP ${it.code}；改用 Android 本機 TTS")
                                 _synthesisStatus.value = "⚠️ 伺服器回 HTTP ${it.code}，改用本機 TTS"
-                                speakWithSystemTts(originalText, onComplete)
+                                if (prewarmOnly) onComplete() else speakWithSystemTts(originalText, onComplete)
                             }
                             else -> {
                                 addLog("[GPT-SoVITS] API HTTP ${it.code}；測試模式不改用 Android TTS")
@@ -827,7 +847,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                             !expressiveTest -> {
                                 addLog("[GPT-SoVITS] API 回傳空音訊；改用 Android 本機 TTS")
                                 _synthesisStatus.value = "⚠️ 伺服器回傳空音訊，改用本機 TTS"
-                                speakWithSystemTts(originalText, onComplete)
+                                if (prewarmOnly) onComplete() else speakWithSystemTts(originalText, onComplete)
                             }
                             else -> {
                                 addLog("[GPT-SoVITS] API 回傳空音訊；測試模式不改用 Android TTS")
@@ -842,10 +862,10 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
                     if (out == null) {
                         addLog("[GPT-SoVITS] 音訊寫檔失敗，改用 Android 本機 TTS")
                         _synthesisStatus.value = "⚠️ 音訊寫檔失敗，改用本機 TTS"
-                        speakWithSystemTts(originalText, onComplete)
+                        if (prewarmOnly) onComplete() else speakWithSystemTts(originalText, onComplete)
                     } else {
                         _synthesisStatus.value = "✅ 合成成功（${bytes.size / 1024} KB），播放中"
-                        playSynthesizedAudio(out, onComplete)
+                        if (prewarmOnly) onComplete() else playSynthesizedAudio(out, onComplete)
                     }
                 }
             }

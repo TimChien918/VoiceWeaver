@@ -1767,6 +1767,13 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun speak(text: String) = ttsModule.speak(text)
 
+    // ── 自動演示（做報告用）的兩個語音出口 ──
+    // 演示要「唸完再走下一步」，字幕與畫面才跟得上旁白；一般的 speak() 沒有完成回呼。
+    /** 唸一句，唸完回呼。 */
+    fun demoSpeak(text: String, onDone: () -> Unit) = ttsModule.speak(text, onDone)
+    /** 只合成進快取、不出聲（錄影前把整段旁白備妥用）。 */
+    fun demoPrewarm(text: String, onDone: () -> Unit) = ttsModule.prewarm(text, onDone)
+
     /** 多語朗讀：把一句話用指定語言唸出（重組結果一鍵中/英/日/韓）。 */
     fun speakIn(text: String, lang: AppLanguage) {
         val locale = when (lang) {
