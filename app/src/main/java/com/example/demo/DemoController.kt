@@ -137,14 +137,6 @@ object DemoController {
         val onStage: (suspend (Stage) -> kotlin.Unit)? = null,
         /** onStage 裡大約會自己等多久（估時用；不影響實際執行）。 */
         val stageMs: Long = 0,
-        /**
-         * 這一步要用**使用者的專屬聲音**唸的句子。
-         *
-         * 宣告在這裡是為了讓錄影前的預錄批次收得到它——和旁白同一批合成完，
-         * 演示時直接播檔案。不然這一句會在錄影途中現場合成，那是十幾二十秒的
-         * 空白，而且電腦沒開就整段沒聲音。
-         */
-        val speakLine: String? = null,
     )
 
     /** 示範用的碎詞與候選句（固定樣本，不呼叫任何 AI）。 */
@@ -208,10 +200,9 @@ object DemoController {
                 onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
             Step("The person picks the one that is actually theirs.",
                 onStage = { it.pick(0) }, holdMs = 700),
-            Step("Only then is it said out loud — in a voice rebuilt from their own.",
-                onStage = { delay(300); speakInOwnVoice(it, SAMPLE_CANDIDATES.first()) },
-                holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L,
-                speakLine = SAMPLE_CANDIDATES.first()),
+            Step("Only then is it said out loud.",
+                onStage = { delay(300); speakDemoSentence(it, SAMPLE_CANDIDATES.first()) },
+                holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L),
         )),
         Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
             // 只切到 "settings" 是不夠的：那是一頁設定清單，旁白在講聲音模型，
@@ -224,10 +215,9 @@ object DemoController {
                 holdMs = 600),
             Step("So the sentence comes out sounding like them, with the right feeling.",
                 onStage = {
-                    delay(400); speakInOwnVoice(it, SAMPLE_CANDIDATES.first())
+                    delay(400); speakDemoSentence(it, SAMPLE_CANDIDATES.first())
                     it.openPanel(null)    // 收面板，別把它留給下一個單元
-                }, holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L,
-                speakLine = SAMPLE_CANDIDATES.first()),
+                }, holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L),
         )),
         Unit("sos", "🚨", "Emergency SOS", 22, steps = listOf(
             Step("Now the other half of the problem: what happens when something goes wrong.",
@@ -423,17 +413,20 @@ object DemoController {
     }
 
     /**
-     * 用**使用者的專屬聲音**唸一句：亮出合成指示 → 停 2 秒 → 播預錄好的那一段。
+     * 演示裡「App 把句子唸出來」那一下：亮出合成指示 → 停 2 秒 → 用系統 TTS 唸。
      *
-     * 和 speakAndWait 的差別是聲音來源與那 2 秒。speakAndWait 走系統 TTS，
-     * 用在「快速求救」那種本來就該即時的地方；這條用在展示專屬聲音的地方，
-     * 那正是使用者最想在影片裡聽到的東西。
+     * **和旁白完全獨立。** 走的是 App 自己的發聲路徑，不碰旁白的預錄快取——
+     * 借用那份快取的話，這句話會用旁白角色的聲音唸出來，聽起來就變成旁白
+     * 在唸它，而不是 App 在講話。
+     *
+     * 那 2 秒是給「合成需要時間」用的。真的按下去要等電腦跑 10～30 秒，
+     * 瞬間出聲會讓觀眾以為這個 App 是即時的；停的長度縮短了，但「要等」
+     * 這件事本身不是演的。
      */
-    private suspend fun speakInOwnVoice(stage: Stage, text: String) {
+    private suspend fun speakDemoSentence(stage: Stage, text: String) {
         stage.synthesizing(true)
         try { delay(VOICE_SYNTH_DELAY_MS) } finally { stage.synthesizing(false) }
-        val clip = usableClip(text)
-        if (clip != null) playClip(clip) else speakAndWait(stage, text)   // 沒錄到就退回系統語音
+        speakAndWait(stage, text)
     }
 
     /** 逐字打進輸入框。一次貼上看起來像作弊，逐字打才看得懂使用者在做什麼。 */
@@ -529,10 +522,12 @@ object DemoController {
                     // 換過角色就把整批快取作廢——不然舊句子會用上一個角色的聲音播，
                     // 同一支影片裡兩種音色交錯出現。
                     if (voiceTag != clipsVoice) { clips.clear(); clipsVoice = voiceTag }
-                    // 旁白 ＋ 要用專屬聲音唸的句子，同一批錄完。
-                    val lines = units.flatMap { u ->
-                        u.steps.flatMap { listOf(it.cap, it.speakLine.orEmpty()) }
-                    }.filter { it.isNotBlank() }.distinct()
+                    // **只錄旁白。** 演示裡「App 自己唸出來」那幾句不在這裡——
+                    // 它們走的是 App 自己的發聲路徑（系統 TTS），和旁白是兩回事。
+                    // 混進來的話會被用旁白角色的聲音合成，聽起來就像旁白在唸那句話，
+                    // 而且缺一句還會擋住整個錄影。
+                    val lines = units.flatMap { u -> u.steps.map { it.cap } }
+                        .filter { it.isNotBlank() }.distinct()
                     val todo = lines.filter { usableClip(it) == null }
                     _prep.value = 0 to todo.size
                     todo.forEachIndexed { i, line ->
