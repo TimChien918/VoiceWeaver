@@ -602,12 +602,14 @@ object I18n {
         "重組" to arrayOf("Compose", "再構成", "재구성"),
         "圖卡" to arrayOf("Cards", "カード", "카드"),
 
-        // ── 自動演示 ＋ 螢幕錄影 ──
+        // ── 功能介紹 ＋ 螢幕錄影 ──
         // 面板本身跟著介面語言走；影片裡的旁白與字幕一律英文（報告用途），
         // 所以單元名稱刻意不翻——那是影片的段落名，不是介面文字。
         "功能介紹" to arrayOf("Feature tour", "機能紹介", "기능 소개"),
+        "正在錄製功能介紹…" to arrayOf("Recording the feature tour…", "機能紹介を録画中…", "기능 소개 녹화 중…"),
+        "螢幕錄影" to arrayOf("Screen recording", "画面録画", "화면 녹화"),
         "功能介紹與螢幕錄影" to arrayOf(
-            "Demo & screen recording", "デモと画面録画", "데모 및 화면 녹화"),
+            "Feature tour & screen recording", "機能紹介と画面録画", "기능 소개 및 화면 녹화"),
         "自動走過主要功能並錄影。全程不寫入資料、不送出任何訊息——危機介入與求救只是介紹，不會真的觸發。" to arrayOf(
             "Walks through the app on its own and records the screen. Nothing is written and no messages are sent — the crisis and SOS sections are described, not triggered.",
             "アプリを自動で一巡し、画面を録画します。データは書き込まれず、メッセージも送信されません（危機介入とSOSは説明のみ）。",

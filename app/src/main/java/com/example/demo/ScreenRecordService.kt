@@ -109,7 +109,7 @@ class ScreenRecordService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "螢幕錄影", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, com.example.ui.I18n.tr("螢幕錄影"), NotificationManager.IMPORTANCE_LOW)
             )
         }
         startInForeground()
@@ -118,7 +118,7 @@ class ScreenRecordService : Service() {
     private fun startInForeground() {
         val n: Notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("VoiceWeaver")
-            .setContentText("Recording the demo…")
+            .setContentText(com.example.ui.I18n.tr("正在錄製功能介紹…"))
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setOngoing(true)
             .build()
