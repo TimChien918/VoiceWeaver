@@ -205,8 +205,7 @@ object DemoController {
                     it.openPanel(null)    // 收面板，別把它留給下一個單元
                 }, holdMs = 600),
         )),
-        Unit("sos", "🚨", "Emergency SOS", 22,
-            note = "Simulated — nothing is sent.", steps = listOf(
+        Unit("sos", "🚨", "Emergency SOS", 22, steps = listOf(
             Step("Now the other half of the problem: what happens when something goes wrong.",
                 route = "main", onStage = { it.clear() }),
             Step("In an emergency, building a sentence word by word is far too slow.", holdMs = 600),
@@ -216,11 +215,10 @@ object DemoController {
                 onStage = { it.scrollToTop() }, holdMs = 900),
             Step("One tap, and the phone says it out loud straight away.",
                 onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
-            Step("The same tap can message the family with the current location. Nothing is sent in this demo.",
+            Step("The same tap can message the family with the current location.",
                 holdMs = 900),
         )),
-        Unit("crisis", "🆘", "Crisis intervention", 34,
-            note = "Simulated — nothing is sent.", steps = listOf(
+        Unit("crisis", "🆘", "Crisis intervention", 34, steps = listOf(
             Step("Losing language carries a real risk of depression and self-harm.", route = "main",
                 onStage = { it.clear() }),
             Step("So every sentence is screened before it is ever spoken.",
@@ -249,7 +247,6 @@ object DemoController {
                 onStage = { delay(700); it.crisisSay("me", com.example.ui.I18n.tr("我好一點了")) }, holdMs = 1400),
             Step("Then it closes gently, and the app goes back to being an ordinary app.",
                 onStage = { delay(900); it.crisisClose(); it.clear() }, holdMs = 900),
-            Step("In this demo nothing left the phone: no message, no photo, no call.", holdMs = 700),
         )),
         Unit("acoustic", "🎤", "Personal pronunciation model", 18, steps = listOf(
             Step("Aphasic speech breaks ordinary speech recognition. Every time.", route = "phrase_shortcuts"),
