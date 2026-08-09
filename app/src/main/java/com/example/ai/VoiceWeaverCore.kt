@@ -696,39 +696,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      *   給「AI 判不出是誰想自傷」的情況用：真是本人求救→家人仍收到通報；
      *   是替別人求救→話送得出去。兩邊的最壞情況都不致命。
      */
-    /** 使用者按下求救鍵之後的結果，給畫面顯示（null＝沒有在進行）。 */
-    private val _sosResult = MutableStateFlow<String?>(null)
-    val sosResult: StateFlow<String?> = _sosResult.asStateFlow()
-    fun dismissSosResult() { _sosResult.value = null }
-
-    /**
-     * 使用者**自己按下求救鍵**：通知家人（帶位置）並開啟與家人的對話視窗。
-     *
-     * 和危機偵測那條路的關鍵差別是**不鎖語音**。那條路鎖是因為判定他想自傷，
-     * 要攔住即將說出口的話；這裡他是主動求救，反過來更需要能繼續講。
-     * 送不出去一定要說——使用者按了鈕就會以為家人收到了，那是最糟的失敗方式。
-     */
-    fun triggerUserSos() {
-        val text = I18n.tr("我需要幫忙")
-        _sosResult.value = I18n.tr("正在通知家人…")
-        viewModelScope.launch {
-            val outcome = runCatching {
-                emergencyTrigger.reportUserSos(text, poiTag = _globalTagsVault.value.locationTag)
-            }.getOrNull()
-            _sosResult.value = when (outcome) {
-                is com.example.safety.EmergencyTrigger.Outcome.Sent ->
-                    I18n.tr("✅ 已通知家人，並附上你的位置。")
-                is com.example.safety.EmergencyTrigger.Outcome.Failed ->
-                    I18n.tr("⚠ 通報傳送失敗（%s）。請直接撥打 1925 安心專線或 119。")
-                        .format(outcome.reason.take(40))
-                else ->
-                    I18n.tr("⚠ 通報傳送失敗。請直接撥打 1925 安心專線或 119。")
-            }
-            // 對話視窗要開起來——通報只是把訊息送出去，家人回話、視訊、拍照都在那裡。
-            startCrisisConversation(text)
-        }
-    }
-
     fun triggerEmergencyReport(text: String, poiTag: String = "", lockSpeech: Boolean = true) {
         if (!lockSpeech) {
             // 靜默通報：不動 speakGate、不開危機視窗，不打斷使用者講話

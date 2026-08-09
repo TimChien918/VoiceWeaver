@@ -215,11 +215,11 @@ object DemoController {
                 onStage = { it.scrollToTop() }, holdMs = 900),
             Step("One tap, and the phone says it out loud straight away.",
                 onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
-            Step("And a red button sits above every screen, on every tab.",
-                onStage = { it.scrollToTop(); delay(600); it.press("sos"); delay(700); it.press(null) },
-                holdMs = 900, stageMs = 1300L),
-            Step("It messages the family with the current location, and opens a window to talk to them.",
-                holdMs = 900),
+            // 這一段只講「一鍵發聲」，因為 App 上使用者按得到的就是這三顆。
+            // 通知家人是危機偵測那條路自動觸發的，屬於下一個單元（crisis）在講的東西——
+            // 混在這裡講會讓觀眾以為畫面上有一顆通報鍵，那是沒有的。
+            Step("Three of them, always in reach, on the screen they use most.",
+                onStage = { it.scrollToTop() }, holdMs = 900),
         )),
         Unit("crisis", "🆘", "Crisis intervention", 34, steps = listOf(
             Step("Losing language carries a real risk of depression and self-harm.", route = "main",

@@ -25,16 +25,6 @@ class EmergencyTrigger(
         return report(userText, poiTag)
     }
 
-    /**
-     * 使用者**自己按下求救鍵**時走這條，不看關鍵字。
-     *
-     * interceptAndReport 是「替他把話聽出危險」用的，所以第一件事就是比對危機關鍵字。
-     * 但主動求救的人打的是「我需要幫忙」——那不含任何關鍵字，走那條路會被靜默丟掉，
-     * 使用者按了鈕、畫面說已通報，家人其實什麼都沒收到。這是最不能出錯的一條路。
-     */
-    suspend fun reportUserSos(userText: String, poiTag: String = ""): Outcome =
-        report(userText, poiTag)
-
     private suspend fun report(userText: String, poiTag: String): Outcome {
         // 拿 GPS（拿不到也要送，至少要讓家屬知道）
         val loc = runCatching { locationTracker.getCurrentLocation() }.getOrNull()

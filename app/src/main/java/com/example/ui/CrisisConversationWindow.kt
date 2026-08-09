@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -92,13 +93,21 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
       // Dialog 開在新 Window，語言與字級都會被平台蓋回系統預設——見 ReapplyAppLocale。
       // 這個視窗是危機當下要讀的，字太小等於沒有。
       com.example.ui.ReapplyAppLocale {
+        // 高度上限要同時看螢幕，而且**一定要能捲**。
+        //
+        // 原本只有 heightIn(max = 680.dp)、沒有 verticalScroll：內容一超過就
+        // 被硬切掉，下面的「傳語音給家人」「我好一點了」永遠碰不到——而這個
+        // 視窗是刻意設計成「只有按下我好一點了才關得掉」的。使用者正在情緒
+        // 危機當下，卡在一個關不掉也滑不動的畫面裡，這是最糟的失敗方式。
+        val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
-                .heightIn(max = 680.dp)
+                .heightIn(max = minOf(680.dp, screenH * 0.88f))
                 .clip(RoundedCornerShape(24.dp))
                 .background(Brush.verticalGradient(listOf(CalmBg1, CalmBg2, CalmBg3)))
                 .border(1.dp, CalmAccent.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
