@@ -41,9 +41,15 @@ object DemoController {
     // 等外部回呼的上限。旁白音檔、系統 TTS、畫面動作都可能不回來（引擎被回收、
     // MediaPlayer 卡在 prepare、某個 onStage 自己拋在 delay 裡）。演示是無人看顧
     // 跑完整段錄影的，任何一個永遠等下去的地方都會變成一支卡住的長影片。
-    private const val SPEAK_TIMEOUT_MS = 20_000L
+    // 演示裡「按下重組」之後要轉多久。取一次雲端重組的實測中位數——
+    // 這一步的重點就是讓觀眾看到真實的等待，所以它不該比真的短。
+    private const val RECONSTRUCT_WAIT_MS = 4_500L
+
+    // 發聲的上限。演示的示範發聲走的是真的 GPT-SoVITS（使用者自己的聲音），
+    // 在電腦 CPU 上一句要 10～30 秒，20 秒的上限會把它攔腰砍掉。
+    private const val SPEAK_TIMEOUT_MS = 90_000L
     private const val CLIP_TIMEOUT_MS = 60_000L
-    private const val STAGE_TIMEOUT_MS = 30_000L
+    private const val STAGE_TIMEOUT_MS = 120_000L
 
     /** 給 UI 估時用：一步大概多久（英文約每秒 2.6 個字）。 */
     fun stepMillis(cap: String, narrated: Boolean): Long {
@@ -88,6 +94,8 @@ object DemoController {
         fun scrollToResult()
         /** 主畫面捲回最上面（緊急片語那張卡在第一個）。 */
         fun scrollToTop()
+        /** 切成「正在重組」的等待畫面（真的那顆 Loading 元件）。 */
+        fun reconstructing()
         /** 視覺按壓某顆按鈕（tag；null＝放開）。不會真的觸發它的動作。 */
         fun press(tag: String?)
         /** 讓 App 把這句話唸出來（系統 TTS，即時），唸完呼叫 done。 */
@@ -164,14 +172,19 @@ object DemoController {
                 onStage = { it.clear() }),
             Step("The user types, or says, whatever they can manage.",
                 onStage = { typeSlowly(it, SAMPLE_FRAGMENTS) }),
+            // 候選句是固定樣本（錄影途中被 LLM 逾時或網路一抖毀掉整支影片是不能
+            // 接受的），但**等待不能假**：按下去之後真的要轉，而且轉的是真的那顆
+            // Loading 元件、轉真實長度。直接跳出結果會讓觀眾以為這個 App 是即時的。
             Step("One tap turns the fragments into a whole sentence.",
                 onStage = {
                     it.scrollToResult(); delay(700)          // 先捲到按鈕看得到的位置
                     it.press("reconstruct"); delay(320)      // 按下去（視覺）
                     it.press(null); delay(200)
+                    it.reconstructing()                      // 真的進入等待狀態
+                    delay(RECONSTRUCT_WAIT_MS)               // 一次雲端重組實際要這麼久
                     it.candidates(SAMPLE_CANDIDATES); delay(300)
                     it.scrollToResult()                      // 再捲到結果
-                }, holdMs = 700),
+                }, holdMs = 700, stageMs = RECONSTRUCT_WAIT_MS + 1500L),
             Step("Three versions, never one. A wrong guess put in your mouth is worse than silence.",
                 onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
             Step("The person picks the one that is actually theirs.",

@@ -1891,8 +1891,27 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     val demoPressed: StateFlow<String?> = _demoPressed.asStateFlow()
     fun demoPress(tag: String?) { _demoPressed.value = tag }
 
-    /** 演示：讓 App 把這句話唸出來，唸完才回呼。固定用系統 TTS（要即時）。 */
-    fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakDemoInstant(text, onDone)
+    /**
+     * 演示：讓 App 把這句話唸出來，**唸完**才回呼。
+     *
+     * 走的是使用者平常按下發聲鍵時完全一樣的那條路——也就是 GPT-SoVITS 的
+     * 專屬聲音，包含它在電腦上合成要花的那十幾二十秒與畫面上的等待指示。
+     * 以前這裡改用 Android 系統 TTS 是為了「快」，但那等於在影片裡演一個
+     * 使用者實際上不會遇到的流程：真正的產品就是要等，而且等的是他自己的聲音。
+     */
+    fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speak(text, onDone)
+
+    /**
+     * 演示：把畫面切成「正在重組」的等待狀態。
+     *
+     * 候選句本身仍然是固定樣本（錄影途中被 LLM 逾時、金鑰失效、網路一抖毀掉
+     * 整支影片是不能接受的），但**等待這件事不能假**：真的按下去要轉幾秒，
+     * 影片裡就要轉幾秒，用的也是真的那顆 Loading 元件。
+     * 直接跳出結果會讓觀眾以為這個 App 是即時的，那是在騙人。
+     */
+    fun demoReconstructing() {
+        _reconstructionState.value = ReconstructionUiState.Loading
+    }
 
     // ── 危機對話視窗的演示 ────────────────────────────────────────────────
     // 直接推 _crisisConv 的狀態，用的是真的視窗、真的氣泡元件，但**完全不碰
@@ -2990,6 +3009,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
     }
+
 
     fun resetState() {
         _reconstructionState.value = ReconstructionUiState.Idle
