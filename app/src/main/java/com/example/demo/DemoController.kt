@@ -97,6 +97,8 @@ object DemoController {
         fun scrollToResult()
         /** 主畫面捲回最上面（緊急片語那張卡在第一個）。 */
         fun scrollToTop()
+        /** 主畫面捲到輸入框（打字之前一定要先做，否則錄影裡看不到在打什麼）。 */
+        fun scrollToInput()
         /** 切成「正在重組」的等待畫面（真的那顆 Loading 元件）。 */
         fun reconstructing()
         /** 把「合成中…」指示亮起來／熄掉。 */
@@ -183,8 +185,12 @@ object DemoController {
         Unit("compose", "💬", "Sentence reconstruction", 24, steps = listOf(
             Step("What comes out is fragments. Water. Rest. Now.", route = "main",
                 onStage = { it.clear() }),
+            // 先捲到輸入框再打字。主畫面上面壓著「快速求救」與整張情境卡，
+            // 輸入框在折線下面——不捲的話錄出來是旁白在講「使用者把想得到的字
+            // 打進去」，畫面上卻連輸入框都看不到。
             Step("The user types, or says, whatever they can manage.",
-                onStage = { typeSlowly(it, SAMPLE_FRAGMENTS) }),
+                onStage = { it.scrollToInput(); delay(600); typeSlowly(it, SAMPLE_FRAGMENTS) },
+                stageMs = 600L + SAMPLE_FRAGMENTS.length * 70L),
             // 候選句是固定樣本（錄影途中被 LLM 逾時或網路一抖毀掉整支影片是不能
             // 接受的），但**等待不能假**：按下去之後真的要轉，而且轉的是真的那顆
             // Loading 元件、轉真實長度。直接跳出結果會讓觀眾以為這個 App 是即時的。
@@ -243,7 +249,8 @@ object DemoController {
             Step("Losing language carries a real risk of depression and self-harm.", route = "main",
                 onStage = { it.clear() }),
             Step("So every sentence is screened before it is ever spoken.",
-                onStage = { typeSlowly(it, "I do not want to go on") }, holdMs = 500),
+                onStage = { it.scrollToInput(); delay(600); typeSlowly(it, "I do not want to go on") },
+                holdMs = 500, stageMs = 600L + 22 * 70L),
             Step("When something is found, the app refuses to say it, and says so plainly.",
                 onStage = { it.safetyLock(com.example.ui.I18n.tr("偵測到高風險訊息，正在通報緊急聯絡人…")) }, holdMs = 1200),
             Step("But refusing is not enough. It opens a window and stays with the person.",

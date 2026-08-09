@@ -174,14 +174,22 @@ fun VoiceWeaverScreen(
         val demoListState = androidx.compose.foundation.lazy.rememberLazyListState()
         val demoScroll by viewModel.demoScroll.collectAsState()
         val demoPressed by viewModel.demoPressed.collectAsState()
+        // 我的最愛那一格是條件式的（沒有收藏就不存在），會讓後面每個 item 的
+        // 索引整個位移一格。所以在這裡算一次，下面 LazyColumn 用同一個值——
+        // 兩邊各自算的話，只要有人改了其中一邊，演示就會捲到隔壁那張卡。
+        val favorites = settings.favoriteSentences.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+        val inputItemIndex = if (favorites.isEmpty()) 2 else 3   // 0=快速求救 1=情境 (2=最愛) → 輸入框
         LaunchedEffect(demoScroll) {
-            when {
-                // 負數＝捲回最上面。緊急片語那張卡是第一個 item，旁白講
-                // 「always at the top」的時候畫面不能停在最底下。
-                demoScroll < 0 -> runCatching { demoListState.animateScrollToItem(0) }
-                demoScroll > 0 -> {
-                    val last = demoListState.layoutInfo.totalItemsCount - 1
-                    if (last >= 0) runCatching { demoListState.animateScrollToItem(last) }
+            val (seq, target) = demoScroll
+            if (seq == 0) return@LaunchedEffect
+            runCatching {
+                when (target) {
+                    "top" -> demoListState.animateScrollToItem(0)
+                    "input" -> demoListState.animateScrollToItem(inputItemIndex)
+                    else -> {
+                        val last = demoListState.layoutInfo.totalItemsCount - 1
+                        if (last >= 0) demoListState.animateScrollToItem(last)
+                    }
                 }
             }
         }
@@ -238,7 +246,6 @@ fun VoiceWeaverScreen(
             }
 
             // ── 我的最愛：收藏的常用句，一鍵朗讀 ──
-            val favorites = settings.favoriteSentences.split("\n").map { it.trim() }.filter { it.isNotBlank() }
             if (favorites.isNotEmpty()) {
                 item {
                     Card(

@@ -435,6 +435,7 @@ class MainActivity : ComponentActivity() {
                                             override fun severity(name: String) { viewModel.demoSeverity(name) }
                                             override fun scrollToResult() = viewModel.demoScrollToResult()
                                             override fun scrollToTop() = viewModel.demoScrollToTop()
+                                            override fun scrollToInput() = viewModel.demoScrollToInput()
                                             override fun reconstructing() = viewModel.demoReconstructing()
                                             override fun synthesizing(on: Boolean) = viewModel.demoSynthesizing(on)
                                             override fun press(tag: String?) = viewModel.demoPress(tag)

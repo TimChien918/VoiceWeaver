@@ -1889,16 +1889,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // 演示的捲動訊號。把候選句塞進狀態沒有用——結果卡在畫面下方，
     // 不捲下去觀眾根本看不到，影片就會變成「旁白在講看不到的東西」。
     // 用遞增的計數當事件，畫面那邊 LaunchedEffect 收到就捲。
-    // 值是「遞增序號」而不是位置，因為連續兩次捲到同一個地方也要各觸發一次。
-    // 正數＝捲到底（結果／候選句），負數＝捲回最上面（緊急片語那張卡）。
-    private val _demoScroll = MutableStateFlow(0)
-    val demoScroll: StateFlow<Int> = _demoScroll.asStateFlow()
+    // 帶序號是因為連續兩次捲到同一個地方也要各觸發一次（值不變 collect 不會動）。
+    // target: "top" 最上面／"input" 輸入框／"result" 結果與候選句。
+    private val _demoScroll = MutableStateFlow(0 to "")
+    val demoScroll: StateFlow<Pair<Int, String>> = _demoScroll.asStateFlow()
     private var demoScrollSeq = 0
+    private fun demoScrollTo(target: String) { demoScrollSeq++; _demoScroll.value = demoScrollSeq to target }
     /** 演示：把主畫面捲到底（結果／候選句所在的位置）。 */
-    fun demoScrollToResult() { demoScrollSeq++; _demoScroll.value = demoScrollSeq }
-    /** 演示：把主畫面捲回最上面。緊急片語那張卡是第一個 item，
-     *  旁白講「always at the top」的時候畫面不能停在最底下。 */
-    fun demoScrollToTop() { demoScrollSeq++; _demoScroll.value = -demoScrollSeq }
+    fun demoScrollToResult() = demoScrollTo("result")
+    /** 演示：把主畫面捲回最上面（緊急片語那張卡是第一個 item）。 */
+    fun demoScrollToTop() = demoScrollTo("top")
+    /** 演示：捲到輸入框。打字那一步不捲的話，錄影裡看得到的是情境卡，
+     *  旁白說「使用者把想得到的字打進去」，而畫面上根本沒有輸入框。 */
+    fun demoScrollToInput() = demoScrollTo("input")
 
     // 「哪一顆按鈕正被按下」。演示不能真的呼叫 onClick——重組那顆會去打 LLM，
     // 錄影途中網路一抖就毀了整支影片。但畫面上一定要看得到「他按了那顆鍵」，
