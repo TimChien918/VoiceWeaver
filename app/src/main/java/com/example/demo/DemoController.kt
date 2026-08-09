@@ -45,6 +45,11 @@ object DemoController {
     // 這一步的重點就是讓觀眾看到真實的等待，所以它不該比真的短。
     private const val RECONSTRUCT_WAIT_MS = 4_500L
 
+    // 專屬聲音「合成」的停頓。音檔是預錄好的，所以其實不必等，但真的按下去
+    // 是要等電腦跑 10～30 秒的——瞬間出聲會讓觀眾以為這個 App 是即時的。
+    // 停的長度是縮短的，但「要等」這件事本身不是演的。
+    private const val VOICE_SYNTH_DELAY_MS = 2_000L
+
     private const val SPEAK_TIMEOUT_MS = 20_000L
     private const val CLIP_TIMEOUT_MS = 60_000L
     private const val STAGE_TIMEOUT_MS = 30_000L
@@ -94,6 +99,8 @@ object DemoController {
         fun scrollToTop()
         /** 切成「正在重組」的等待畫面（真的那顆 Loading 元件）。 */
         fun reconstructing()
+        /** 把「合成中…」指示亮起來／熄掉。 */
+        fun synthesizing(on: Boolean)
         /** 視覺按壓某顆按鈕（tag；null＝放開）。不會真的觸發它的動作。 */
         fun press(tag: String?)
         /** 讓 App 把這句話唸出來（系統 TTS，即時），唸完呼叫 done。 */
@@ -128,6 +135,14 @@ object DemoController {
         val onStage: (suspend (Stage) -> kotlin.Unit)? = null,
         /** onStage 裡大約會自己等多久（估時用；不影響實際執行）。 */
         val stageMs: Long = 0,
+        /**
+         * 這一步要用**使用者的專屬聲音**唸的句子。
+         *
+         * 宣告在這裡是為了讓錄影前的預錄批次收得到它——和旁白同一批合成完，
+         * 演示時直接播檔案。不然這一句會在錄影途中現場合成，那是十幾二十秒的
+         * 空白，而且電腦沒開就整段沒聲音。
+         */
+        val speakLine: String? = null,
     )
 
     /** 示範用的碎詞與候選句（固定樣本，不呼叫任何 AI）。 */
@@ -187,8 +202,10 @@ object DemoController {
                 onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
             Step("The person picks the one that is actually theirs.",
                 onStage = { it.pick(0) }, holdMs = 700),
-            Step("Only then is it said out loud.",
-                onStage = { delay(300); speakAndWait(it, SAMPLE_CANDIDATES.first()) }, holdMs = 600),
+            Step("Only then is it said out loud — in a voice rebuilt from their own.",
+                onStage = { delay(300); speakInOwnVoice(it, SAMPLE_CANDIDATES.first()) },
+                holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L,
+                speakLine = SAMPLE_CANDIDATES.first()),
         )),
         Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
             // 只切到 "settings" 是不夠的：那是一頁設定清單，旁白在講聲音模型，
@@ -201,9 +218,10 @@ object DemoController {
                 holdMs = 600),
             Step("So the sentence comes out sounding like them, with the right feeling.",
                 onStage = {
-                    delay(400); speakAndWait(it, SAMPLE_CANDIDATES.first())
+                    delay(400); speakInOwnVoice(it, SAMPLE_CANDIDATES.first())
                     it.openPanel(null)    // 收面板，別把它留給下一個單元
-                }, holdMs = 600),
+                }, holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L,
+                speakLine = SAMPLE_CANDIDATES.first()),
         )),
         Unit("sos", "🚨", "Emergency SOS", 22, steps = listOf(
             Step("Now the other half of the problem: what happens when something goes wrong.",
@@ -397,6 +415,20 @@ object DemoController {
         }
     }
 
+    /**
+     * 用**使用者的專屬聲音**唸一句：亮出合成指示 → 停 2 秒 → 播預錄好的那一段。
+     *
+     * 和 speakAndWait 的差別是聲音來源與那 2 秒。speakAndWait 走系統 TTS，
+     * 用在「快速求救」那種本來就該即時的地方；這條用在展示專屬聲音的地方，
+     * 那正是使用者最想在影片裡聽到的東西。
+     */
+    private suspend fun speakInOwnVoice(stage: Stage, text: String) {
+        stage.synthesizing(true)
+        try { delay(VOICE_SYNTH_DELAY_MS) } finally { stage.synthesizing(false) }
+        val clip = usableClip(text)
+        if (clip != null) playClip(clip) else speakAndWait(stage, text)   // 沒錄到就退回系統語音
+    }
+
     /** 逐字打進輸入框。一次貼上看起來像作弊，逐字打才看得懂使用者在做什麼。 */
     private suspend fun typeSlowly(stage: Stage, text: String) {
         val sb = StringBuilder()
@@ -490,8 +522,10 @@ object DemoController {
                     // 換過角色就把整批快取作廢——不然舊句子會用上一個角色的聲音播，
                     // 同一支影片裡兩種音色交錯出現。
                     if (voiceTag != clipsVoice) { clips.clear(); clipsVoice = voiceTag }
-                    val lines = units.flatMap { u -> u.steps.map { it.cap } }
-                        .filter { it.isNotBlank() }.distinct()
+                    // 旁白 ＋ 要用專屬聲音唸的句子，同一批錄完。
+                    val lines = units.flatMap { u ->
+                        u.steps.flatMap { listOf(it.cap, it.speakLine.orEmpty()) }
+                    }.filter { it.isNotBlank() }.distinct()
                     val todo = lines.filter { usableClip(it) == null }
                     _prep.value = 0 to todo.size
                     todo.forEachIndexed { i, line ->

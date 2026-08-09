@@ -427,6 +427,7 @@ class MainActivity : ComponentActivity() {
                                             override fun scrollToResult() = viewModel.demoScrollToResult()
                                             override fun scrollToTop() = viewModel.demoScrollToTop()
                                             override fun reconstructing() = viewModel.demoReconstructing()
+                                            override fun synthesizing(on: Boolean) = viewModel.demoSynthesizing(on)
                                             override fun press(tag: String?) = viewModel.demoPress(tag)
                                             override fun speakAloud(text: String, done: () -> Unit) {
                                                 viewModel.demoSpeakAloud(text, done)

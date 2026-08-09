@@ -1907,6 +1907,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     val demoPressed: StateFlow<String?> = _demoPressed.asStateFlow()
     fun demoPress(tag: String?) { _demoPressed.value = tag }
 
+    /** 演示：把「合成中…」指示亮起來／熄掉。 */
+    fun demoSynthesizing(on: Boolean) = ttsModule.setDemoSynthesizing(on)
+
     /** 演示：讓 App 把這句話唸出來，唸完才回呼。固定用系統 TTS（要即時）。 */
     fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakInstant(text, onDone)
 

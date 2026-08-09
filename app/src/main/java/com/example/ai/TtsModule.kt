@@ -581,6 +581,19 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         }.onFailure { onComplete() }
     }
 
+    /**
+     * 演示：手動把「合成中…」的指示亮起來／熄掉。
+     *
+     * 演示播的是**預錄好的**專屬聲音音檔，所以實際上不需要等。但真的按下去
+     * 是要等電腦合成 10～30 秒的，直接瞬間出聲會讓觀眾以為這個 App 是即時的。
+     * 所以演示照樣停一下並亮出同一個指示——停的時間是縮短的，但「要等」
+     * 這件事本身不是演的。
+     */
+    fun setDemoSynthesizing(on: Boolean) {
+        _isSynthesizing.value = on
+        _synthesisStatus.value = if (on) com.example.ui.I18n.tr("合成中…") else null
+    }
+
     /** GPT-SoVITS 有沒有開起來（演示要靠它發旁白）。 */
     fun gptSovitReady(): Boolean = gptSovitEnabled
 
