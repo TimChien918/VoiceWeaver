@@ -984,7 +984,23 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /** 臨床高頻一鍵發聲：固定句、預先核可，不過 LLM 直接朗讀。 */
-    fun speakClinicalPhrase(phrase: String) = doSpeak(phrase)
+    /**
+     * 快速求救的三句話：**直接走系統 TTS，不經過 GPT-SoVITS**。
+     *
+     * 這三顆鈕存在的理由就是「現在就要讓旁邊的人聽懂」。走一般發聲路徑的話，
+     * 開了專屬聲音的人要等電腦合成 10～30 秒，電腦沒開更是直接合不出來——
+     * 而需要按「我很痛」的那個當下，音色好聽完全不重要。
+     * 也刻意不過風險閘門：這三句是寫死的，「我很痛」會被判成醫療類而跳確認卡，
+     * 那等於在求救路上多擋一道。
+     */
+    fun speakClinicalPhrase(phrase: String) {
+        if (!firstSpeakRecorded) {
+            firstSpeakRecorded = true
+            val latency = System.currentTimeMillis() - appOpenAtMs
+            viewModelScope.launch { settingsRepo.recordFirstSpeakLatency(latency) }
+        }
+        ttsModule.speakInstant(phrase)
+    }
     private val _isGeneratingSuggestions = MutableStateFlow(false)
     val isGeneratingSuggestions: StateFlow<Boolean> = _isGeneratingSuggestions.asStateFlow()
 
@@ -1892,7 +1908,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun demoPress(tag: String?) { _demoPressed.value = tag }
 
     /** 演示：讓 App 把這句話唸出來，唸完才回呼。固定用系統 TTS（要即時）。 */
-    fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakDemoInstant(text, onDone)
+    fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakInstant(text, onDone)
 
     /**
      * 演示：把畫面切成「正在重組」的等待狀態。
