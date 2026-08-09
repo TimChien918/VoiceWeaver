@@ -542,6 +542,21 @@ object LocalSovitsHelper {
         return switchModel(baseUrl, target).fold(onSuccess = { target }, onFailure = { null })
     }
 
+    /**
+     * 切到**指定角色**的該語言聲音。找不到那個角色就退回該語言的預設。
+     *
+     * ensureLanguageModel 的規則是「語言對了就不動」，所以伺服器上剛好載著哪個
+     * 英文模型就用哪個——旁白每次用什麼聲音因此是不確定的。演示旁白要固定一個
+     * 角色（整支影片同一個聲音，而且和示範發聲分得開），所以要能指名。
+     */
+    suspend fun ensureCharacter(baseUrl: String, lang: VoiceLang, character: String): MacRefVoice? {
+        val target = voicesFor(lang).firstOrNull { it.character.contains(character) }
+            ?: return ensureLanguageModel(baseUrl, lang)
+        if (currentModel?.displayLabel == target.displayLabel) return target   // 已經是它，免切
+        Log.i(TAG, "指定角色切換 → ${target.displayLabel}（目前：${currentModel?.displayLabel ?: "未知"}）")
+        return switchModel(baseUrl, target).fold(onSuccess = { target }, onFailure = { null })
+    }
+
     // ─── 多電腦（server）清單 ──────────────────────────────────────────────────
     // 存放格式：每行「名稱|http://ip:9880」，存於 AppSettings.gptSovitServerList。
 

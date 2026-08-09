@@ -67,6 +67,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     private val pendingUtterances = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
     private var utteranceSeq = 0
 
+    /** 演示旁白固定用這個角色（比對 character 是否包含這串）。 */
+    private val demoNarrationCharacter = "花火"
+
     private fun installUtteranceListener(engine: TextToSpeech) {
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
@@ -760,7 +763,12 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             // ① 自動切換：確保 server 載入的模型語言 == 要講的語言（_ZH/_EN/_JA/_KO）。
             //    一致就不動；不一致才切；沒有該語言模型則沿用目前模型。
             _synthesisStatus.value = "⏳ 確認語音模型（${targetLang.displayName}）…"
-            val activeVoice = LocalSovitsHelper.ensureLanguageModel(apiBaseUrl, targetLang)
+            // 演示旁白固定用同一個角色：整支影片一個聲音，而且和「App 自己講話」
+            // 那一下分得開。不指名的話 ensureLanguageModel 是「語言對了就不動」，
+            // 伺服器上剛好載著哪個英文模型就用哪個，每次錄出來的旁白都可能不一樣。
+            val activeVoice = if (demoNarration)
+                LocalSovitsHelper.ensureCharacter(apiBaseUrl, targetLang, demoNarrationCharacter)
+            else LocalSovitsHelper.ensureLanguageModel(apiBaseUrl, targetLang)
             if (activeVoice != null) {
                 addLog("[GPT-SoVITS] 使用模型：${activeVoice.displayLabel}")
             } else {
