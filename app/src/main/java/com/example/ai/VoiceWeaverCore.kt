@@ -1902,6 +1902,21 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 演示：捲到輸入框。打字那一步不捲的話，錄影裡看得到的是情境卡，
      *  旁白說「使用者把想得到的字打進去」，而畫面上根本沒有輸入框。 */
     fun demoScrollToInput() = demoScrollTo("input")
+    /** 演示：把某個位置露出來（"top"／"input"／"result"）。 */
+    fun demoFocusOn(target: String) = demoScrollTo(target)
+
+    // 捲完之後，那個東西到底有沒有真的在畫面上。由畫面回報。
+    // 這是「錄影池」的驗收：旁白在講某個地方，那個地方就必須看得見；
+    // 沒看見不是靜靜地放過去，而是留下紀錄，才不會又是錄完整支影片才發現。
+    private val _demoFocusVisible = MutableStateFlow<Pair<String, Boolean>?>(null)
+    val demoFocusVisible: StateFlow<Pair<String, Boolean>?> = _demoFocusVisible.asStateFlow()
+    fun demoReportFocus(target: String, visible: Boolean) {
+        _demoFocusVisible.value = target to visible
+    }
+    fun demoFocusWasVisible(target: String): Boolean {
+        val v = _demoFocusVisible.value
+        return v == null || v.first != target || v.second
+    }
 
     // 「哪一顆按鈕正被按下」。演示不能真的呼叫 onClick——重組那顆會去打 LLM，
     // 錄影途中網路一抖就毀了整支影片。但畫面上一定要看得到「他按了那顆鍵」，

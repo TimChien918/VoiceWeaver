@@ -50,6 +50,10 @@ object DemoController {
     // 停的長度是縮短的，但「要等」這件事本身不是演的。
     private const val VOICE_SYNTH_DELAY_MS = 2_000L
 
+    // 捲動動畫跑完要一點時間。不等就開始講，觀眾看到的是「畫面還在滑」而旁白
+    // 已經在講那個東西了；而且太早檢查可見性也會誤報。
+    private const val FOCUS_SETTLE_MS = 650L
+
     private const val SPEAK_TIMEOUT_MS = 20_000L
     private const val CLIP_TIMEOUT_MS = 60_000L
     private const val STAGE_TIMEOUT_MS = 30_000L
@@ -99,6 +103,10 @@ object DemoController {
         fun scrollToTop()
         /** 主畫面捲到輸入框（打字之前一定要先做，否則錄影裡看不到在打什麼）。 */
         fun scrollToInput()
+        /** 把某個位置露出來（"top"／"input"／"result"）。 */
+        fun focusOn(target: String)
+        /** 上一次 focusOn 之後，那個位置到底有沒有在畫面上。 */
+        fun focusWasVisible(target: String): Boolean
         /** 切成「正在重組」的等待畫面（真的那顆 Loading 元件）。 */
         fun reconstructing()
         /** 把「合成中…」指示亮起來／熄掉。 */
@@ -137,6 +145,15 @@ object DemoController {
         val onStage: (suspend (Stage) -> kotlin.Unit)? = null,
         /** onStage 裡大約會自己等多久（估時用；不影響實際執行）。 */
         val stageMs: Long = 0,
+        /**
+         * 這一步在講畫面上的哪個地方（"top"／"input"／"result"）。
+         *
+         * 錄影池的核心：旁白開始講之前，演示會先把這個地方捲出來，捲完再確認
+         * 它真的在畫面上，不在就留一筆警告。以前是每發現一次「旁白在講某個
+         * 東西、畫面上卻沒有它」就補一次 scroll——補到第三次就該把它變成規則。
+         * null＝這一步沒有特定對象（片頭、純解說），不做任何事。
+         */
+        val focus: String? = null,
     )
 
     /** 示範用的碎詞與候選句（固定樣本，不呼叫任何 AI）。 */
@@ -180,15 +197,14 @@ object DemoController {
             // 先捲到輸入框再打字。主畫面上面壓著「快速求救」與整張情境卡，
             // 輸入框在折線下面——不捲的話錄出來是旁白在講「使用者把想得到的字
             // 打進去」，畫面上卻連輸入框都看不到。
-            Step("The user types, or says, whatever they can manage.",
-                onStage = { it.scrollToInput(); delay(600); typeSlowly(it, SAMPLE_FRAGMENTS) },
-                stageMs = 600L + SAMPLE_FRAGMENTS.length * 70L),
+            Step("The user types, or says, whatever they can manage.", focus = "input",
+                onStage = { typeSlowly(it, SAMPLE_FRAGMENTS) },
+                stageMs = SAMPLE_FRAGMENTS.length * 70L),
             // 候選句是固定樣本（錄影途中被 LLM 逾時或網路一抖毀掉整支影片是不能
             // 接受的），但**等待不能假**：按下去之後真的要轉，而且轉的是真的那顆
             // Loading 元件、轉真實長度。直接跳出結果會讓觀眾以為這個 App 是即時的。
-            Step("One tap turns the fragments into a whole sentence.",
+            Step("One tap turns the fragments into a whole sentence.", focus = "result",
                 onStage = {
-                    it.scrollToResult(); delay(700)          // 先捲到按鈕看得到的位置
                     it.press("reconstruct"); delay(320)      // 按下去（視覺）
                     it.press(null); delay(200)
                     it.reconstructing()                      // 真的進入等待狀態
@@ -197,11 +213,10 @@ object DemoController {
                     it.scrollToResult()                      // 再捲到結果
                 }, holdMs = 700, stageMs = RECONSTRUCT_WAIT_MS + 1500L),
             Step("Three versions, never one. A wrong guess put in your mouth is worse than silence.",
-                onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
-            Step("The person picks the one that is actually theirs.",
+                focus = "result", onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
+            Step("The person picks the one that is actually theirs.", focus = "result",
                 onStage = { it.pick(0) }, holdMs = 700),
-            Step("Only then is it said out loud.",
-                onStage = { delay(300); speakDemoSentence(it, SAMPLE_CANDIDATES.first()) },
+            Step("Only then is it said out loud.", focus = "result", onStage = { delay(300); speakDemoSentence(it, SAMPLE_CANDIDATES.first()) },
                 holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L),
         )),
         Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
@@ -226,21 +241,20 @@ object DemoController {
             // 旁白說的是「在最上面」，所以要往上捲。原本呼叫 scrollToResult()
             // 是捲到最底下——講的和演的剛好相反。
             Step("So a row of fixed phrases sits at the top of the home screen, always there.",
-                onStage = { it.scrollToTop() }, holdMs = 900),
-            Step("One tap, and the phone says it out loud straight away.",
-                onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
+                focus = "top", holdMs = 900),
+            Step("One tap, and the phone says it out loud straight away.", focus = "top", onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
             // 這一段只講「一鍵發聲」，因為 App 上使用者按得到的就是這三顆。
             // 通知家人是危機偵測那條路自動觸發的，屬於下一個單元（crisis）在講的東西——
             // 混在這裡講會讓觀眾以為畫面上有一顆通報鍵，那是沒有的。
             Step("Three of them, always in reach, on the screen they use most.",
-                onStage = { it.scrollToTop() }, holdMs = 900),
+                focus = "top", holdMs = 900),
         )),
         Unit("crisis", "🆘", "Crisis intervention", 34, steps = listOf(
             Step("Losing language carries a real risk of depression and self-harm.", route = "main",
                 onStage = { it.clear() }),
-            Step("So every sentence is screened before it is ever spoken.",
-                onStage = { it.scrollToInput(); delay(600); typeSlowly(it, "I do not want to go on") },
-                holdMs = 500, stageMs = 600L + 22 * 70L),
+            Step("So every sentence is screened before it is ever spoken.", focus = "input",
+                onStage = { typeSlowly(it, "I do not want to go on") },
+                holdMs = 500, stageMs = 22 * 70L),
             Step("When something is found, the app refuses to say it, and says so plainly.",
                 onStage = { it.safetyLock(com.example.ui.I18n.tr("偵測到高風險訊息，正在通報緊急聯絡人…")) }, holdMs = 1200),
             Step("But refusing is not enough. It opens a window and stays with the person.",
@@ -567,6 +581,19 @@ object DemoController {
                             else -> null
                         }
                         s.route?.let { navigate(it) }
+                        // ── 錄影池 ──
+                        // 旁白開始講之前，先把這一步要講的地方露出來並確認看得見。
+                        // 放在旁白之前而不是和它並行：話一出口畫面就該已經對了。
+                        s.focus?.let { f ->
+                            stage.focusOn(f)
+                            delay(FOCUS_SETTLE_MS)
+                            if (!stage.focusWasVisible(f)) {
+                                android.util.Log.w(
+                                    "DemoController",
+                                    "錄影池：這一步要講「$f」，但它不在畫面上 — 「${s.cap.take(48)}」"
+                                )
+                            }
+                        }
                         // 畫面動作與旁白同時跑：旁白在講的時候畫面已經在動，
                         // 而不是講完才動（那樣看起來像投影片配旁白）。
                         val staging = s.onStage?.let { act -> launch { runCatching { act(stage) } } }

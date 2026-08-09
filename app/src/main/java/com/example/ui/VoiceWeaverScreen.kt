@@ -182,16 +182,18 @@ fun VoiceWeaverScreen(
         LaunchedEffect(demoScroll) {
             val (seq, target) = demoScroll
             if (seq == 0) return@LaunchedEffect
-            runCatching {
-                when (target) {
-                    "top" -> demoListState.animateScrollToItem(0)
-                    "input" -> demoListState.animateScrollToItem(inputItemIndex)
-                    else -> {
-                        val last = demoListState.layoutInfo.totalItemsCount - 1
-                        if (last >= 0) demoListState.animateScrollToItem(last)
-                    }
-                }
+            val idx = when (target) {
+                "top" -> 0
+                "input" -> inputItemIndex
+                else -> (demoListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
             }
+            runCatching { demoListState.animateScrollToItem(idx) }
+            // 捲完回報那個東西是不是真的在畫面上。演示會讀這個值——
+            // 旁白在講某個地方，那個地方就必須看得見。
+            viewModel.demoReportFocus(
+                target,
+                demoListState.layoutInfo.visibleItemsInfo.any { it.index == idx }
+            )
         }
         LazyColumn(
             state = demoListState,

@@ -436,6 +436,8 @@ class MainActivity : ComponentActivity() {
                                             override fun scrollToResult() = viewModel.demoScrollToResult()
                                             override fun scrollToTop() = viewModel.demoScrollToTop()
                                             override fun scrollToInput() = viewModel.demoScrollToInput()
+                                            override fun focusOn(target: String) = viewModel.demoFocusOn(target)
+                                            override fun focusWasVisible(target: String) = viewModel.demoFocusWasVisible(target)
                                             override fun reconstructing() = viewModel.demoReconstructing()
                                             override fun synthesizing(on: Boolean) = viewModel.demoSynthesizing(on)
                                             override fun press(tag: String?) = viewModel.demoPress(tag)
