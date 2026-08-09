@@ -69,6 +69,9 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
 
     /** 演示旁白固定用這個角色（比對 character 是否包含這串）。 */
     private val demoNarrationCharacter = "花火"
+    /** 這一次預錄要用哪個角色；空＝旁白角色。專屬聲音那一段用別人，
+     *  觀眾才聽得出「這是他自己的聲音」而不是旁白又講了一句。 */
+    @Volatile private var demoVoiceOverride: String = ""
 
     private fun installUtteranceListener(engine: TextToSpeech) {
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -550,14 +553,20 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
      * 也可能在任何一步掉回系統機器音。預錄好的檔案沒有這些變數，而且第二次跑完全免合成。
      * 合成不出來時回 null，呼叫端自己決定要不要退而求其次。
      */
-    fun prerecordDemoLine(text: String, onDone: (File?) -> Unit) {
+    /**
+     * @param character 指定角色（空＝旁白角色）。「我的專屬聲音」那一段要用**別的**
+     *   角色唸——那一段整段都在講「這是他自己的聲音」，用旁白的聲音等於自己
+     *   打自己的臉；用系統機器音更糟，那是在示範這個功能不存在。
+     */
+    fun prerecordDemoLine(text: String, character: String = "", onDone: (File?) -> Unit) {
         var file: File? = null
         demoNarration = true
+        demoVoiceOverride = character
         speakInternal(
             text = text, forcedGptSovitMode = GptSovitVoiceMode.English,
             expressiveTest = false, prewarmOnly = true,
             onAudioFile = { file = it },
-            onComplete = { demoNarration = false; onDone(file) },
+            onComplete = { demoNarration = false; demoVoiceOverride = ""; onDone(file) },
         )
     }
 
@@ -767,7 +776,10 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
             // 那一下分得開。不指名的話 ensureLanguageModel 是「語言對了就不動」，
             // 伺服器上剛好載著哪個英文模型就用哪個，每次錄出來的旁白都可能不一樣。
             val activeVoice = if (demoNarration)
-                LocalSovitsHelper.ensureCharacter(apiBaseUrl, targetLang, demoNarrationCharacter)
+                LocalSovitsHelper.ensureCharacter(
+                    apiBaseUrl, targetLang,
+                    demoVoiceOverride.ifBlank { demoNarrationCharacter }
+                )
             else LocalSovitsHelper.ensureLanguageModel(apiBaseUrl, targetLang)
             if (activeVoice != null) {
                 addLog("[GPT-SoVITS] 使用模型：${activeVoice.displayLabel}")

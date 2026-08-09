@@ -1998,7 +1998,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 預錄一句旁白成音檔（錄影前做）。合不出來回 null。 */
     fun demoPrerecord(text: String, onDone: (java.io.File?) -> Unit) =
-        ttsModule.prerecordDemoLine(text, onDone)
+        ttsModule.prerecordDemoLine(text, onDone = onDone)
+    /** 「我的專屬聲音」那一段示範用的角色。刻意不是旁白那個（花火）——
+     *  那一段整段都在講「這是他自己的聲音」，用旁白的聲音等於自己打自己的臉。 */
+    private val DEMO_VOICE_SAMPLE_CHARACTER = "遐蝶"
+
+    /** 預錄「我的專屬聲音」那一段要唸的句子——用**不是旁白**的角色。 */
+    fun demoPrerecordVoiceSample(text: String, onDone: (java.io.File?) -> Unit) =
+        ttsModule.prerecordDemoLine(text, character = DEMO_VOICE_SAMPLE_CHARACTER, onDone = onDone)
     /** 沒有預錄檔可用時的退路：照一般流程唸（會是系統語音）。 */
     fun demoSpeak(text: String, onDone: () -> Unit) =
         ttsModule.speakDemo(text, onDone)

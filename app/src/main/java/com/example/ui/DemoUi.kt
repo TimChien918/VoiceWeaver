@@ -74,11 +74,11 @@ fun DemoPickerDialog(
             // 整個面板一個捲軸。之前清單自己再包一層 verticalScroll + weight(fill=false)，
             // 在沒有固定高度的 Dialog 裡算出來的剩餘空間幾乎是零——十五個單元只看得到一個。
             Column(Modifier.padding(18.dp).verticalScroll(rememberScrollState())) {
-                Text("🎬  " + I18n.tr("自動演示與螢幕錄影"), color = Color.White,
+                Text("🎬  " + I18n.tr("功能介紹與螢幕錄影"), color = Color.White,
                     fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.size(6.dp))
                 Text(
-                    I18n.tr("自動走過主要功能並錄影。全程不寫入資料、不送出任何訊息——危機介入與求救只是講解，不會真的觸發。"),
+                    I18n.tr("自動走過主要功能並錄影。全程不寫入資料、不送出任何訊息——危機介入與求救只是介紹，不會真的觸發。"),
                     color = Color(0xFFB9B9C2), fontSize = 12.sp
                 )
                 Spacer(Modifier.size(10.dp))

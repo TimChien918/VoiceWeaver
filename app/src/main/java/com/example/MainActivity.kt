@@ -455,6 +455,7 @@ class MainActivity : ComponentActivity() {
                                             override fun clear() = viewModel.demoClearScreen()
                                         },
                                         prerecord = { line, done -> viewModel.demoPrerecord(line, done) },
+                                        prerecordVoice = { line, done -> viewModel.demoPrerecordVoiceSample(line, done) },
                                         speakFallback = { line, done -> viewModel.demoSpeak(line, done) },
                                         onReady = {
                                             if (!record) return@start

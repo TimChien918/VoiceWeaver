@@ -605,10 +605,10 @@ object I18n {
         // ── 自動演示 ＋ 螢幕錄影 ──
         // 面板本身跟著介面語言走；影片裡的旁白與字幕一律英文（報告用途），
         // 所以單元名稱刻意不翻——那是影片的段落名，不是介面文字。
-        "自動演示" to arrayOf("Auto demo", "自動デモ", "자동 데모"),
-        "自動演示與螢幕錄影" to arrayOf(
+        "功能介紹" to arrayOf("Feature tour", "機能紹介", "기능 소개"),
+        "功能介紹與螢幕錄影" to arrayOf(
             "Demo & screen recording", "デモと画面録画", "데모 및 화면 녹화"),
-        "自動走過主要功能並錄影。全程不寫入資料、不送出任何訊息——危機介入與求救只是講解，不會真的觸發。" to arrayOf(
+        "自動走過主要功能並錄影。全程不寫入資料、不送出任何訊息——危機介入與求救只是介紹，不會真的觸發。" to arrayOf(
             "Walks through the app on its own and records the screen. Nothing is written and no messages are sent — the crisis and SOS sections are described, not triggered.",
             "アプリを自動で一巡し、画面を録画します。データは書き込まれず、メッセージも送信されません（危機介入とSOSは説明のみ）。",
             "앱을 자동으로 한 바퀴 돌며 화면을 녹화합니다. 데이터는 기록되지 않고 메시지도 전송되지 않습니다(위기 개입과 SOS는 설명만)."),

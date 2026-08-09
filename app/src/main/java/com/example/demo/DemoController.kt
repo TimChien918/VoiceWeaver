@@ -146,6 +146,13 @@ object DemoController {
         /** onStage 裡大約會自己等多久（估時用；不影響實際執行）。 */
         val stageMs: Long = 0,
         /**
+         * 這一步要用**專屬聲音**（GPT-SoVITS）唸的句子。
+         *
+         * 只有「我的專屬聲音」那一段用得到：那一段整段都在講這個功能，
+         * 用系統機器音唸等於在示範這個功能不存在。和旁白分開預錄、用不同角色。
+         */
+        val voiceSample: String? = null,
+        /**
          * 這一步在講畫面上的哪個地方（"top"／"input"／"result"）。
          *
          * 錄影池的核心：旁白開始講之前，演示會先把這個地方捲出來，捲完再確認
@@ -230,9 +237,10 @@ object DemoController {
                 holdMs = 600),
             Step("So the sentence comes out sounding like them, with the right feeling.",
                 onStage = {
-                    delay(400); speakDemoSentence(it, SAMPLE_CANDIDATES.first())
+                    delay(400); speakInOwnVoice(it, SAMPLE_CANDIDATES.first())
                     it.openPanel(null)    // 收面板，別把它留給下一個單元
-                }, holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L),
+                }, holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 3000L,
+                voiceSample = SAMPLE_CANDIDATES.first()),
         )),
         Unit("sos", "🚨", "Emergency SOS", 22, steps = listOf(
             Step("Now the other half of the problem: what happens when something goes wrong.",
@@ -437,6 +445,23 @@ object DemoController {
      * 瞬間出聲會讓觀眾以為這個 App 是即時的；停的長度縮短了，但「要等」
      * 這件事本身不是演的。
      */
+    /**
+     * 用**專屬聲音**（GPT-SoVITS 預錄檔）唸一句。給「我的專屬聲音」那一段用。
+     *
+     * 那一段整段都在講這個功能，用系統機器音唸等於在示範它不存在。
+     * 角色刻意不是旁白那個，觀眾才聽得出這是「他自己的聲音」而不是旁白又講了一句。
+     * 合不出來才退回系統 TTS——寧可音色不對，也不能整段沒有聲音。
+     */
+    private suspend fun speakInOwnVoice(stage: Stage, text: String) {
+        stage.synthesizing(true)
+        try { delay(VOICE_SYNTH_DELAY_MS) } finally { stage.synthesizing(false) }
+        val clip = voiceClips[text]?.takeIf { it.exists() && it.length() > 0 }
+        if (clip != null) playClip(clip) else speakAndWait(stage, text)
+    }
+
+    /** 專屬聲音的預錄檔（和旁白那份分開：不同角色，不能互相覆蓋）。 */
+    private val voiceClips = mutableMapOf<String, java.io.File>()
+
     private suspend fun speakDemoSentence(stage: Stage, text: String) {
         stage.synthesizing(true)
         try { delay(VOICE_SYNTH_DELAY_MS) } finally { stage.synthesizing(false) }
@@ -514,6 +539,8 @@ object DemoController {
         stage: Stage,
         /** 預錄一句旁白成音檔（錄影開始前做）。合不出來回 null。 */
         prerecord: (String, (java.io.File?) -> kotlin.Unit) -> kotlin.Unit,
+        /** 預錄「專屬聲音」示範句——用的是**另一個角色**，不是旁白那個。 */
+        prerecordVoice: (String, (java.io.File?) -> kotlin.Unit) -> kotlin.Unit = { _, d -> d(null) },
         /** 沒有預錄檔時的退路：照一般流程唸（會是系統語音）。 */
         speakFallback: (String, () -> kotlin.Unit) -> kotlin.Unit,
         onReady: suspend () -> kotlin.Unit = {},
@@ -535,7 +562,7 @@ object DemoController {
                     // 錄好的檔案留著，第二次跑完全不用合成。
                     // 換過角色就把整批快取作廢——不然舊句子會用上一個角色的聲音播，
                     // 同一支影片裡兩種音色交錯出現。
-                    if (voiceTag != clipsVoice) { clips.clear(); clipsVoice = voiceTag }
+                    if (voiceTag != clipsVoice) { clips.clear(); voiceClips.clear(); clipsVoice = voiceTag }
                     // **只錄旁白。** 演示裡「App 自己唸出來」那幾句不在這裡——
                     // 它們走的是 App 自己的發聲路徑（系統 TTS），和旁白是兩回事。
                     // 混進來的話會被用旁白角色的聲音合成，聽起來就像旁白在唸那句話，
@@ -554,7 +581,21 @@ object DemoController {
                         }
                         if (f != null && f.exists() && f.length() > 0) clips[line] = f
                     }
-                    _prep.value = todo.size to todo.size
+                    // 專屬聲音的示範句另外錄一輪（不同角色，所以不能混在同一批）。
+                    // 錄不起來不中止——退回系統 TTS 仍然演得下去，只是音色不對；
+                    // 而旁白少一句是真的不能開錄（整支影片的解說會斷掉）。
+                    val samples = units.flatMap { u -> u.steps.mapNotNull { it.voiceSample } }
+                        .distinct().filter { voiceClips[it]?.exists() != true }
+                    samples.forEachIndexed { i, line ->
+                        _prep.value = (todo.size + i) to (todo.size + samples.size)
+                        val f = suspendCancellableCoroutine<java.io.File?> { cont ->
+                            var resumed = false
+                            prerecordVoice(line) { file ->
+                                if (!resumed) { resumed = true; if (cont.isActive) cont.resume(file) }
+                            }
+                        }
+                        if (f != null && f.exists() && f.length() > 0) voiceClips[line] = f
+                    }
                     _prep.value = null
 
                     // 少一句都不開錄。使用者要的是自己的聲音；用系統機器音頂替，

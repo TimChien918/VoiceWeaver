@@ -345,9 +345,9 @@ fun SettingsScreen(
             // 標題與內容刻意是英文——錄出來的影片旁白與字幕都是英文，
             // 入口跟著英文才不會一半中文一半英文。
             item {
-                Section(title = I18n.tr("自動演示"), icon = Icons.Default.Movie, p = p) {
+                Section(title = I18n.tr("功能介紹"), icon = Icons.Default.Movie, p = p) {
                     AdvancedEntryRow(
-                        label = I18n.tr("自動演示與螢幕錄影"),
+                        label = I18n.tr("功能介紹與螢幕錄影"),
                         onClick = onOpenDemo, p = p,
                         icon = Icons.Filled.Movie, iconTint = IosCategory.Blue
                     )
