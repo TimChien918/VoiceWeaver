@@ -56,6 +56,10 @@ class DemoRecorder(
         private const val AUDIO_BITRATE = 128_000
         private const val TIMEOUT_US = 10_000L
 
+        // 等 EOS 的上限。stop() 只 join(3000) 就會往下 release codec，
+        // 所以這裡一定要比它短，否則執行緒還在用的東西就被收掉了。
+        private const val EOS_WAIT_MS = 2_000L
+
         // drainOnce 的三種結果。原本只回 Boolean（是不是 EOS），呼叫端就分不出
         // 「這次有抽到東西」和「暫時沒有東西」——想抽乾也寫不出正確的迴圈條件。
         private const val NOTHING = 0    // 這次沒有輸出（先讓出去，等下再來）
@@ -241,7 +245,10 @@ class DemoRecorder(
                     frames * 1_000_000L / rate
                 ac.queueInputBuffer(inIdx, 0, 0, pts, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
             }
-            drain(ac, isVideo = false)
+            // drain() 的無限迴圈在音訊這一邊沒有出口（那個 signalEndOfInputStream
+            // 分支只給影像用），拿不到 EOS 就會一直卡著，然後被 stop() 從底下抽掉
+            // codec。這裡要的本來就只是「抽乾，但有期限」。
+            awaitEos(ac, isVideo = false)
         } catch (t: Throwable) {
             Log.w(TAG, "音訊擷取結束：${t.message}")
         }
@@ -253,16 +260,41 @@ class DemoRecorder(
             if (!running.get() && isVideo) {
                 // 影像沒有「送 EOS」的入口（輸入是 Surface），只能用 signalEndOfInputStream
                 runCatching { codec.signalEndOfInputStream() }
-                while (drainOnce(codec, isVideo) != EOS) { /* 抽到 EOS 為止 */ }
+                awaitEos(codec, isVideo)
                 return
             }
         }
     }
 
+    /**
+     * 等這一軌吐出 EOS，但**不會無限等**。
+     *
+     * 原本這裡是 `while (drainOnce(...) != EOS) {}`。編碼器不一定會給 EOS——
+     * VirtualDisplay 先被收掉、codec 進了 error state、送 EOS 那一格排不進去，
+     * 都會讓它永遠不來。而 stop() 只 join(3000) 就往下走，接著 release() 這顆
+     * codec；此時這條執行緒還卡在 dequeueOutputBuffer 上，對已釋放的 codec 操作
+     * 是直接在 native 層掛掉，整個 App 收掉。
+     * 給它一個期限，過了就認賠離開——寧可影片尾巴少幾格，也不要當掉。
+     */
+    private fun awaitEos(codec: MediaCodec, isVideo: Boolean) {
+        val deadline = System.currentTimeMillis() + EOS_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            if (drainOnce(codec, isVideo) == EOS) return
+        }
+        Log.w(TAG, "等不到 ${if (isVideo) "影像" else "音訊"} EOS，直接收尾")
+    }
+
     /** 抽一次輸出。回傳 NOTHING / WROTE / EOS。 */
     private fun drainOnce(codec: MediaCodec, isVideo: Boolean): Int {
         val info = MediaCodec.BufferInfo()
-        val idx = codec.dequeueOutputBuffer(info, TIMEOUT_US)
+        // codec 進 error state（機型差異、資源被搶走）時這裡會丟。讓它冒到
+        // 呼叫端的迴圈裡只會變成無窮重試，所以在這裡就當成 EOS 收掉。
+        val idx = try {
+            codec.dequeueOutputBuffer(info, TIMEOUT_US)
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "編碼器已失效（${if (isVideo) "影像" else "音訊"}）：${e.message}")
+            return EOS
+        }
         when {
             idx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                 synchronized(muxLock) {
@@ -343,19 +375,28 @@ class DemoRecorder(
         runCatching { videoCodec?.stop() }; runCatching { videoCodec?.release() }; videoCodec = null
         runCatching { audioCodec?.stop() }; runCatching { audioCodec?.release() }; audioCodec = null
         runCatching { audioRecord?.release() }; audioRecord = null
+        // MP4 的索引（moov）是在 stop() 的時候才寫進去的。stop() 失敗＝檔案有內容
+        // 但放不出來，而長度是好幾十 MB——上層用「存在且非空」判斷就會把它當成
+        // 錄好了，發布到相簿裡變成一支點開是壞的影片。壞掉就直接刪，寧可少一份。
+        var mainOk = false
+        var silentOk = false
         synchronized(muxLock) {
             if (muxerStarted) {
-                runCatching { muxer.stop() }.onFailure { Log.w(TAG, "muxer.stop 失敗：${it.message}") }
+                mainOk = runCatching { muxer.stop() }
+                    .onFailure { Log.w(TAG, "muxer.stop 失敗：${it.message}") }.isSuccess
                 muxerStarted = false
             }
             runCatching { muxer.release() }
             if (muxerBStarted) {
-                runCatching { muxerB?.stop() }.onFailure { Log.w(TAG, "無聲版 stop 失敗：${it.message}") }
+                silentOk = runCatching { muxerB?.stop() }
+                    .onFailure { Log.w(TAG, "無聲版 stop 失敗：${it.message}") }.isSuccess
                 muxerBStarted = false
             }
             runCatching { muxerB?.release() }
             muxerB = null
         }
-        return outFile.takeIf { it.exists() && it.length() > 0 }
+        if (!mainOk) runCatching { outFile.delete() }
+        if (!silentOk) silentFile?.let { runCatching { it.delete() } }
+        return outFile.takeIf { mainOk && it.exists() && it.length() > 0 }
     }
 }
