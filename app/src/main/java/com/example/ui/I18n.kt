@@ -81,6 +81,27 @@ object I18n {
     private val M: Map<String, Array<String>> = mapOf(
         // ── 主畫面 VoiceWeaverScreen ──
         "🏥 快速求救（一鍵發聲）" to arrayOf("🏥 Quick help (tap to speak)", "🏥 緊急ヘルプ（タップで発声）", "🏥 빠른 도움 (탭하여 발성)"),
+        "🆘 求救" to arrayOf("🆘 Help", "🆘 助けて", "🆘 도움"),
+        "要通知家人嗎？" to arrayOf("Alert your family?", "家族に知らせますか？", "가족에게 알릴까요?"),
+        "會立刻傳訊息給你的緊急聯絡人，並附上你目前的位置，然後開啟與家人的對話視窗。" to arrayOf(
+            "This messages your emergency contact with your current location, then opens a window so you can talk to them.",
+            "緊急連絡先に現在地を添えてすぐにメッセージを送り、家族と話せる画面を開きます。",
+            "긴급 연락처에 현재 위치와 함께 즉시 메시지를 보내고, 가족과 대화할 수 있는 창을 엽니다."),
+        "通知家人" to arrayOf("Alert family", "家族に知らせる", "가족에게 알리기"),
+        "求救" to arrayOf("Help", "助けを求める", "도움 요청"),
+        "正在通知家人…" to arrayOf("Alerting your family…", "家族に知らせています…", "가족에게 알리는 중…"),
+        "✅ 已通知家人，並附上你的位置。" to arrayOf(
+            "✅ Your family has been alerted, with your location.",
+            "✅ 家族に位置情報つきで知らせました。",
+            "✅ 위치와 함께 가족에게 알렸습니다."),
+        "⚠ 通報傳送失敗（%s）。請直接撥打 1925 安心專線或 119。" to arrayOf(
+            "⚠ The alert could not be sent (%s). Please call 1925 or 119 directly.",
+            "⚠ 通報を送信できませんでした（%s）。1925 または 119 に直接お電話ください。",
+            "⚠ 신고를 보내지 못했습니다(%s). 1925 또는 119로 직접 전화해 주세요."),
+        "⚠ 通報傳送失敗。請直接撥打 1925 安心專線或 119。" to arrayOf(
+            "⚠ The alert could not be sent. Please call 1925 or 119 directly.",
+            "⚠ 通報を送信できませんでした。1925 または 119 に直接お電話ください。",
+            "⚠ 신고를 보내지 못했습니다. 1925 또는 119로 직접 전화해 주세요."),
         "😖 我痛" to arrayOf("😖 Pain", "😖 痛い", "😖 아파요"),
         "我很痛，請幫幫我。" to arrayOf("I'm in pain, please help me.", "とても痛いです、助けてください。", "너무 아파요, 도와주세요."),
         "💧 喝水" to arrayOf("💧 Water", "💧 水", "💧 물"),

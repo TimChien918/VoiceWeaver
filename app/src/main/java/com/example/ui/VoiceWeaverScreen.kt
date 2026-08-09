@@ -194,36 +194,37 @@ fun VoiceWeaverScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ── 臨床高頻置頂面板（醫師臨床建議）：定位在醫療場所時強制置頂一鍵求救 ──
-            val clinicalLocation =
-                listOf("醫院", "診所", "復健", "病房", "急診", "藥局").any { vault.locationTag.contains(it) }
-            if (clinicalLocation) {
-                item {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = dangerRose.copy(alpha = 0.12f)),
-                        border = BorderStroke(1.5.dp, dangerRose.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                I18n.tr("🏥 快速求救（一鍵發聲）"),
-                                fontSize = 12.sp, fontWeight = FontWeight.Bold, color = dangerRose
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                listOf(I18n.tr("😖 我痛") to I18n.tr("我很痛，請幫幫我。"),
-                                       I18n.tr("💧 喝水") to I18n.tr("我想要喝水。"),
-                                       I18n.tr("🚻 廁所") to I18n.tr("我想上廁所，請帶我去。")).forEach { (label, phrase) ->
-                                    Button(
-                                        onClick = { viewModel.speakClinicalPhrase(phrase) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = dangerRose),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 14.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                    }
+            // ── 臨床高頻置頂面板：一鍵把最常需要的三句話唸出來 ──
+            //
+            // 以前這張卡只在「GPS 判定人在醫療場所」時才出現。但需要一鍵說出
+            // 「我很痛」的時刻不會挑地方，而定位失準、室內收不到、沒給權限
+            // 都會讓它整張消失——使用者只會覺得這個功能時有時無。
+            // 現在固定顯示；地點資訊仍然會跟著通報一起送出去。
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = dangerRose.copy(alpha = 0.12f)),
+                    border = BorderStroke(1.5.dp, dangerRose.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            I18n.tr("🏥 快速求救（一鍵發聲）"),
+                            fontSize = 12.sp, fontWeight = FontWeight.Bold, color = dangerRose
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            listOf(I18n.tr("😖 我痛") to I18n.tr("我很痛，請幫幫我。"),
+                                   I18n.tr("💧 喝水") to I18n.tr("我想要喝水。"),
+                                   I18n.tr("🚻 廁所") to I18n.tr("我想上廁所，請帶我去。")).forEach { (label, phrase) ->
+                                Button(
+                                    onClick = { viewModel.speakClinicalPhrase(phrase) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = dangerRose),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }

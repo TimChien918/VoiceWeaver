@@ -81,6 +81,7 @@ import com.example.demo.DemoController
 import com.example.demo.ScreenRecordService
 import com.example.ui.DemoOverlay
 import com.example.ui.DemoPickerDialog
+import com.example.ui.SosBar
 
 class MainActivity : ComponentActivity() {
 
@@ -225,6 +226,10 @@ class MainActivity : ComponentActivity() {
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
                             containerColor = if (hasCustomBackground) palette.darkBg.copy(alpha = 0.78f) else palette.darkBg,
+                            // 求救鍵釘在所有分頁之上（與網頁版一致）。放在 Scaffold 的
+                            // topBar 而不是某個畫面裡：需要求救的時候，人不一定停在主畫面，
+                            // 而「先切回主畫面再找按鈕」在那個當下是不可能的事。
+                            topBar = { SosBar(viewModel = viewModel, p = palette) },
                             bottomBar = {
                                 // 寬螢幕改用左側導覽軌（在 Scaffold 外層），這裡就不重複出現
                                 if (!useRail) {

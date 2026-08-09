@@ -215,7 +215,10 @@ object DemoController {
                 onStage = { it.scrollToTop() }, holdMs = 900),
             Step("One tap, and the phone says it out loud straight away.",
                 onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
-            Step("The same tap can message the family with the current location.",
+            Step("And a red button sits above every screen, on every tab.",
+                onStage = { it.scrollToTop(); delay(600); it.press("sos"); delay(700); it.press(null) },
+                holdMs = 900, stageMs = 1300L),
+            Step("It messages the family with the current location, and opens a window to talk to them.",
                 holdMs = 900),
         )),
         Unit("crisis", "🆘", "Crisis intervention", 34, steps = listOf(
