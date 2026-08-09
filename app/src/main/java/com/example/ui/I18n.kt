@@ -64,6 +64,26 @@ object I18n {
         else           -> "重要：「$field」的內容必須用繁體中文書寫。"
     }
 
+    /**
+     * 這句話的文字系統符不符合目前的介面語言。
+     *
+     * outputLanguageDirective 是「請模型照做」，這個是「做不到就擋下來」。
+     * 前者是機率性的（提示詞主體是中文，模型會往中文偏），後者是確定的。
+     * 兩個都要：候選句是要拿去對別人講出口的，出現使用者看不懂的語言等於不能用。
+     */
+    fun matchesInterfaceScript(text: String): Boolean {
+        if (text.isBlank()) return false
+        val kana = text.any { it in '\u3040'..'\u309f' || it in '\u30a0'..'\u30ff' }
+        val hangul = text.any { it in '\uac00'..'\ud7af' || it in '\u1100'..'\u11ff' }
+        val han = text.any { it in '\u4e00'..'\u9fff' }
+        return when (lang) {
+            AppLanguage.En -> !kana && !hangul && !han       // 英文句子不該有漢字假名諺文
+            AppLanguage.Ja -> kana || (han && !hangul)       // 日文一定有假名；純漢字也接受
+            AppLanguage.Ko -> hangul                         // 韓文一定有諺文
+            else           -> han && !kana && !hangul        // 中文要有漢字，不能混假名諺文
+        }
+    }
+
     /** 取翻譯；繁中或查無 → 回原文。 */
     fun tr(zh: String): String {
         if (lang == AppLanguage.ZhTW) return zh

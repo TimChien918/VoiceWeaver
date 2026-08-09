@@ -610,7 +610,21 @@ class HybridInferenceEngine(
                 parsed.alternatives.map { entry to it }
         }.filter { it.second.text.isNotBlank() }
 
-        val groups = flat.groupBy { normalize(it.second.text) }.values
+        // 出口把關：文字系統和介面語言對不上的候選句丟掉。
+        //
+        // 提示詞管不住模型——它是機率性的，而且指示本身還是中文寫的，本來就會往
+        // 中文偏。實測英文介面打英文碎詞，回來的三句仍然有兩句是中文。
+        // 使用者看到看不懂的語言比少一個候選嚴重得多：那三句是要拿去對別人講出口的。
+        // 全部都不符時保留原樣——語言錯的句子他至少看得出來，一句都沒有就完全無法溝通。
+        val wanted = flat.filter { com.example.ui.I18n.matchesInterfaceScript(it.second.text) }
+        val usable = if (wanted.isNotEmpty()) wanted else flat.also {
+            DiagnosticLog.w(
+                DiagnosticLog.Cat.LLM, "候選句語言全部不符介面語言",
+                "保留原樣：${it.take(3).joinToString(" / ") { c -> c.second.text.take(20) }}"
+            )
+        }
+
+        val groups = usable.groupBy { normalize(it.second.text) }.values
         return groups.map { group ->
             val rep = group.maxBy { it.second.confidence }
             val avgConfidence = group.sumOf { it.second.confidence } / group.size
