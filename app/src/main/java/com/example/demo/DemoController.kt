@@ -45,11 +45,9 @@ object DemoController {
     // 這一步的重點就是讓觀眾看到真實的等待，所以它不該比真的短。
     private const val RECONSTRUCT_WAIT_MS = 4_500L
 
-    // 發聲的上限。演示的示範發聲走的是真的 GPT-SoVITS（使用者自己的聲音），
-    // 在電腦 CPU 上一句要 10～30 秒，20 秒的上限會把它攔腰砍掉。
-    private const val SPEAK_TIMEOUT_MS = 90_000L
+    private const val SPEAK_TIMEOUT_MS = 20_000L
     private const val CLIP_TIMEOUT_MS = 60_000L
-    private const val STAGE_TIMEOUT_MS = 120_000L
+    private const val STAGE_TIMEOUT_MS = 30_000L
 
     /** 給 UI 估時用：一步大概多久（英文約每秒 2.6 個字）。 */
     fun stepMillis(cap: String, narrated: Boolean): Long {
