@@ -2,6 +2,10 @@ package com.example.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusEvent
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,7 +56,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun VoiceWeaverScreen(
     viewModel: VoiceWeaverViewModel,
@@ -681,6 +686,13 @@ fun VoiceWeaverScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
+                        // 點進輸入框就把它捲到看得到的地方。
+                        //
+                        // 主畫面上面壓著「快速求救」與整張情境卡，輸入框永遠在折線下面；
+                        // 只靠 imePadding 的話畫面雖然不被鍵盤蓋住，但捲動位置沒有變，
+                        // 使用者還是得自己往下滑才看得到自己打的字。
+                        val bringInputIntoView = remember { BringIntoViewRequester() }
+                        val inputScope = rememberCoroutineScope()
                         OutlinedTextField(
                             value = vault.rawText,
                             onValueChange = { viewModel.onRawTextChanged(it) },
@@ -694,6 +706,14 @@ fun VoiceWeaverScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(if (isLandscape) 76.dp else 96.dp)
+                                .bringIntoViewRequester(bringInputIntoView)
+                                .onFocusEvent { st ->
+                                    if (st.isFocused) inputScope.launch {
+                                        // 等鍵盤把版面推完再捲，不然捲到的是舊的位置
+                                        kotlinx.coroutines.delay(250)
+                                        runCatching { bringInputIntoView.bringIntoView() }
+                                    }
+                                }
                                 .testTag("raw_text_input_field"),
                             maxLines = if (isLandscape) 3 else 4,
                             shape = RoundedCornerShape(12.dp),

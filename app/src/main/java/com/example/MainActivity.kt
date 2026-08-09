@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -256,7 +257,15 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(innerPadding)
-                                    .consumeWindowInsets(innerPadding),
+                                    .consumeWindowInsets(innerPadding)
+                                    // 鍵盤彈出來時把內容區縮到鍵盤上面。
+                                    //
+                                    // enableEdgeToEdge() 等於 decorFitsSystemWindows=false，
+                                    // 系統就不再幫我們 resize/pan 了——沒有這一行，鍵盤會直接
+                                    // 蓋住輸入框，使用者打字看不到自己打了什麼，要先收鍵盤或
+                                    // 手動往下滑才看得到。主畫面上面還有「快速求救」與情境卡，
+                                    // 輸入框本來就偏下，蓋住的機率是百分之百。
+                                    .imePadding(),
                                 contentAlignment = Alignment.TopCenter
                             ) {
                             NavHost(
