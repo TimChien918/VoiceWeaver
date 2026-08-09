@@ -86,6 +86,8 @@ object DemoController {
         fun severity(name: String)
         /** 主畫面捲到結果那一段（候選句在下面，不捲就看不到）。 */
         fun scrollToResult()
+        /** 主畫面捲回最上面（緊急片語那張卡在第一個）。 */
+        fun scrollToTop()
         /** 視覺按壓某顆按鈕（tag；null＝放開）。不會真的觸發它的動作。 */
         fun press(tag: String?)
         /** 讓 App 把這句話唸出來（系統 TTS，即時），唸完呼叫 done。 */
@@ -197,8 +199,10 @@ object DemoController {
             Step("Now the other half of the problem: what happens when something goes wrong.",
                 route = "main", onStage = { it.clear() }),
             Step("In an emergency, building a sentence word by word is far too slow.", holdMs = 600),
+            // 旁白說的是「在最上面」，所以要往上捲。原本呼叫 scrollToResult()
+            // 是捲到最底下——講的和演的剛好相反。
             Step("So a row of fixed phrases sits at the top of the home screen, always there.",
-                onStage = { it.scrollToResult() }, holdMs = 900),
+                onStage = { it.scrollToTop() }, holdMs = 900),
             Step("One tap, and the phone says it out loud straight away.",
                 onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
             Step("The same tap can message the family with the current location. Nothing is sent in this demo.",

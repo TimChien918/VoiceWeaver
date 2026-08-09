@@ -170,9 +170,14 @@ fun VoiceWeaverScreen(
         val demoScroll by viewModel.demoScroll.collectAsState()
         val demoPressed by viewModel.demoPressed.collectAsState()
         LaunchedEffect(demoScroll) {
-            if (demoScroll > 0) {
-                val last = demoListState.layoutInfo.totalItemsCount - 1
-                if (last >= 0) runCatching { demoListState.animateScrollToItem(last) }
+            when {
+                // 負數＝捲回最上面。緊急片語那張卡是第一個 item，旁白講
+                // 「always at the top」的時候畫面不能停在最底下。
+                demoScroll < 0 -> runCatching { demoListState.animateScrollToItem(0) }
+                demoScroll > 0 -> {
+                    val last = demoListState.layoutInfo.totalItemsCount - 1
+                    if (last >= 0) runCatching { demoListState.animateScrollToItem(last) }
+                }
             }
         }
         LazyColumn(
