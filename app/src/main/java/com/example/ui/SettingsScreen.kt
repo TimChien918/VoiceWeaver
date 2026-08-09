@@ -156,6 +156,13 @@ fun SettingsScreen(
     }
     // 角色語音與雲端曲庫（獨立子頁，iOS 風整頁）——不是開發者工具，是日常會用的真實功能
     var showGptSovit by remember { mutableStateOf(false) }
+    // 自動演示要能把這一頁打開：旁白在講聲音模型時，畫面必須真的是這一頁，
+    // 不能停在設定首頁的清單上。演示結束會送 null 把它收回去。
+    val demoPanel by viewModel.demoPanel.collectAsState()
+    LaunchedEffect(demoPanel) {
+        if (demoPanel == "voice") showGptSovit = true
+        else if (demoPanel == null && com.example.demo.DemoController.active.value) showGptSovit = false
+    }
     if (showGptSovit) {
         FloatingPanel(title = I18n.tr("🎙 角色語音與雲端曲庫"), icon = Icons.Default.GraphicEq, onDismiss = { showGptSovit = false }) {
             GptSovitSection(

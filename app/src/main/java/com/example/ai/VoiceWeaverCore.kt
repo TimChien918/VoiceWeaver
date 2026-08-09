@@ -1919,14 +1919,27 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         _speakGate.value = if (message == null) SpeakGate.Idle else SpeakGate.Locked(message)
     }
 
-    /** 演示結束：把演示放上去的東西清乾淨（不影響使用者原本的資料）。 */
+    /** 演示：把畫面上的東西清乾淨（不影響使用者原本的資料）。
+     *
+     *  這個在演示**途中**也會被呼叫（每個單元開場都要一張乾淨的畫面），
+     *  所以絕對不能在這裡還原設定——快照只有一份，第一次清畫面就把它用掉的話，
+     *  後面無障礙單元把字級調到 2.2 倍、語言切成韓文，結束時就沒東西可以還原了。
+     *  還原是 restoreSettings()，只在演示真的結束時呼叫一次。 */
     fun demoClearScreen() {
         _crisisConv.value = CrisisConvState()
         _speakGate.value = SpeakGate.Idle
         resetState()
         _aacState.value = _aacState.value.copy(sentence = emptyList(), selectedCategory = null)
-        demoRestoreSettings()
+        _demoPanel.value = null
     }
+
+    // 演示要打開設定裡的子面板（例如「角色語音與雲端曲庫」）。
+    // 沒有這個的話，旁白講了四句聲音模型，畫面卻停在設定首頁——
+    // 觀眾看到的是一份設定清單，跟旁白講的東西完全對不起來。
+    private val _demoPanel = MutableStateFlow<String?>(null)
+    val demoPanel: StateFlow<String?> = _demoPanel.asStateFlow()
+    /** key: "voice"＝角色語音與雲端曲庫；null＝關掉。 */
+    fun demoOpenPanel(key: String?) { _demoPanel.value = key }
 
     /** 預錄一句旁白成音檔（錄影前做）。合不出來回 null。 */
     fun demoPrerecord(text: String, onDone: (java.io.File?) -> Unit) =

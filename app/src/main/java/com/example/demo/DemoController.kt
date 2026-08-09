@@ -38,6 +38,13 @@ object DemoController {
     // 最後一個字的尾音、加上人腦讀完字幕需要的一點時間，都落在這一段裡。
     private const val TAIL_PAD_MS = 900L
 
+    // 等外部回呼的上限。旁白音檔、系統 TTS、畫面動作都可能不回來（引擎被回收、
+    // MediaPlayer 卡在 prepare、某個 onStage 自己拋在 delay 裡）。演示是無人看顧
+    // 跑完整段錄影的，任何一個永遠等下去的地方都會變成一支卡住的長影片。
+    private const val SPEAK_TIMEOUT_MS = 20_000L
+    private const val CLIP_TIMEOUT_MS = 60_000L
+    private const val STAGE_TIMEOUT_MS = 30_000L
+
     /** 給 UI 估時用：一步大概多久（英文約每秒 2.6 個字）。 */
     fun stepMillis(cap: String, narrated: Boolean): Long {
         if (!narrated) return MIN_STEP_SILENT_MS
@@ -93,8 +100,12 @@ object DemoController {
         fun crisisClose()
         /** 安全閘門：顯示「發聲已鎖定」畫面（傳 null 收起來）。不會通報任何人。 */
         fun safetyLock(message: String?)
-        /** 演示開始前先快照會存檔的設定，結束一定還原。 */
+        /** 打開設定裡的子面板（"voice"＝角色語音與雲端曲庫；null＝關掉）。 */
+        fun openPanel(key: String?)
+        /** 演示開始前先快照會存檔的設定。 */
         fun snapshotSettings()
+        /** 把快照的設定放回去。**只在演示結束時呼叫一次**，不能混進 clear()。 */
+        fun restoreSettings()
         fun clear()
     }
 
@@ -167,10 +178,19 @@ object DemoController {
                 onStage = { delay(300); speakAndWait(it, SAMPLE_CANDIDATES.first()) }, holdMs = 600),
         )),
         Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
-            Step("Losing speech often means losing your voice as well.", route = "settings"),
-            Step("A short recording made before the illness is enough to rebuild it."),
-            Step("The model lives in their own Drive, and follows them to phone, web and desktop."),
-            Step("So the sentence comes out sounding like them, with the right feeling."),
+            // 只切到 "settings" 是不夠的：那是一頁設定清單，旁白在講聲音模型，
+            // 畫面上卻連「聲音」兩個字都看不到。要真的把子面板打開。
+            Step("Losing speech often means losing your voice as well.", route = "settings",
+                onStage = { it.openPanel(null) }),
+            Step("A short recording made before the illness is enough to rebuild it.",
+                onStage = { delay(400); it.openPanel("voice") }, stageMs = 400L),
+            Step("The model lives in their own Drive, and follows them to phone, web and desktop.",
+                holdMs = 600),
+            Step("So the sentence comes out sounding like them, with the right feeling.",
+                onStage = {
+                    delay(400); speakAndWait(it, SAMPLE_CANDIDATES.first())
+                    it.openPanel(null)    // 收面板，別把它留給下一個單元
+                }, holdMs = 600),
         )),
         Unit("sos", "🚨", "Emergency SOS", 22,
             note = "Simulated — nothing is sent.", steps = listOf(
@@ -344,16 +364,23 @@ object DemoController {
             ?: run { clips.remove(line); null }
     private var player: android.media.MediaPlayer? = null
 
-    /** 讓 App 唸一句並等它唸完。不等的話畫面會跳到下一段，聲音才姍姍來遲蓋在別段上。 */
-    private suspend fun speakAndWait(stage: Stage, text: String) =
+    /** 讓 App 唸一句並等它唸完。不等的話畫面會跳到下一段，聲音才姍姍來遲蓋在別段上。
+     *
+     *  上限 20 秒：系統 TTS 的 onDone 不是保證會來的（引擎被系統回收、語音包正在
+     *  更新、utterance 被丟掉都不會回呼）。沒有上限的話演示會永遠卡在這一步，
+     *  而錄影還開著——使用者拿到的是一支停在某個畫面錄了十分鐘的影片。 */
+    private suspend fun speakAndWait(stage: Stage, text: String) {
         audioFloor.withLock {
-            suspendCancellableCoroutine<kotlin.Unit> { cont ->
-                var resumed = false
-                stage.speakAloud(text) {
-                    if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
+            kotlinx.coroutines.withTimeoutOrNull(SPEAK_TIMEOUT_MS) {
+                suspendCancellableCoroutine<kotlin.Unit> { cont ->
+                    var resumed = false
+                    stage.speakAloud(text) {
+                        if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
+                    }
                 }
             }
         }
+    }
 
     /** 逐字打進輸入框。一次貼上看起來像作弊，逐字打才看得懂使用者在做什麼。 */
     private suspend fun typeSlowly(stage: Stage, text: String) {
@@ -365,8 +392,12 @@ object DemoController {
         }
     }
 
-    /** 播一段預錄好的旁白，等它真的播完。 */
+    /** 播一段預錄好的旁白，等它真的播完。
+     *
+     *  用 prepareAsync 而不是 prepare()：這裡跑在主執行緒上，而 prepare() 會同步
+     *  讀檔＋解碼標頭。錄影中主執行緒被擋住 = 那幾十毫秒的畫面直接掉幀。 */
     private suspend fun playClip(file: java.io.File) = audioFloor.withLock {
+      kotlinx.coroutines.withTimeoutOrNull(CLIP_TIMEOUT_MS) {
       suspendCancellableCoroutine<kotlin.Unit> { cont ->
         var resumed = false
         val finish = {
@@ -378,11 +409,12 @@ object DemoController {
                 setDataSource(file.absolutePath)
                 setOnCompletionListener { finish() }
                 setOnErrorListener { _, _, _ -> finish(); true }
-                prepare()
-                start()
+                setOnPreparedListener { runCatching { it.start() }.onFailure { finish() } }
+                prepareAsync()
             }
         }.onFailure { finish() }     // 播不出來也要放行，不然整段演示卡在這裡
         cont.invokeOnCancellation { runCatching { player?.release() }; player = null }
+      }
       }
     }
 
@@ -494,11 +526,18 @@ object DemoController {
                             if (clip != null) playClip(clip)
                             // 退路也要拿發言權，否則它會和示範發聲疊在一起
                             else audioFloor.withLock {
-                                awaitCallback { done -> speakFallback(s.cap, done) }
+                                kotlinx.coroutines.withTimeoutOrNull(SPEAK_TIMEOUT_MS) {
+                                    awaitCallback { done -> speakFallback(s.cap, done) }
+                                }
                             }
                             delay(TAIL_PAD_MS)      // 講完再讓畫面多停一下
                         }
-                        staging?.join()
+                        // 畫面動作也要有上限，理由同上：卡住的是整支影片，不只這一步。
+                        staging?.let {
+                            if (kotlinx.coroutines.withTimeoutOrNull(STAGE_TIMEOUT_MS) { it.join() } == null) {
+                                it.cancel()
+                            }
+                        }
                         if (s.holdMs > 0) delay(s.holdMs)
                         // 補到最短停留；旁白比下限長時這裡是 0，不會拖慢。
                         val floor = if (narrate) MIN_STEP_NARRATED_MS else MIN_STEP_SILENT_MS
@@ -508,6 +547,9 @@ object DemoController {
                 }
             } finally {
                 runCatching { stage.clear() }   // 演示放上去的碎詞／候選句不留給使用者
+                // 字級／語言／嚴重度是寫進 DataStore 的，中途按返回鍵中止也要還原——
+                // 不然使用者會停在 2.2 倍字級的韓文介面，而且不知道怎麼弄回來。
+                runCatching { stage.restoreSettings() }
                 reset()
                 onFinish()
             }

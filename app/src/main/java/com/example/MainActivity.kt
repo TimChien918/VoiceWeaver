@@ -434,7 +434,9 @@ class MainActivity : ComponentActivity() {
                                             override fun crisisStatus(status: String) = viewModel.demoCrisisStatus(status)
                                             override fun crisisClose() = viewModel.demoCrisisClose()
                                             override fun safetyLock(message: String?) = viewModel.demoSafetyLock(message)
+                                            override fun openPanel(key: String?) = viewModel.demoOpenPanel(key)
                                             override fun snapshotSettings() = viewModel.demoSnapshotSettings()
+                                            override fun restoreSettings() = viewModel.demoRestoreSettings()
                                             override fun clear() = viewModel.demoClearScreen()
                                         },
                                         prerecord = { line, done -> viewModel.demoPrerecord(line, done) },
