@@ -597,7 +597,6 @@ object I18n {
         "⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 1925 安心專線或 119。" to arrayOf("⚠ High-risk message detected; voice output is locked. Please call your local crisis line or emergency number.", "⚠ 高リスクを検出、音声出力をロック。相談ダイヤルや緊急番号へ。", "⚠ 고위험 감지, 음성 출력 잠김. 상담 전화나 긴급 번호로."),
         "鼻子頭控追蹤中：轉頭移動游標" to arrayOf("Nose head-tracking on: turn your head to move the cursor", "鼻ヘッドトラッキング中：首を向けてカーソル移動", "코 헤드 추적 중: 고개를 돌려 커서 이동"),
         "已重新置中：保持自然姿勢，轉頭即可移動游標" to arrayOf("Recentered: keep a natural posture; turn your head to move the cursor", "再センタリング完了：自然な姿勢で、首を向けて移動", "다시 중앙 정렬: 자연스러운 자세로, 고개를 돌려 이동"),
-        "正在通知家人…" to arrayOf("Notifying family…", "家族に通知中…", "가족에게 알리는 중…"),
         "已把現場畫面與視訊連結傳給家人" to arrayOf("Sent the scene and a video link to family", "現場の画像とビデオリンクを家族に送信", "현장 화면과 영상 링크를 가족에게 전송"),
         "家人正在陪你 💙" to arrayOf("Family is with you 💙", "家族がそばにいます 💙", "가족이 곁에 있어요 💙"),
         "凝視選取：%s" to arrayOf("Gaze select: %s", "視線選択：%s", "시선 선택: %s"),
@@ -656,7 +655,8 @@ object I18n {
         "停止" to arrayOf("Stop", "停止", "중지"),
         // 自動演示注入危機視窗的內容。介面是英文、訊息卻是中文的話，
         // 錄出來就是一頁中英夾雜——這些一定要跟著介面語言走。
-        "正在通知家人…" to arrayOf("Contacting your family…", "家族に連絡しています…", "가족에게 연락 중…"),
+        // 註：「正在通知家人…」不重複列在這裡，正式求救路徑那筆（見上方「求救」區塊）
+        // 已經涵蓋；重複的鍵會被後者默默覆蓋，反而讓正式路徑吃到演示的用詞。
         "已通知家人" to arrayOf("Family notified", "家族に通知しました", "가족에게 알렸습니다"),
         "已通知家人 · 視訊隨時可開" to arrayOf(
             "Family notified · video call ready", "家族に通知済み・ビデオ通話可能", "가족에게 알림 · 영상통화 가능"),
@@ -688,7 +688,7 @@ object I18n {
         "設定" to arrayOf("Settings", "設定", "설정"),
 
         // ── AacScreen 補遺 ──
-        "清除" to arrayOf("Clear", "クリア", "지우기"),
+        // 註:「清除」在上方演示面板區塊已有同樣一筆（Clear／クリア／지우기），不重複列。
         "嘗試調整搜尋條件或選擇其他分類" to arrayOf("Try different search terms or another category", "検索条件を変えるか別のカテゴリを選んでください", "검색어를 바꾸거나 다른 분류를 선택해 보세요"),
         "選擇操作" to arrayOf("Choose an action", "操作を選択", "동작 선택"),
         "加入句子" to arrayOf("Add to sentence", "文に追加", "문장에 추가"),
