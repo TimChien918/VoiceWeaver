@@ -514,7 +514,9 @@ HELP_TEXT = """使用說明
 2. 手機連線（「控制台」分頁會顯示實際位址，擇一）：
    • USB：手機填 http://127.0.0.1:9880
    • Wi-Fi：填電腦 IP，例 http://192.168.x.x:9880
-   • 外網：裝 Tailscale 後填 100.x 位址（tailscale.com/download）
+   • 外網：裝 Tailscale 後填 http://100.x.x.x:9880（tailscale.com/download）
+     ※ 埠一定要是 9880。9879 是給網頁版用的橋接埠，手機 App 填了
+       「測試連線」會過，但真的要合成時會失敗。
 
 3. 換聲音：到「模型 / 進階」分頁選一個按「切換」；
    沒有模型就按「從資料夾匯入」。
@@ -749,7 +751,9 @@ def load_ui_lang() -> str:
                 return v
     except Exception:
         pass
-    return "zh-TW"
+    # 還沒選過就用英文，和 App（AppLanguage.En）、網頁版一致。
+    # 選過的會寫進 .ui_lang，這裡不會蓋掉。
+    return "en"
 
 
 def save_ui_lang(lang: str) -> None:

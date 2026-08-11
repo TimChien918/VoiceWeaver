@@ -103,7 +103,12 @@ fun DemoPickerDialog(
                             Text("${u.icon}  ", fontSize = 15.sp)
                             Column {
                                 Text(u.title, color = Color.White, fontSize = 14.sp)
-                                Text("~${u.estSec}s" + (u.note?.let { " · $it" } ?: ""),
+                                // 每個單元的秒數也要用**算的**。以前這裡印的是寫死在
+                                // UNITS 裡的數字，上面的總長卻是 estimateSeconds() 算的——
+                                // 兩套數字放在同一個面板上，單元加起來永遠不等於總長，
+                                // 而且旁白改長改短之後只有總長會跟著動。
+                                Text("~${DemoController.estimateSeconds(setOf(u.id), narrate)}s" +
+                                    (u.note?.let { " · $it" } ?: ""),
                                     color = Color(0xFF9A9AA4), fontSize = 11.sp)
                             }
                         }
@@ -119,9 +124,14 @@ fun DemoPickerDialog(
                     )
                 }
                 if (narrate && !voiceReady) {
-                    // 默默用系統機器音唸完一整支影片，使用者只會在錄完之後才發現。
+                    // ⚠️ 這裡以前寫「旁白會用手機的系統語音唸」——**那不是實際行為**。
+                    // 旁白是錄影前先合成好的，而預熱那條路在 GPT-SoVITS 沒開時直接
+                    // 就回來了（TtsModule 的 prewarmOnly && !gptSovitEnabled），
+                    // 於是一句都錄不到 → DemoController 判定 missing > 0 → **整個演示不會開始**，
+                    // 只跳一個 Toast。照舊文字理解的人會以為「音色差一點但還是能錄」，
+                    // 按下開始卻什麼都沒發生。
                     Text(
-                        "⚠️  " + I18n.tr("電腦端語音（GPT-SoVITS）沒有啟用，旁白會用手機的系統語音唸。要用你自己的角色語音，請先到設定把電腦端語音打開並連上。"),
+                        "⚠️  " + I18n.tr("電腦端語音（GPT-SoVITS）沒有啟用，旁白合不出來，按下開始會直接中止。請先到設定把電腦端語音打開並連上，或把「英文旁白與字幕」關掉改錄無旁白版。"),
                         color = Color(0xFFFFB020), fontSize = 11.sp,
                         modifier = Modifier.padding(start = 44.dp, bottom = 6.dp)
                     )

@@ -178,14 +178,20 @@ fun VoiceWeaverScreen(
         // 索引整個位移一格。所以在這裡算一次，下面 LazyColumn 用同一個值——
         // 兩邊各自算的話，只要有人改了其中一邊，演示就會捲到隔壁那張卡。
         val favorites = settings.favoriteSentences.split("\n").map { it.trim() }.filter { it.isNotBlank() }
-        val inputItemIndex = if (favorites.isEmpty()) 2 else 3   // 0=快速求救 1=情境 (2=最愛) → 輸入框
+        // 實際順序：0=快速求救 [1=最愛] → 情境 → 輸入 → 結果 → 底部留白
+        val inputItemIndex = if (favorites.isEmpty()) 2 else 3
+        val resultItemIndex = inputItemIndex + 1
         LaunchedEffect(demoScroll) {
             val (seq, target) = demoScroll
             if (seq == 0) return@LaunchedEffect
             val idx = when (target) {
                 "top" -> 0
                 "input" -> inputItemIndex
-                else -> (demoListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                // ⚠️ 這裡本來是 totalItemsCount - 1，那是**底部留白的 Spacer**，不是結果卡。
+                // 捲到它等於捲到最底，結果區被推到視窗上緣外；更糟的是下面的可見性
+                // 驗證檢查的也是那個 Spacer——「錄影池」等於在驗一個跟旁白無關的東西，
+                // 旁白講候選句、畫面上沒有候選句也照樣通過。
+                else -> resultItemIndex
             }
             runCatching { demoListState.animateScrollToItem(idx) }
             // 捲完回報那個東西是不是真的在畫面上。演示會讀這個值——
@@ -231,13 +237,17 @@ fun VoiceWeaverScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             listOf(I18n.tr("😖 我痛") to I18n.tr("我很痛，請幫幫我。"),
                                    I18n.tr("💧 喝水") to I18n.tr("我想要喝水。"),
-                                   I18n.tr("🚻 廁所") to I18n.tr("我想上廁所，請帶我去。")).forEach { (label, phrase) ->
+                                   I18n.tr("🚻 廁所") to I18n.tr("我想上廁所，請帶我去。")).forEachIndexed { i, (label, phrase) ->
                                 Button(
                                     onClick = { viewModel.speakClinicalPhrase(phrase) },
                                     colors = ButtonDefaults.buttonColors(containerColor = dangerRose),
                                     shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 14.dp),
-                                    modifier = Modifier.weight(1f)
+                                    // 演示要看得到「按下去」這件事。旁白說「按一下，手機就唸出來」，
+                                    // 畫面上卻沒有任何按鈕動過——觀眾會以為是自己播的。
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .scale(if (demoPressed == "sos_$i") 0.94f else 1f)
                                 ) {
                                     Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }

@@ -175,6 +175,7 @@ class ScreenRecordService : Service() {
         silentFile = silent
 
         _capturing.value = false
+        tornDown = false          // 這個 service 實例還活著就再錄一次時，收拾旗標要重來
         val r = DemoRecorder(projection!!, w, h, dpi, withAudio, f, silent) { _capturing.value = true }
         r.start()
         recorder = r
@@ -188,9 +189,8 @@ class ScreenRecordService : Service() {
      * 放 MediaStore 而不是 Android/data/<套件>/files——後者在檔案管理員裡幾乎找不到，
      * 而這支影片的用途就是「拿出去給別人看」。
      */
-    private fun publish(src: File, suffix: String = ""): String? {
-        val name = "VoiceWeaver-Demo-" +
-            SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + suffix + ".mp4"
+    private fun publish(src: File, stamp: String, suffix: String = ""): String? {
+        val name = "VoiceWeaver-Demo-$stamp$suffix.mp4"
         return runCatching {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, name)
@@ -217,7 +217,20 @@ class ScreenRecordService : Service() {
         }
     }
 
+    /**
+     * teardown() 會被呼叫**兩次**：ACTION_STOP（或使用者從系統列停止分享）先收一次，
+     * 接著 stopSelf() → onDestroy() 又收一次。
+     *
+     * 第二次進來時 recorder 已經是 null，`done` 就是 null，於是
+     * `_lastPath.value = done?.let { … }` 把剛剛寫好的路徑**覆蓋成 null**——
+     * 使用者錄完看到的是「沒有存檔」，但影片其實好好地在相簿裡。
+     * 所以這裡要擋掉重入，收拾的工作只做一次。
+     */
+    private var tornDown = false
+
     private fun teardown() {
+        if (tornDown) return
+        tornDown = true
         // 每一步都可能丟例外（沒錄到任何影格時尤其），但一步失敗不能擋住後面的釋放，
         // 否則 MediaProjection 會一直掛著、狀態列的錄影圖示也不會消失。
         val done = runCatching { recorder?.stop() }.getOrNull()
@@ -228,9 +241,12 @@ class ScreenRecordService : Service() {
         _recording.value = false
         _capturing.value = false
         // 兩份一起發布。無聲版沒錄到東西就安靜跳過（例如 Android 10 以下沒有音訊擷取）。
+        // 時間戳只取一次：兩次 publish 之間跨過整分鐘的話，-narrated 和 -silent
+        // 會變成兩個不同時間的檔名，看起來像兩次不相干的錄影。
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
         val hasSilent = silentFile?.takeIf { it.exists() && it.length() > 0 }
-        _lastPath.value = done?.let { publish(it, if (hasSilent != null) "-narrated" else "") }
-        hasSilent?.let { publish(it, "-silent") }
+        _lastPath.value = done?.let { publish(it, stamp, if (hasSilent != null) "-narrated" else "") }
+        hasSilent?.let { publish(it, stamp, "-silent") }
         silentFile = null
         if (done != null && _lastPath.value == null) {
             // 發布失敗也不要把檔案丟掉，至少留在快取裡還救得回來

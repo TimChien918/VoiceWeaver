@@ -1870,6 +1870,16 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /** 演示：把介面語言放回演示開始前的那一個。**快照留著不動**——
+     *
+     *  多語言那一段輪播完不能寫死切回中文：使用者的介面本來可能是英日韓，
+     *  寫死的話影片剩下的單元全部變成中文畫面配英文旁白。
+     *  真正的還原（含字級／嚴重度）仍然是結束時的 demoRestoreSettings()。 */
+    fun demoRestoreLanguage() {
+        val lang = demoSnapshot?.language ?: return
+        viewModelScope.launch { settingsRepo.setLanguage(lang) }
+    }
+
     fun demoFontScale(scale: Float) = viewModelScope.launch { settingsRepo.setFontScale(scale) }
     fun demoLanguage(tag: String) = viewModelScope.launch {
         val lang = when (tag) {
@@ -1903,7 +1913,13 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      *  旁白說「使用者把想得到的字打進去」，而畫面上根本沒有輸入框。 */
     fun demoScrollToInput() = demoScrollTo("input")
     /** 演示：把某個位置露出來（"top"／"input"／"result"）。 */
-    fun demoFocusOn(target: String) = demoScrollTo(target)
+    fun demoFocusOn(target: String) {
+        // 捲之前先把上一次的回報作廢。不清的話，同一個 target 連著好幾步時
+        // （主畫面那幾步就是這樣），後面的步驟即使畫面根本沒回報，也會讀到
+        // 第一步留下的「看得見」而靜靜通過——錄影池等於沒有在驗。
+        _demoFocusVisible.value = null
+        demoScrollTo(target)
+    }
 
     // 捲完之後，那個東西到底有沒有真的在畫面上。由畫面回報。
     // 這是「錄影池」的驗收：旁白在講某個地方，那個地方就必須看得見；
@@ -1913,9 +1929,17 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun demoReportFocus(target: String, visible: Boolean) {
         _demoFocusVisible.value = target to visible
     }
+    /**
+     * 上一次 focusOn 之後，畫面有沒有回報「那個東西看得見」。
+     *
+     * **沒有任何回報也算不通過。** 以前 null 是回 true（給它好處），
+     * 但沒有回報代表的是「當下這個畫面根本沒在聽捲動訊號」——
+     * 旁白要講的東西到底在不在畫面上，沒有人知道。錄影池的用途就是
+     * 抓這種情況，預設放行等於把它關掉。
+     */
     fun demoFocusWasVisible(target: String): Boolean {
-        val v = _demoFocusVisible.value
-        return v == null || v.first != target || v.second
+        val v = _demoFocusVisible.value ?: return false
+        return v.first == target && v.second
     }
 
     // 「哪一顆按鈕正被按下」。演示不能真的呼叫 onClick——重組那顆會去打 LLM，
@@ -1930,6 +1954,11 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 演示：讓 App 把這句話唸出來，唸完才回呼。固定用系統 TTS（要即時）。 */
     fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakInstant(text, onDone)
+
+    /** 演示：唸英文樣本句。示範句是英文的（字幕與旁白一律英文），不能照介面語言
+     *  挑語音——中文介面會用中文嗓音硬唸英文，錄進影片裡沒人聽得懂。 */
+    fun demoSpeakAloudEnglish(text: String, onDone: () -> Unit) =
+        ttsModule.speakInstantIn(text, java.util.Locale.US, onDone)
 
     /**
      * 演示：把畫面切成「正在重組」的等待狀態。
@@ -1986,6 +2015,13 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         resetState()
         _aacState.value = _aacState.value.copy(sentence = emptyList(), selectedCategory = null)
         _demoPanel.value = null
+        // 視覺按壓要放開。演示在 press(tag) 和 press(null) 中間被中止（按停止、
+        // 返回鍵、或某個 onStage 逾時被取消）的話，那顆按鈕會一直維持按下去的樣子，
+        // 直到下一次演示才復原。
+        _demoPressed.value = null
+        // 復健畫面的目標句是演示放進去的，結束要收掉——不然使用者回到復健分頁
+        // 會看到一句自己沒選過的練習句停在那裡。
+        _rehabState.value = RehabUiState()
     }
 
     // 演示要打開設定裡的子面板（例如「角色語音與雲端曲庫」）。

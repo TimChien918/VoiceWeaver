@@ -399,8 +399,21 @@ class MainActivity : ComponentActivity() {
                         // 演示期間強制保持螢幕恆亮，結束立刻還原（不改使用者的系統設定）。
                         DisposableEffect(demoRunning) {
                             val w = this@MainActivity.window
-                            if (demoRunning) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                            onDispose { w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+                            val prevOrientation = this@MainActivity.requestedOrientation
+                            if (demoRunning) {
+                                w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                                // 演示期間也要鎖住螢幕方向。轉一下＝Activity 重建＝
+                                // demoScope（rememberCoroutineScope）被取消，整段演示
+                                // 無聲無息中斷，而錄影已經錄到一半。何況錄影的
+                                // VirtualDisplay 是用開錄當下的長寬建的，轉向之後
+                                // 畫面比例也對不上。結束立刻還原，不改使用者的系統設定。
+                                this@MainActivity.requestedOrientation =
+                                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                            }
+                            onDispose {
+                                w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                                this@MainActivity.requestedOrientation = prevOrientation
+                            }
                         }
                         androidx.activity.compose.BackHandler(enabled = demoRunning) {
                             DemoController.stop()
@@ -432,6 +445,7 @@ class MainActivity : ComponentActivity() {
                                             override fun rehabTarget(sentence: String) = viewModel.demoRehabTarget(sentence)
                                             override fun fontScale(scale: Float) { viewModel.demoFontScale(scale) }
                                             override fun language(tag: String) { viewModel.demoLanguage(tag) }
+                                            override fun restoreLanguage() { viewModel.demoRestoreLanguage() }
                                             override fun severity(name: String) { viewModel.demoSeverity(name) }
                                             override fun scrollToResult() = viewModel.demoScrollToResult()
                                             override fun scrollToTop() = viewModel.demoScrollToTop()
@@ -443,6 +457,9 @@ class MainActivity : ComponentActivity() {
                                             override fun press(tag: String?) = viewModel.demoPress(tag)
                                             override fun speakAloud(text: String, done: () -> Unit) {
                                                 viewModel.demoSpeakAloud(text, done)
+                                            }
+                                            override fun speakAloudEnglish(text: String, done: () -> Unit) {
+                                                viewModel.demoSpeakAloudEnglish(text, done)
                                             }
                                             override fun crisisOpen(status: String) = viewModel.demoCrisisOpen(status)
                                             override fun crisisSay(who: String, text: String) = viewModel.demoCrisisSay(who, text)

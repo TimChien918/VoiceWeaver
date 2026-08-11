@@ -1435,6 +1435,7 @@ private fun TermuxSovitsPanel(
                     com.example.ai.LocalSovitsHelper.PingResultKind.Reachable  -> p.neonGreen
                     com.example.ai.LocalSovitsHelper.PingResultKind.PortClosed -> p.dangerRose
                     com.example.ai.LocalSovitsHelper.PingResultKind.HttpError  -> p.auraAmber
+                    com.example.ai.LocalSovitsHelper.PingResultKind.BridgePort -> p.auraAmber
                     null -> p.textMuted
                 },
                 modifier = Modifier.weight(1f)

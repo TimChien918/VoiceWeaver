@@ -44,10 +44,54 @@ object LocalSovitsHelper {
     /** 預設本機 API URL。只有 server 真的跑在手機本機時才適用；一般建議改填 Mac/PC IP。 */
     const val DEFAULT_LOCAL_URL = "http://127.0.0.1:9880"
 
+    /** USB／區網用。這條線上連不到就是真的沒開，等再久也一樣。 */
     private val client = OkHttpClient.Builder()
         .connectTimeout(2, TimeUnit.SECONDS)
         .readTimeout(3, TimeUnit.SECONDS)
         .build()
+
+    /**
+     * Tailscale／公網用。
+     *
+     * 這裡的逾時**不是**保守起見放寬的，而是那條線本來就比較慢：
+     * Tailscale 的第一個封包要先把 WireGuard 隧道拉起來，直連（NAT 穿透）談不成
+     * 還會退回 DERP 中繼繞一圈；手機剛從休眠醒來或走 4G/5G 時更明顯。
+     * 用區網的 2 秒去量它，結果就是「明明服務開著，App 說連不到」。
+     */
+    private val remoteClient = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
+        .build()
+
+    private const val SOCKET_TIMEOUT_LAN_MS = 1200
+    private const val SOCKET_TIMEOUT_REMOTE_MS = 6000
+
+    /**
+     * 這個位址是不是「不在同一條線上」。
+     *
+     * Tailscale 給的是 100.64.0.0/10（CGNAT 保留段）的位址，或 MagicDNS 的
+     * `*.ts.net`；兩者都要走隧道。區網（10/172.16-31/192.168）與 loopback
+     * （USB 走 adb reverse 就是 127.0.0.1）則是直通的。
+     * 認不出來的主機名一律當遠端——猜錯的代價只是慢一點，反過來猜錯是連不上。
+     */
+    internal fun isRemoteHost(host: String): Boolean {
+        if (host.equals("localhost", true) || host.startsWith("127.") || host == "::1") return false
+        if (host.endsWith(".ts.net", true)) return true
+        val p = host.split(".").mapNotNull { it.toIntOrNull() }
+        if (p.size == 4 && host.count { it == '.' } == 3) {
+            if (p[0] == 100 && p[1] in 64..127) return true          // Tailscale CGNAT
+            if (p[0] == 10) return false
+            if (p[0] == 192 && p[1] == 168) return false
+            if (p[0] == 172 && p[1] in 16..31) return false
+            return true                                              // 其餘 IPv4＝公網
+        }
+        return true
+    }
+
+    private fun httpFor(baseUrl: String): OkHttpClient {
+        val h = runCatching { URI(baseUrl).host }.getOrNull() ?: return client
+        return if (isRemoteHost(h)) remoteClient else client
+    }
 
     suspend fun pingLocalServer(): PingResult = pingServer(DEFAULT_LOCAL_URL)
 
@@ -66,25 +110,42 @@ object LocalSovitsHelper {
             else -> 80
         }
 
+        val remote = isRemoteHost(host)
+
         // ── 1) Socket layer ──
         val socketAlive = runCatching {
             Socket().use { s ->
-                s.connect(InetSocketAddress(host, port), 1200)
+                s.connect(
+                    InetSocketAddress(host, port),
+                    if (remote) SOCKET_TIMEOUT_REMOTE_MS else SOCKET_TIMEOUT_LAN_MS
+                )
                 true
             }
         }.getOrDefault(false)
-        if (!socketAlive) return@withContext PingResult.PortClosed
+        // 區網／USB 探不到就是真的沒開，直接回報，不必再多等一輪 HTTP。
+        // 但**遠端不能這樣判死**：Tailscale 第一次連要先把隧道拉起來，談不成直連
+        // 還會繞 DERP 中繼，這一下常常比 socket 逾時久。在這裡就回 PortClosed 的話，
+        // 使用者看到的是「連不到」，實際上再試一次就通了。遠端一律往下走 HTTP 再確認。
+        if (!socketAlive && !remote) return@withContext PingResult.PortClosed(false)
 
         // ── 2) HTTP layer：SoVITS api_v2 在 / 回 404（沒這 route）但 server 會應答；/health 通常 200 ──
         val req = Request.Builder().url("$normalized/health").get().build()
         runCatching {
-            client.newCall(req).execute().use { resp ->
-                Log.i(TAG, "SoVITS HTTP ${resp.code} @ $normalized")
+            httpFor(normalized).newCall(req).execute().use { resp ->
+                Log.i(TAG, "SoVITS HTTP ${resp.code} @ $normalized（remote=$remote）")
+                val body = runCatching { resp.body?.string() }.getOrNull().orEmpty()
+                // 位址填到語音中心的**橋接埠 9879** 了。這裡一定要擋下來：
+                // 橋接的 /health 回 200，測試連線會亮綠燈，但 App 合成打的是 api_v2 的
+                // /tts，橋接沒有那個路由——於是「測試通過，真的要唸的時候卻失敗」。
+                // 網頁版填 9879 是對的（它走 /speak），App 要的是 9880，
+                // 兩邊的說明不一樣，貼錯是很自然的事。
+                if (resp.code == 200 && body.contains("voiceweaver-bridge")) {
+                    return@use PingResult.BridgePort
+                }
                 if (resp.code == 200) {
                     // 先從伺服器更新可用模型清單（電腦端新增/刪除的模型即時反映）
                     refreshModels(normalized)
                     // /health 會回目前載入的 weights 路徑 — 比對權重檔名找出是哪個聲音（含語言標籤）。
-                    val body = runCatching { resp.body?.string() }.getOrNull().orEmpty()
                     VOICES.firstOrNull {
                         body.contains(it.sovitsWeights.substringAfterLast('/')) ||
                         body.contains(it.gptWeights.substringAfterLast('/'))
@@ -97,14 +158,38 @@ object LocalSovitsHelper {
                 if (resp.code in 200..499) PingResult.Reachable
                 else PingResult.HttpError(resp.code)
             }
-        }.getOrElse { PingResult.HttpError(-1) }
+            // socket 沒通、HTTP 也沒通 → 說「連不到」比說「HTTP 失敗」準確
+        }.getOrElse { e ->
+            // 遠端連不上時把原因寫進診斷日誌——使用者可以直接匯出給開發者看，
+            // 不必靠他轉述「就是連不上」。
+            if (remote) DiagnosticLog.e(
+                DiagnosticLog.Cat.NET, "遠端語音伺服器連不上",
+                "位址=$normalized socket=${if (socketAlive) "通" else "不通"} 原因=${e.message}"
+            )
+            if (socketAlive) PingResult.HttpError(-1) else PingResult.PortClosed(remote)
+        }
     }
 
-    enum class PingResultKind { PortClosed, Reachable, HttpError }
+    enum class PingResultKind { PortClosed, Reachable, HttpError, BridgePort }
     sealed class PingResult(val kind: PingResultKind, val label: String) {
-        object PortClosed : PingResult(PingResultKind.PortClosed, "❌ 連不到 API 位址，請確認 server 已啟動、IP 正確、同一個 Wi-Fi")
+        /**
+         * 連不到。**建議要看位址給**：對 Tailscale 位址講「請連同一個 Wi-Fi」
+         * 是完全錯的指引——那條路本來就不需要同網段，照著查只會白費時間。
+         */
+        data class PortClosed(val remote: Boolean = false) : PingResult(
+            PingResultKind.PortClosed,
+            if (remote)
+                "❌ 連不到這台電腦。請確認：① 手機的 Tailscale 有連上（VPN 圖示亮著）" +
+                    "② 電腦的語音中心開著、9880 綠燈 ③ 電腦防火牆沒擋住 Python" +
+                    "④ 埠是 9880（不是網頁版用的 9879）"
+            else
+                "❌ 連不到 API 位址，請確認 server 已啟動、IP 正確、同一個 Wi-Fi"
+        )
         object Reachable  : PingResult(PingResultKind.Reachable,  "✅ SoVITS server 通了，可以合成測試")
         data class HttpError(val code: Int) : PingResult(PingResultKind.HttpError, "⚠ port 開但 HTTP $code，請檢查 api_v2.py log 或 API URL")
+        /** 連到的是語音中心的橋接埠（9879），不是 GPT-SoVITS 本體（9880）。
+         *  這種情況測試會通、合成一定失敗，所以要當成錯誤講清楚。 */
+        object BridgePort : PingResult(PingResultKind.BridgePort, "⚠ 這是語音中心的橋接埠（9879）。App 要直接連 GPT-SoVITS，請把位址的埠改成 9880（網頁版才是填 9879）")
     }
 
     /**
@@ -352,7 +437,7 @@ object LocalSovitsHelper {
         val base = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_LOCAL_URL }
         runCatching {
             val req = Request.Builder().url("$base/models").get().build()
-            client.newCall(req).execute().use { resp ->
+            httpFor(base).newCall(req).execute().use { resp ->
                 if (resp.code != 200) return@use false
                 val body = resp.body?.string().orEmpty()
                 val arr = org.json.JSONObject(body).optJSONArray("models") ?: return@use false
@@ -421,7 +506,7 @@ object LocalSovitsHelper {
         val base = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_LOCAL_URL }
         runCatching {
             val req = Request.Builder().url("$base/catalog").get().build()
-            client.newCall(req).execute().use { resp ->
+            httpFor(base).newCall(req).execute().use { resp ->
                 if (resp.code != 200) return@use emptyList<CatalogEntry>()
                 val cat = org.json.JSONObject(resp.body?.string().orEmpty())
                     .optJSONObject("catalog") ?: return@use emptyList()
@@ -452,7 +537,9 @@ object LocalSovitsHelper {
         Pair<Boolean, String> = withContext(Dispatchers.IO) {
         val base = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_LOCAL_URL }
         val dlClient = OkHttpClient.Builder()
-            .connectTimeout(4, TimeUnit.SECONDS)
+            // 連線階段要留給 Tailscale 建隧道的時間（區網 4 秒不夠）
+            .connectTimeout(if (isRemoteHost(runCatching { URI(base).host }.getOrNull() ?: "")) 10 else 4,
+                TimeUnit.SECONDS)
             .readTimeout(300, TimeUnit.SECONDS)   // 大檔從 Drive 拉可能要一段時間
             .build()
         runCatching {
@@ -483,7 +570,9 @@ object LocalSovitsHelper {
         withContext(Dispatchers.IO) {
             val base = baseUrl.trim().trimEnd('/').ifBlank { DEFAULT_LOCAL_URL }
             val swapClient = OkHttpClient.Builder()
-                .connectTimeout(3, TimeUnit.SECONDS)
+                // 同上：3 秒是區網的數字，Tailscale 冷啟動常常超過
+                .connectTimeout(if (isRemoteHost(runCatching { URI(base).host }.getOrNull() ?: "")) 10 else 3,
+                    TimeUnit.SECONDS)
                 .readTimeout(120, TimeUnit.SECONDS) // CPU 載權重可能要數十秒
                 .build()
             fun call(path: String, weights: String): String? {
@@ -584,9 +673,10 @@ object LocalSovitsHelper {
             val b = baseUrl.trim()
             URI(if (b.contains("://")) b else "http://$b").host
         }.getOrNull() ?: return@withContext null
-        val req = Request.Builder().url("http://$host:9881/whoami").get().build()
+        val target = "http://$host:9881"
+        val req = Request.Builder().url("$target/whoami").get().build()
         runCatching {
-            client.newCall(req).execute().use { resp ->
+            httpFor(target).newCall(req).execute().use { resp ->
                 if (resp.code != 200) return@use null
                 val j = JSONObject(resp.body?.string().orEmpty())
                 val ts = j.optString("tailscale_ip").trim()

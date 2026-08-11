@@ -226,7 +226,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 | 設定 | 預設 | 說明 |
 | --- | --- | --- |
-| `language` | 繁體中文 | 介面＋朗讀＋跟讀辨識語言（繁中／EN／日／韓），連動聲音模型篩選 |
+| `language` | English | 介面＋朗讀＋跟讀辨識語言（繁中／EN／日／韓），連動聲音模型篩選。四個入口的預設都是英文 |
 | `theme` / `highContrast` | 科技風 / off | 視覺風格、高對比（黑底黃文） |
 | `severityMode` | 輕度 | 輕度／中度／重度，決定字級預設、AAC 圖卡呈現方式、是否隱藏複雜設定 |
 | `fontScale` | 1.0 | 全域字體倍率（0.8–1.8） |

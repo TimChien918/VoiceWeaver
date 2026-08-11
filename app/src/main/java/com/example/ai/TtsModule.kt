@@ -594,6 +594,37 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
+     * 同 speakInstant，但**用指定語言唸**。
+     *
+     * 演示裡「App 把句子唸出來」的那幾句是英文樣本句（字幕與旁白一律英文，
+     * 這支影片是要拿去做報告的）。走 speakInstant 會照**介面語言**挑語音——
+     * 中文介面就變成用中文嗓音硬唸英文句子，錄進影片裡是一段沒人聽得懂的東西，
+     * 而且觀眾會以為這個 App 的發音就是這樣。
+     *
+     * 沒有那個語音包才退回介面語言（至少發得出聲音）。唸完 appliedTtsLocale
+     * 留在 null，下一句一般朗讀會自己重新套回介面語言。
+     */
+    fun speakInstantIn(text: String, locale: Locale, onComplete: () -> Unit = {}) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { speakInstantIn(text, locale, onComplete) }
+            return
+        }
+        val engine = tts
+        if (engine == null) { onComplete(); return }
+        runCatching {
+            appliedTtsLocale = null          // 底下不管走哪條，快取都不再有效
+            val r = engine.setLanguage(locale)
+            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w("TtsModule", "裝置沒有 ${locale.language} 語音包，演示發聲退回介面語言")
+                applyInterfaceLocale(engine)
+            } else {
+                selectBestVoice(engine, locale)
+            }
+            speakTracked(engine, text, onComplete)
+        }.onFailure { onComplete() }
+    }
+
+    /**
      * 演示：手動把「合成中…」的指示亮起來／熄掉。
      *
      * 演示播的是**預錄好的**專屬聲音音檔，所以實際上不需要等。但真的按下去

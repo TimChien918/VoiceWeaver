@@ -73,7 +73,11 @@ object DemoController {
     fun estimateSeconds(ids: Set<String>, narrated: Boolean): Int =
         (UNITS.filter { it.id in ids }
             .flatMap { it.steps }
-            .sumOf { maxOf(stepMillis(it.cap, narrated), it.stageMs) + it.holdMs } / 1000).toInt()
+            .sumOf {
+                // 有 focus 的步驟開講前要先捲、再等捲動停下來，那段時間也錄在影片裡。
+                val settle = if (it.focus != null) FOCUS_SETTLE_MS else 0L
+                maxOf(stepMillis(it.cap, narrated), it.stageMs) + it.holdMs + settle
+            } / 1000).toInt()
 
     /**
      * 演示可以對畫面做的事。由 MainActivity 用 ViewModel 實作。
@@ -95,6 +99,8 @@ object DemoController {
         fun fontScale(scale: Float)
         /** 無障礙：介面語言（zh / en / ja / ko）。 */
         fun language(tag: String)
+        /** 把介面語言放回演示開始前的那一個（多語言輪播完要用這個，不要寫死 "zh"）。 */
+        fun restoreLanguage()
         /** 嚴重度模式（Mild / Moderate / Severe）——重度會把圖卡換成全螢幕大卡。 */
         fun severity(name: String)
         /** 主畫面捲到結果那一段（候選句在下面，不捲就看不到）。 */
@@ -113,8 +119,12 @@ object DemoController {
         fun synthesizing(on: Boolean)
         /** 視覺按壓某顆按鈕（tag；null＝放開）。不會真的觸發它的動作。 */
         fun press(tag: String?)
-        /** 讓 App 把這句話唸出來（系統 TTS，即時），唸完呼叫 done。 */
+        /** 讓 App 把這句話唸出來（系統 TTS，即時，照介面語言），唸完呼叫 done。
+         *  只給「介面語言的句子」用（例如快速求救那三句）。 */
         fun speakAloud(text: String, done: () -> kotlin.Unit)
+        /** 同上，但固定用英文語音——演示的樣本句是英文的，照介面語言唸會變成
+         *  用中文嗓音硬唸英文。 */
+        fun speakAloudEnglish(text: String, done: () -> kotlin.Unit)
         /** 危機對話視窗：開啟。不會通報任何人。 */
         fun crisisOpen(status: String)
         /** 危機對話視窗：加一則訊息（who: "me" 病患／"family" 家人／其他 系統）。 */
@@ -175,8 +185,6 @@ object DemoController {
         val id: String,
         val icon: String,
         val title: String,
-        /** 純演示（無旁白）時的估計秒數。 */
-        val estSec: Int,
         val note: String? = null,
         val steps: List<Step>,
     )
@@ -193,12 +201,12 @@ object DemoController {
         //   → 長期的復健與成績單 → 跨裝置同步 → 收尾。
         // 語音合成的下一段刻意接求救：剛讓觀眾聽到「他的聲音」，
         // 緊接著問「那講不出話又出事的時候呢」，情緒是連著的。
-        Unit("intro", "🎬", "Title & overview", 12, steps = listOf(
+        Unit("intro", "🎬", "Title & overview", steps = listOf(
             Step("Imagine knowing exactly what you want to say, and not one word will come out."),
             Step("That is aphasia. The thought is intact. The bridge to speech is broken."),
             Step("VoiceWeaver rebuilds that bridge."),
         )),
-        Unit("compose", "💬", "Sentence reconstruction", 24, steps = listOf(
+        Unit("compose", "💬", "Sentence reconstruction", steps = listOf(
             Step("What comes out is fragments. Water. Rest. Now.", route = "main",
                 onStage = { it.clear() }),
             // 先捲到輸入框再打字。主畫面上面壓著「快速求救」與整張情境卡，
@@ -219,14 +227,16 @@ object DemoController {
                     it.candidates(SAMPLE_CANDIDATES); delay(300)
                     it.scrollToResult()                      // 再捲到結果
                 }, holdMs = 700, stageMs = RECONSTRUCT_WAIT_MS + 1500L),
+            // 瀏覽停在第三句，下一步才「挑」回第一句——原本瀏覽完就已經 pick(0)，
+            // 下一步再 pick(0) 等於沒動，旁白說「他挑了一句」畫面上卻什麼都沒發生。
             Step("Three versions, never one. A wrong guess put in your mouth is worse than silence.",
-                focus = "result", onStage = { delay(300); it.pick(1); delay(1500); it.pick(2); delay(1500); it.pick(0) }, holdMs = 500),
+                focus = "result", onStage = { delay(300); it.pick(1); delay(1500); it.pick(2) }, holdMs = 500),
             Step("The person picks the one that is actually theirs.", focus = "result",
-                onStage = { it.pick(0) }, holdMs = 700),
+                onStage = { delay(400); it.pick(0) }, holdMs = 700),
             Step("Only then is it said out loud.", focus = "result", onStage = { delay(300); speakDemoSentence(it, SAMPLE_CANDIDATES.first()) },
                 holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 1500L),
         )),
-        Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", 20, steps = listOf(
+        Unit("voice", "🗣", "Personal voice (GPT-SoVITS)", steps = listOf(
             // 只切到 "settings" 是不夠的：那是一頁設定清單，旁白在講聲音模型，
             // 畫面上卻連「聲音」兩個字都看不到。要真的把子面板打開。
             Step("Losing speech often means losing your voice as well.", route = "settings",
@@ -242,7 +252,7 @@ object DemoController {
                 }, holdMs = 600, stageMs = VOICE_SYNTH_DELAY_MS + 3000L,
                 voiceSample = SAMPLE_CANDIDATES.first()),
         )),
-        Unit("sos", "🚨", "Emergency SOS", 22, steps = listOf(
+        Unit("sos", "🚨", "Emergency SOS", steps = listOf(
             Step("Now the other half of the problem: what happens when something goes wrong.",
                 route = "main", onStage = { it.clear() }),
             Step("In an emergency, building a sentence word by word is far too slow.", holdMs = 600),
@@ -250,14 +260,22 @@ object DemoController {
             // 是捲到最底下——講的和演的剛好相反。
             Step("So a row of fixed phrases sits at the top of the home screen, always there.",
                 focus = "top", holdMs = 900),
-            Step("One tap, and the phone says it out loud straight away.", focus = "top", onStage = { speakAndWait(it, com.example.ui.I18n.tr("我需要幫忙")) }, holdMs = 600),
+            // 唸的必須是**畫面上那三顆真的會唸的句子**。原本唸的是「我需要幫忙」，
+            // 那句話不在任何一顆按鈕上——旁白說「按一下手機就唸出來」，唸出來的
+            // 卻是螢幕上找不到的句子。這裡按第一顆（😖 我痛）並唸它真正的那一句。
+            Step("One tap, and the phone says it out loud straight away.", focus = "top",
+                onStage = {
+                    it.press("sos_0"); delay(320)
+                    it.press(null)
+                    speakAndWait(it, com.example.ui.I18n.tr("我很痛，請幫幫我。"))
+                }, holdMs = 600, stageMs = 520L),
             // 這一段只講「一鍵發聲」，因為 App 上使用者按得到的就是這三顆。
             // 通知家人是危機偵測那條路自動觸發的，屬於下一個單元（crisis）在講的東西——
             // 混在這裡講會讓觀眾以為畫面上有一顆通報鍵，那是沒有的。
             Step("Three of them, always in reach, on the screen they use most.",
                 focus = "top", holdMs = 900),
         )),
-        Unit("crisis", "🆘", "Crisis intervention", 34, steps = listOf(
+        Unit("crisis", "🆘", "Crisis intervention", steps = listOf(
             Step("Losing language carries a real risk of depression and self-harm.", route = "main",
                 onStage = { it.clear() }),
             Step("So every sentence is screened before it is ever spoken.", focus = "input",
@@ -281,20 +299,34 @@ object DemoController {
                 onStage = { delay(500); it.crisisSay("me", com.example.ui.I18n.tr("我好害怕")) }, holdMs = 1200),
             Step("And the family answers, inside the same window.",
                 onStage = { delay(900); it.crisisSay("family", com.example.ui.I18n.tr("我在路上了，你先坐下來，我十分鐘就到")) }, holdMs = 1600),
-            Step("Photos, a voice clip, or a live video call are one tap away if the family asks for them.",
+            // 視訊與語音訊息是**患者自己**按的（危機視窗上最顯眼的兩顆），
+            // 家人能要求的只有再拍一次現場（/camera）。原本一句話把三個都說成
+            // 「家人要求才有」，等於把患者手上僅有的主動求救管道講不見了。
+            Step("A live video call and a voice message are one tap away. The family can ask for another photo.",
                 onStage = { it.crisisStatus(com.example.ui.I18n.tr("已通知家人 · 視訊隨時可開")) }, holdMs = 1400),
-            Step("The window cannot be closed by the person alone. Only when they say they are better.",
+            // 這一段的旁白曾經說「只要本人說自己好一點了，視窗就會關」——
+            // 那個功能不存在，而且把安全設計講反了。真正的規則只有一條：
+            // 使用者關不掉，家人在 Telegram 輸入 /end 才會關（VoiceWeaverCore.handleFamilyReply）。
+            Step("The person cannot close this window. Only the family can end it, from their phone.",
                 onStage = { delay(700); it.crisisSay("me", com.example.ui.I18n.tr("我好一點了")) }, holdMs = 1400),
-            Step("Then it closes gently, and the app goes back to being an ordinary app.",
-                onStage = { delay(900); it.crisisClose(); it.clear() }, holdMs = 900),
+            Step("When they do, it closes gently, and the app goes back to being an ordinary app.",
+                onStage = {
+                    delay(900)
+                    it.crisisSay("sys", com.example.ui.I18n.tr("家人已結束對話，好好照顧自己 💙"))
+                    delay(1200); it.crisisClose(); it.clear()
+                }, holdMs = 900, stageMs = 2100L),
         )),
-        Unit("acoustic", "🎤", "Personal pronunciation model", 18, steps = listOf(
+        Unit("acoustic", "🎤", "Personal pronunciation model", steps = listOf(
             Step("Aphasic speech breaks ordinary speech recognition. Every time.", route = "phrase_shortcuts"),
             Step("So the app learns this person's own way of saying a few key words."),
-            Step("It keeps an acoustic template, and matches it with dynamic time warping."),
+            // 畫面上是一份「還沒測過」的片語清單，不是已經存好的樣板。旁白改成講
+            // 使用者在這一頁要做的事（唸三次），畫面和話才對得起來——原本說
+            // 「它保留了一份聲波樣板」，觀眾在畫面上找不到那個東西。
+            Step("The person says each phrase three times, and the app keeps the waveform."),
+            Step("Matching runs on the waveform itself, with dynamic time warping — no transcription in between."),
             Step("It listens to the person in front of it, not to an average speaker.", holdMs = 700),
         )),
-        Unit("aac", "🖼", "Picture cards (AAC)", 22, steps = listOf(
+        Unit("aac", "🖼", "Picture cards (AAC)", steps = listOf(
             Step("Some people cannot type at all. For them, the board is the way in.", route = "aac",
                 onStage = { it.clear(); it.aacCategory(null) }),
             Step("Cards are coloured by part of speech, and grouped by where you are.",
@@ -309,22 +341,25 @@ object DemoController {
             Step("Everything scales up, for tired eyes and unsteady hands.",
                 onStage = { it.fontScale(1.4f); delay(1400); it.fontScale(1.8f) }, holdMs = 700, stageMs = 1600L),
         )),
-        Unit("customcards", "📷", "Custom photo cards", 12, steps = listOf(
+        Unit("customcards", "📷", "Custom photo cards", steps = listOf(
             Step("A stock drawing of a cup means nothing to someone's grandmother.", route = "aac",
                 onStage = { it.fontScale(1.0f); it.aacCategory("people") }),
             Step("So the family photographs her cup. Her chair. Her grandson."),
             Step("Recognising your own things is where trust begins."),
         )),
-        Unit("severe", "🔒", "Severe mode", 16, steps = listOf(
+        Unit("severe", "🔒", "Severe mode", steps = listOf(
             Step("For the most severely affected, a whole grid is still too much.", route = "aac",
                 onStage = { it.clear(); it.severity("Mild") }),
-            Step("So the device becomes one card at a time, scanning on its own.",
+            Step("So the device becomes one card at a time, filling the whole screen.",
                 onStage = { it.severity("Severe") }, holdMs = 1400, stageMs = 400L),
             Step("A tap speaks it, and leaves a trail the family can read.", holdMs = 1400),
-            Step("Getting out needs a caregiver PIN. Nobody gets lost in the app.",
+            // ⚠️ 這裡不能講「要輸入照護者 PIN 才出得去」——**App 端還沒有 PIN**，
+            // 目前是識字卡模式，標題列一顆按鈕就切回九宮格（AacScreen 的 GridView 那顆）。
+            // PIN 只有網頁版做了。等 App 端補上再把這句改回去。
+            Step("One button brings the caregiver back to the full board. Nobody gets lost in the app.",
                 onStage = { delay(1200); it.severity("Mild") }),
         )),
-        Unit("learning", "🧠", "It learns this person", 20, steps = listOf(
+        Unit("learning", "🧠", "It learns this person", steps = listOf(
             Step("No two people with aphasia are the same, so the app refuses to stay generic.",
                 route = "aac", onStage = { it.clear(); it.aacCategory(null) }),
             Step("The cards you reach for most rise to the top, weighted by time of day and by place.",
@@ -333,7 +368,7 @@ object DemoController {
             Step("Your pronunciation model, your cards, your voice — it drifts towards you over time.",
                 holdMs = 800),
         )),
-        Unit("a11y", "♿", "Accessibility & languages", 14, steps = listOf(
+        Unit("a11y", "♿", "Accessibility & languages", steps = listOf(
             Step("Many users are elderly, and stroke often takes part of the visual field with it.", route = "settings",
                 onStage = { it.fontScale(1.0f) }),
             Step("So the text scales all the way up, across every screen, settings included.",
@@ -344,37 +379,49 @@ object DemoController {
             Step("The whole interface runs in Traditional Chinese, English, Japanese and Korean.",
                 onStage = { it.language("en"); delay(1800); it.language("ja"); delay(1800); it.language("ko") },
                 holdMs = 900),
+            // 輪播完一定要**回到使用者原本的語言**，不能寫死 zh——後面還有復健、
+            // 成績單、片尾好幾個單元，寫死的話那些全部錄成中文畫面配英文旁白，
+            // 而且演示跑完之前使用者一直看著不是自己設定的語言。
             Step("The voice follows the language — the same person, speaking four of them.",
-                onStage = { delay(1000); it.language("zh") }, holdMs = 600),
+                onStage = { delay(1000); it.restoreLanguage() }, holdMs = 600),
         )),
-        Unit("rehab", "🏥", "Speech rehabilitation", 20, steps = listOf(
+        Unit("rehab", "🏥", "Speech rehabilitation", steps = listOf(
             Step("Communication is today. Recovery is the long game.", route = "rehab"),
             Step("A clinical phrase bank works offline, with no API key.", holdMs = 900),
             Step("Hear the target sentence. Say it back.",
                 onStage = { it.rehabTarget(com.example.ui.I18n.tr("我想要喝一杯水")) }, holdMs = 700),
-            Step("Every attempt is scored syllable by syllable, so progress is something you can see.", holdMs = 900),
+            // 「逐音節比對」正好是這個專案刻意不做的那種評分（CloudInferenceEngine
+            // 的 AI 評分是語意／流暢／語氣三面向，不用字元差異）——旁白講反了。
+            Step("Each attempt is scored on meaning, fluency and tone, so progress is something you can see.", holdMs = 900),
         )),
-        Unit("training", "📖", "Guided training", 14, steps = listOf(
+        Unit("training", "📖", "Guided training", steps = listOf(
             Step("For milder cases, repeating single sentences is not enough.", route = "training"),
             Step("Guided exercises ask them to organise the meaning themselves.", holdMs = 900),
             Step("The AI answers the way a therapist would, and gives a score."),
         )),
-        Unit("report", "📊", "Progress report", 18, steps = listOf(
+        Unit("report", "📊", "Progress report", steps = listOf(
             Step("Everything the person does quietly becomes a report.", route = "report"),
             Step("Sessions, average score, streak, and how much positive language they use.", holdMs = 900),
             Step("Behavioural numbers show how they are coping, not only how they scored."),
             Step("It exports for the next clinic visit."),
         )),
-        Unit("history", "🕘", "History", 10, steps = listOf(
+        Unit("history", "🕘", "History", steps = listOf(
             Step("Every sentence they managed to say is kept.", route = "history"),
             Step("The ones that matter get starred, and come back with one tap.", holdMs = 900),
         )),
-        Unit("cloud", "☁️", "Cloud sync", 12, steps = listOf(
-            Step("Phone, web and desktop share one account.", route = "settings"),
-            Step("The voice models stay in the user's own Google Drive. Never on our server."),
-            Step("Nothing here leaves their account."),
+        Unit("cloud", "☁️", "Cloud sync", steps = listOf(
+            // 這一段本來只切到 "settings" 就開始講 Drive 曲庫——那是一頁設定清單，
+            // 畫面上連「曲庫」兩個字都沒有。和「我的專屬聲音」那一段當初的問題一樣，
+            // 解法也一樣：真的把「角色語音與雲端曲庫」那個子面板打開（裡面就是
+            // CloudLibraryPanel，整個 Drive 曲庫看得見）。
+            Step("Phone, web and desktop share one account.", route = "settings",
+                onStage = { it.openPanel(null) }),
+            Step("The voice models stay in the user's own Google Drive. Never on our server.",
+                onStage = { delay(400); it.openPanel("voice") }, stageMs = 400L, holdMs = 600),
+            Step("Nothing here leaves their account.",
+                onStage = { delay(800); it.openPanel(null) }, stageMs = 800L),
         )),
-        Unit("outro", "🏁", "Closing card", 8, steps = listOf(
+        Unit("outro", "🏁", "Closing card", steps = listOf(
             Step("Aphasia takes the words. It does not take the person.", holdMs = 1200),
         )),
     )
@@ -421,14 +468,15 @@ object DemoController {
      *  上限 20 秒：系統 TTS 的 onDone 不是保證會來的（引擎被系統回收、語音包正在
      *  更新、utterance 被丟掉都不會回呼）。沒有上限的話演示會永遠卡在這一步，
      *  而錄影還開著——使用者拿到的是一支停在某個畫面錄了十分鐘的影片。 */
-    private suspend fun speakAndWait(stage: Stage, text: String) {
+    private suspend fun speakAndWait(stage: Stage, text: String, english: Boolean = false) {
         audioFloor.withLock {
             kotlinx.coroutines.withTimeoutOrNull(SPEAK_TIMEOUT_MS) {
                 suspendCancellableCoroutine<kotlin.Unit> { cont ->
                     var resumed = false
-                    stage.speakAloud(text) {
+                    val done = {
                         if (!resumed) { resumed = true; if (cont.isActive) cont.resume(kotlin.Unit) }
                     }
+                    if (english) stage.speakAloudEnglish(text, done) else stage.speakAloud(text, done)
                 }
             }
         }
@@ -456,7 +504,8 @@ object DemoController {
         stage.synthesizing(true)
         try { delay(VOICE_SYNTH_DELAY_MS) } finally { stage.synthesizing(false) }
         val clip = voiceClips[text]?.takeIf { it.exists() && it.length() > 0 }
-        if (clip != null) playClip(clip) else speakAndWait(stage, text)
+        // 樣本句是英文的 → 退路也要用英文語音（english = true）
+        if (clip != null) playClip(clip) else speakAndWait(stage, text, english = true)
     }
 
     /** 專屬聲音的預錄檔（和旁白那份分開：不同角色，不能互相覆蓋）。 */
@@ -465,7 +514,7 @@ object DemoController {
     private suspend fun speakDemoSentence(stage: Stage, text: String) {
         stage.synthesizing(true)
         try { delay(VOICE_SYNTH_DELAY_MS) } finally { stage.synthesizing(false) }
-        speakAndWait(stage, text)
+        speakAndWait(stage, text, english = true)   // 樣本句是英文的
     }
 
     /** 逐字打進輸入框。一次貼上看起來像作弊，逐字打才看得懂使用者在做什麼。 */
@@ -631,7 +680,8 @@ object DemoController {
                             if (!stage.focusWasVisible(f)) {
                                 android.util.Log.w(
                                     "DemoController",
-                                    "錄影池：這一步要講「$f」，但它不在畫面上 — 「${s.cap.take(48)}」"
+                                    "錄影池：這一步要講「$f」，但畫面沒有確認它看得見" +
+                                        "（不在畫面上，或這個頁面根本沒在聽捲動訊號）— 「${s.cap.take(48)}」"
                                 )
                             }
                         }
