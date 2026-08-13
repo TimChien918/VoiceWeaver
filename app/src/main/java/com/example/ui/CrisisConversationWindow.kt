@@ -39,6 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ai.VoiceWeaverViewModel
+import com.example.safety.CrisisHotlineDirectory
 
 // 危機介入專用的療癒色盤（與主題無關，永遠柔和、安定）
 private val CalmBg1 = Color(0xFF1B2A4A)
@@ -78,6 +82,18 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
     val ctx = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val familyPhone = settings.emergencyPhoneNumber
+
+    // 求救號碼依所在國家。**先畫再更新**：視窗一開就得有可以按的按鈕，
+    // 不能卡在等 GPS 冷啟動（動輒數秒，而這裡正是最不能等的地方）。
+    // 先用快取的國別畫出來，GPS 回來若判到別的國家再換掉。
+    var hotlines by remember {
+        mutableStateOf(CrisisHotlineDirectory.forCountry(viewModel.lastKnownCountryCode()))
+    }
+    LaunchedEffect(state.active) {
+        if (!state.active) return@LaunchedEffect
+        val cc = viewModel.resolveCountryCode() ?: return@LaunchedEffect
+        hotlines = CrisisHotlineDirectory.forCountry(cc)
+    }
 
     // 家人輸入 /call → forceJoinCall +1 → 強制使用者自動加入視訊房（網頁跳轉）
     LaunchedEffect(state.forceJoinCall) {
@@ -215,10 +231,10 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
                 )
             }
 
-            // ── 安心專線 / 119 ──
+            // ── 求救專線（號碼依所在國家，見 CrisisHotlineDirectory）──
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                HotlineButton(I18n.tr("1925 安心專線"), "1925", CalmAccent, Modifier.weight(1f), ctx)
-                HotlineButton(I18n.tr("119 緊急"), "119", CalmWarm, Modifier.weight(1f), ctx)
+                HotlineButton(hotlines.crisis.label(), hotlines.crisis.number, CalmAccent, Modifier.weight(1f), ctx)
+                HotlineButton(hotlines.emergency.label(), hotlines.emergency.number, CalmWarm, Modifier.weight(1f), ctx)
             }
 
             // ── 結束由家人控制：使用者無法自行關閉，需家人在 Telegram 輸入 /end ──

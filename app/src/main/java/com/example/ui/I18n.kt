@@ -109,19 +109,25 @@ object I18n {
             "긴급 연락처에 현재 위치와 함께 즉시 메시지를 보내고, 가족과 대화할 수 있는 창을 엽니다."),
         "通知家人" to arrayOf("Alert family", "家族に知らせる", "가족에게 알리기"),
         "求救" to arrayOf("Help", "助けを求める", "도움 요청"),
+        // 危機視窗撥號鍵的用途標籤。號碼不寫在這裡——按鈕文字是「號碼 空格 用途」，
+        // 號碼由 CrisisHotlineDirectory 依所在國家決定（988/911、1925/119…）。
+        "安心專線" to arrayOf("Crisis line", "相談ダイヤル", "상담 전화"),
+        "緊急" to arrayOf("Emergency", "緊急", "긴급"),
+        // LocationTracker 的 POI 分類標籤。這四個原本沒有譯文，英文介面下
+        // 會直接把中文分類名塞進句子裡（「我在 健身房」）。
+        "夜市" to arrayOf("night market", "夜市", "야시장"),
+        "電影院" to arrayOf("cinema", "映画館", "영화관"),
+        "健身房" to arrayOf("gym", "ジム", "헬스장"),
+        "KTV" to arrayOf("karaoke", "カラオケ", "노래방"),
+        "%1\$s 附近" to arrayOf("near %1\$s", "%1\$s 付近", "%1\$s 근처"),
         "正在通知家人…" to arrayOf("Alerting your family…", "家族に知らせています…", "가족에게 알리는 중…"),
         "✅ 已通知家人，並附上你的位置。" to arrayOf(
             "✅ Your family has been alerted, with your location.",
             "✅ 家族に位置情報つきで知らせました。",
             "✅ 위치와 함께 가족에게 알렸습니다."),
-        "⚠ 通報傳送失敗（%s）。請直接撥打 1925 安心專線或 119。" to arrayOf(
-            "⚠ The alert could not be sent (%s). Please call 1925 or 119 directly.",
-            "⚠ 通報を送信できませんでした（%s）。1925 または 119 に直接お電話ください。",
-            "⚠ 신고를 보내지 못했습니다(%s). 1925 또는 119로 직접 전화해 주세요."),
-        "⚠ 通報傳送失敗。請直接撥打 1925 安心專線或 119。" to arrayOf(
-            "⚠ The alert could not be sent. Please call 1925 or 119 directly.",
-            "⚠ 通報を送信できませんでした。1925 または 119 に直接お電話ください。",
-            "⚠ 신고를 보내지 못했습니다. 1925 또는 119로 직접 전화해 주세요."),
+        // 註：這裡原本有兩條「通報傳送失敗，請直接撥打 1925 / 119」，四種語言都寫死
+        // 台灣號碼（連英文都直譯成 "call 1925 or 119"），而且**沒有任何呼叫端**。
+        // 實際在用的是下面帶 %s 的那三條。留著只會讓人以為求救指引已經處理好了。
         "😖 我痛" to arrayOf("😖 Pain", "😖 痛い", "😖 아파요"),
         "我很痛，請幫幫我。" to arrayOf("I'm in pain, please help me.", "とても痛いです、助けてください。", "너무 아파요, 도와주세요."),
         "💧 喝水" to arrayOf("💧 Water", "💧 水", "💧 물"),
@@ -356,10 +362,11 @@ object I18n {
         // SafetyGuard.DEFENSIVE_SYSTEM_PROMPT 用。英文沿用其他危機訊息的作法，
         // 不寫死某個國家的號碼——這個 App 的英文使用者不一定在美國，
         // 給錯號碼比不給號碼更糟。
-        "我聽到了，建議聯絡家屬或撥打 1925 安心專線" to arrayOf(
-            "I hear you. Please reach out to your family, or call your local crisis line.",
-            "聞いています。ご家族に連絡するか、相談ダイヤルにお電話ください。",
-            "듣고 있습니다. 가족에게 연락하시거나 상담 전화로 연락해 주세요."),
+        // 專線號碼由呼叫端依所在國家帶進來（見 CrisisHotlineDirectory）。
+        "我聽到了，建議聯絡家屬或撥打 %1\$s" to arrayOf(
+            "I hear you. Please reach out to your family, or call %1\$s.",
+            "聞いています。ご家族に連絡するか、%1\$s にお電話ください。",
+            "듣고 있습니다. 가족에게 연락하시거나 %1\$s로 연락해 주세요."),
         "119 緊急" to arrayOf("119 emergency", "119 緊急", "119 긴급"),
         "🔒 為了你的安全，這個畫面需要家人確認後才能關閉\n（家人在訊息輸入 /end 即可結束）" to arrayOf("🔒 For your safety, this screen closes only after family confirms\n(family sends /end to finish)", "🔒 安全のため、家族の確認後に閉じます\n（家族が /end で終了）", "🔒 안전을 위해 가족 확인 후 닫힙니다\n(가족이 /end 입력 시 종료)"),
         "畫面與聲音僅安全傳給家人，不會公開。家人可用 /call 視訊、/camera 重拍。" to arrayOf("Screen and audio are sent privately to family only. Family can use /call and /camera.", "画面と音声は家族にのみ安全に送信。家族は /call /camera 利用可。", "화면과 소리는 가족에게만 안전 전송. 가족은 /call /camera 사용 가능."),
@@ -592,9 +599,11 @@ object I18n {
         "測試中 " to arrayOf("Testing", "テスト中", "테스트 중"),
         "內容涉及高風險意圖，語音輸出已鎖定。請照護者協助確認。" to arrayOf("This may involve high-risk intent; voice output is locked. Please have a caregiver confirm.", "高リスクの意図の可能性があり、音声出力をロックしました。介護者に確認を依頼してください。", "고위험 의도가 있을 수 있어 음성 출력이 잠겼습니다. 보호자 확인을 요청하세요."),
         "偵測到高風險訊息，正在通報緊急聯絡人…" to arrayOf("High-risk message detected; notifying the emergency contact…", "高リスクのメッセージを検出、緊急連絡先へ通報中…", "고위험 메시지 감지, 긴급 연락처에 알리는 중…"),
-        "⚠ 已通報緊急聯絡人。語音輸出已鎖定，請照護者協助。\n如有立即危險請撥打 1925 安心專線或 119。" to arrayOf("⚠ Emergency contact notified. Voice output is locked; please have a caregiver help.\nIf in immediate danger, call your local crisis line or emergency number.", "⚠ 緊急連絡先へ通報しました。音声出力はロック中、介護者の支援を。\n差し迫った危険があれば相談ダイヤルや緊急番号へ。", "⚠ 긴급 연락처에 알렸습니다. 음성 출력이 잠김, 보호자 도움을 받으세요.\n즉각적 위험 시 상담 전화나 긴급 번호로."),
-        "⚠ 偵測到高風險訊息，但通報傳送失敗（%s）。請直接撥打 1925 安心專線或 119。" to arrayOf("⚠ High-risk message detected but the alert failed to send (%s). Please call your local crisis line or emergency number directly.", "⚠ 高リスクを検出しましたが通報の送信に失敗（%s）。相談ダイヤルや緊急番号へ直接。", "⚠ 고위험 감지, 그러나 알림 전송 실패(%s). 상담 전화나 긴급 번호로 직접 연락."),
-        "⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 1925 安心專線或 119。" to arrayOf("⚠ High-risk message detected; voice output is locked. Please call your local crisis line or emergency number.", "⚠ 高リスクを検出、音声出力をロック。相談ダイヤルや緊急番号へ。", "⚠ 고위험 감지, 음성 출력 잠김. 상담 전화나 긴급 번호로."),
+        // 號碼由呼叫端依所在國家帶進來（見 CrisisHotlineDirectory）。原本這裡寫死
+        // 1925／119，人在美國看到的就是兩支撥不通的號碼——而這是鎖定當下唯一的出口。
+        "⚠ 已通報緊急聯絡人。語音輸出已鎖定，請照護者協助。\n如有立即危險請撥打 %1\$s 或 %2\$s。" to arrayOf("⚠ Emergency contact notified. Voice output is locked; please have a caregiver help.\nIf in immediate danger, call %1\$s or %2\$s.", "⚠ 緊急連絡先へ通報しました。音声出力はロック中、介護者の支援を。\n差し迫った危険があれば %1\$s または %2\$s へ。", "⚠ 긴급 연락처에 알렸습니다. 음성 출력이 잠김, 보호자 도움을 받으세요.\n즉각적 위험 시 %1\$s 또는 %2\$s로 연락하세요."),
+        "⚠ 偵測到高風險訊息，但通報傳送失敗（%1\$s）。請直接撥打 %2\$s 或 %3\$s。" to arrayOf("⚠ High-risk message detected but the alert failed to send (%1\$s). Please call %2\$s or %3\$s directly.", "⚠ 高リスクを検出しましたが通報の送信に失敗（%1\$s）。%2\$s または %3\$s へ直接お電話ください。", "⚠ 고위험 감지, 그러나 알림 전송 실패(%1\$s). %2\$s 또는 %3\$s로 직접 연락하세요."),
+        "⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 %1\$s 或 %2\$s。" to arrayOf("⚠ High-risk message detected; voice output is locked. Please call %1\$s or %2\$s.", "⚠ 高リスクを検出、音声出力をロック。%1\$s または %2\$s へお電話ください。", "⚠ 고위험 감지, 음성 출력 잠김. %1\$s 또는 %2\$s로 연락하세요."),
         "鼻子頭控追蹤中：轉頭移動游標" to arrayOf("Nose head-tracking on: turn your head to move the cursor", "鼻ヘッドトラッキング中：首を向けてカーソル移動", "코 헤드 추적 중: 고개를 돌려 커서 이동"),
         "已重新置中：保持自然姿勢，轉頭即可移動游標" to arrayOf("Recentered: keep a natural posture; turn your head to move the cursor", "再センタリング完了：自然な姿勢で、首を向けて移動", "다시 중앙 정렬: 자연스러운 자세로, 고개를 돌려 이동"),
         "已把現場畫面與視訊連結傳給家人" to arrayOf("Sent the scene and a video link to family", "現場の画像とビデオリンクを家族に送信", "현장 화면과 영상 링크를 가족에게 전송"),
@@ -672,10 +681,13 @@ object I18n {
             "ナレーションを含める（無音版も同時に保存）",
             "내레이션 포함 — 무음 버전도 함께 저장"),
         "我想要喝一杯水" to arrayOf("I would like a glass of water", "水を一杯ください", "물 한 잔 주세요"),
-        "旁白錄不起來（{n}/{total} 句）：連不到電腦端的 GPT-SoVITS。請確認語音中心開著、位址設定正確，再試一次。" to arrayOf(
-            "Could not record the narration ({n} of {total} lines): the computer's GPT-SoVITS is unreachable. Check that the voice centre is running and the address is correct, then try again.",
-            "ナレーションを録音できません（{n}/{total} 行）：PCのGPT-SoVITSに接続できません。ボイスセンターが起動しているか、アドレスが正しいか確認してから再試行してください。",
-            "내레이션을 녹음할 수 없습니다({n}/{total} 문장): 컴퓨터의 GPT-SoVITS에 연결할 수 없습니다. 보이스 센터가 실행 중인지, 주소가 올바른지 확인한 뒤 다시 시도하세요."),
+        // 重試三次＋補漏一輪之後還缺，才會看到這則。所以不能只寫「連不到」——
+        // 使用者多半已經連上了，缺的是那條線不夠穩。要指出實際該查的地方，
+        // 而且要講清楚無線與 Colab 都是可行的（很多人以為只有插線能用）。
+        "旁白錄不起來（{n}/{total} 句）：已重試仍失敗。USB 直連最穩；走 Wi-Fi／Tailscale／Colab 時請確認電腦或 Colab 沒有休眠、位址是 9880（不是 9879），然後再試一次——已經錄好的句子會保留，不用重來。" to arrayOf(
+            "Could not record the narration ({n} of {total} lines) even after retries. A USB connection is the most reliable; over Wi-Fi, Tailscale or Colab, check that the computer or Colab session has not gone to sleep and that the port is 9880 (not 9879), then try again — lines already recorded are kept, so you do not start over.",
+            "ナレーションを録音できません（{n}/{total} 行）：再試行しても失敗しました。USB 直結が最も安定します。Wi-Fi／Tailscale／Colab の場合は、PC や Colab がスリープしていないか、ポートが 9880（9879 ではない）かを確認して再試行してください。録音済みの行は保持されるのでやり直しにはなりません。",
+            "내레이션을 녹음할 수 없습니다({n}/{total} 문장): 재시도해도 실패했습니다. USB 직결이 가장 안정적입니다. Wi-Fi／Tailscale／Colab을 쓸 때는 컴퓨터나 Colab 세션이 절전에 들어가지 않았는지, 포트가 9880(9879 아님)인지 확인한 뒤 다시 시도하세요. 이미 녹음된 문장은 유지되므로 처음부터 다시 하지 않아도 됩니다."),
         "電腦端語音（GPT-SoVITS）沒有啟用，旁白會用手機的系統語音唸。要用你自己的角色語音，請先到設定把電腦端語音打開並連上。" to arrayOf(
             "Computer voice (GPT-SoVITS) is off, so the narration will use the phone's system voice. To hear your own voice, turn on the computer voice in Settings and connect first.",
             "PC音声（GPT-SoVITS）が無効なため、ナレーションは端末のシステム音声になります。自分の声を使うには設定でPC音声を有効にして接続してください。",

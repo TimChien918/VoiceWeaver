@@ -505,7 +505,7 @@ class MainActivity : ComponentActivity() {
                                         onNarrationMissing = { missing, total ->
                                             android.widget.Toast.makeText(
                                                 act,
-                                                I18n.tr("旁白錄不起來（{n}/{total} 句）：連不到電腦端的 GPT-SoVITS。請確認語音中心開著、位址設定正確，再試一次。")
+                                                I18n.tr("旁白錄不起來（{n}/{total} 句）：已重試仍失敗。USB 直連最穩；走 Wi-Fi／Tailscale／Colab 時請確認電腦或 Colab 沒有休眠、位址是 9880（不是 9879），然後再試一次——已經錄好的句子會保留，不用重來。")
                                                     .replace("{n}", missing.toString())
                                                     .replace("{total}", total.toString()),
                                                 android.widget.Toast.LENGTH_LONG

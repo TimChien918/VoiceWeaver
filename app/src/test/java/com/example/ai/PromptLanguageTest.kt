@@ -1,12 +1,14 @@
 package com.example.ai
 
 import com.example.data.AppLanguage
+import com.example.safety.CrisisHotlineDirectory
 import com.example.safety.SafetyGuard
 import com.example.ui.I18n
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -20,7 +22,14 @@ class PromptLanguageTest {
 
     private val original = I18n.lang
 
-    @After fun restore() { I18n.lang = original }
+    @Before fun clearCountry() { CrisisHotlineDirectory.resetForTest() }
+
+    @After fun restore() {
+        I18n.lang = original
+        // 專線的國別是 process 層級的單例。不清掉的話，前一個測試記住的國家
+        // 會讓這裡的斷言依執行順序時好時壞。
+        CrisisHotlineDirectory.resetForTest()
+    }
 
     private fun hasCjk(text: String) = text.any { it.code in 0x4E00..0x9FFF }
 
@@ -50,15 +59,26 @@ class PromptLanguageTest {
     @Test
     fun `安全 prompt 的專線說法跟著介面語言`() {
         I18n.lang = AppLanguage.En
-        assertTrue(
-            "英文介面應給英文的求助說法",
-            SafetyGuard.DEFENSIVE_SYSTEM_PROMPT.contains("crisis line"),
-        )
+        val en = SafetyGuard.DEFENSIVE_SYSTEM_PROMPT
+        assertTrue("英文介面應給英文的求助說法：\n$en", en.contains("Crisis line", ignoreCase = true))
         I18n.lang = AppLanguage.ZhTW
         assertTrue(
             "中文介面應保留 1925",
             SafetyGuard.DEFENSIVE_SYSTEM_PROMPT.contains("1925"),
         )
+    }
+
+    /**
+     * 專線號碼要跟著**所在國家**，不是只跟著介面語言。
+     * 台灣人用中文介面去美國，prompt 裡建議的號碼必須是 988 而不是 1925。
+     */
+    @Test
+    fun `安全 prompt 的專線號碼跟著所在國家`() {
+        I18n.lang = AppLanguage.ZhTW
+        CrisisHotlineDirectory.rememberCountry("US")
+        val p = SafetyGuard.DEFENSIVE_SYSTEM_PROMPT
+        assertTrue("人在美國就該建議 988：\n$p", p.contains("988"))
+        assertFalse("人在美國不該再出現 1925：\n$p", p.contains("1925"))
     }
 
     @Test
@@ -177,7 +197,7 @@ class PromptLanguageTest {
         I18n.lang = AppLanguage.ZhTW
         assertEquals(
             "我聽到了，建議聯絡家屬或撥打 1925 安心專線",
-            I18n.tr("我聽到了，建議聯絡家屬或撥打 1925 安心專線"),
+            I18n.tr("我聽到了，建議聯絡家屬或撥打 %1\$s").format("1925 安心專線"),
         )
     }
 
@@ -186,7 +206,8 @@ class PromptLanguageTest {
         // I18n.tr 查無譯文時會安全退回中文原文——那對這句話來說是失敗，
         // 英文使用者會在自己的介面上看到一句看不懂的中文。
         I18n.lang = AppLanguage.En
-        val translated = I18n.tr("我聽到了，建議聯絡家屬或撥打 1925 安心專線")
+        val translated = I18n.tr("我聽到了，建議聯絡家屬或撥打 %1\$s")
+            .format(CrisisHotlineDirectory.forCountry("US").crisis.label())
         assertFalse("應有英文譯文，實得：$translated", hasCjk(translated))
     }
 }

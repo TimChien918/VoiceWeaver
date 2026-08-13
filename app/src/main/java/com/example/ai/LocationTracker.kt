@@ -59,6 +59,81 @@ class LocationTracker(
     /** 離線 POI 索引：bundled in APK，永遠免費、無 API、無用量限制。 */
     private val offlinePoi: OfflinePoiIndex by lazy { OfflinePoiIndex(context) }
 
+    /**
+     * 最後一次判定出來的國別（ISO 3166-1 alpha-2）。
+     *
+     * 危機視窗要**立刻**畫出求救按鈕，不能卡在等 GPS 定位（冷啟動動輒數秒，
+     * 而那正是最不能等的時刻）。所以視窗先用這個快取值畫，GPS 回來再更新。
+     * 平常的定位取樣會順手把它填好，多半在危機發生前就已經有值了。
+     */
+    @Volatile
+    var lastKnownCountryCode: String? = null
+        private set
+
+    /**
+     * 只為了拿國別的一次定位。給危機專線挑號碼用（見 `CrisisHotlineDirectory`）。
+     *
+     * 與 [getCurrentLocation] 的差別：不做 POI 比對、不管精度門檻。國別只需要
+     * 「在哪個國家」這種公里級的答案，用街區級的定位綽綽有餘——為了選對求救號碼
+     * 去等一個高精度定位是本末倒置。
+     *
+     * @return ISO 3166-1 alpha-2，判不出來時 null（呼叫端要有退路）。
+     */
+    suspend fun resolveCountryCode(): String? = withContext(Dispatchers.IO) {
+        if (!hasLocationPermission()) {
+            Log.w(TAG, "沒有定位權限，無法判定國別")
+            return@withContext lastKnownCountryCode
+        }
+        val loc = try {
+            fetchLocation()
+        } catch (e: Exception) {
+            Log.w(TAG, "國別定位失敗", e)
+            null
+        } ?: return@withContext lastKnownCountryCode
+
+        val cc = countryCodeFor(loc.latitude, loc.longitude)
+        if (cc != null) {
+            lastKnownCountryCode = cc
+            com.example.safety.CrisisHotlineDirectory.rememberCountry(cc)
+        }
+        cc ?: lastKnownCountryCode
+    }
+
+    /**
+     * 經緯度 → 國別。Geocoder 優先（準），失敗才用邊界框（離線也能動）。
+     *
+     * 邊界框只涵蓋這個 App 有介面語言的四個國家，而且刻意寫得保守——寧可回 null
+     * 讓上層退回介面語言，也不要把邊界附近的人判到隔壁國家去。
+     */
+    private suspend fun countryCodeFor(lat: Double, lon: Double): String? {
+        geocodeCountry(lat, lon)?.let { return it }
+        Log.w(TAG, "Geocoder 判不出國別，改用邊界框")
+        return boundingBoxCountry(lat, lon)
+    }
+
+    private suspend fun geocodeCountry(lat: Double, lon: Double): String? = runCatching {
+        val geocoder = Geocoder(context, Locale.US)
+        val addresses: List<Address> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            suspendCancellableCoroutine { cont ->
+                geocoder.getFromLocation(lat, lon, 1) { list -> cont.resume(list) }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            geocoder.getFromLocation(lat, lon, 1) ?: emptyList()
+        }
+        addresses.firstOrNull()?.countryCode?.takeIf { it.isNotBlank() }?.uppercase(Locale.ROOT)
+    }.getOrNull()
+
+    // 順序有意義：韓國整個落在日本那個框裡面，KR 一定要排在 JP 前面，
+    // 否則首爾會被判成日本、撥到日本的專線。
+    private fun boundingBoxCountry(lat: Double, lon: Double): String? = when {
+        isUnitedStatesCoordinate(lat, lon) -> "US"
+        lat in 21.5..25.5 && lon in 119.5..122.2 -> "TW"
+        lat in 33.0..38.7 && lon in 125.5..129.8 -> "KR"
+        lat in 24.0..46.0 && lon in 122.5..146.5 -> "JP"
+        else -> null
+    }
+
     suspend fun getCurrentLocation(): LocationResult? = withContext(Dispatchers.IO) {
         if (!hasLocationPermission()) {
             Log.w(TAG, "Location permission not granted")
@@ -143,6 +218,17 @@ class LocationTracker(
         addr: Address?,
         accuracyM: Float
     ): LocationResult {
+        // 順手把國別快取起來。危機視窗開的時候不會有時間等 GPS，靠的就是這個值。
+        // 一定要留紀錄：求救號碼是照這個值挑的，事後若有人問「為什麼撥的是這支」，
+        // 沒有這行就查不出來。
+        (addr?.countryCode?.takeIf { it.isNotBlank() }?.uppercase(Locale.ROOT)
+            ?: boundingBoxCountry(lat, lon))
+            ?.let {
+                if (it != lastKnownCountryCode) Log.i(TAG, "國別判定：$it（求救專線會依此挑號碼）")
+                lastKnownCountryCode = it
+                com.example.safety.CrisisHotlineDirectory.rememberCountry(it)
+            }
+
         // ① 住家最優先：純距離判定，與 Geocoder / Overpass 都無關
         val home = homeProvider()
         val homeHit = home != null && distanceMeters(lat, lon, home.latitude, home.longitude) <= home.radiusMeters
@@ -162,7 +248,9 @@ class LocationTracker(
                 addr?.locality?.takeIf { it.isNotBlank() },
                 addr?.thoroughfare?.takeIf { it.isNotBlank() }
             ).firstOrNull()
-            return LocationResult(lat, lon, fullAddress, coarse?.let { "$it 附近" } ?: fullAddress)
+            // 「附近」要走翻譯，不能直接串中文——英文介面會變成 "Main Street 附近"。
+            return LocationResult(lat, lon, fullAddress,
+                coarse?.let { com.example.ui.I18n.tr("%1\$s 附近").format(it) } ?: fullAddress)
         }
 
         // ② **離線 POI**（首選）：bundled 在 APK，零網路、零 API key、無用量限制

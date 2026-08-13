@@ -709,13 +709,23 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             val outcome = runCatching {
                 emergencyTrigger.interceptAndReport(text, poiTag = poiTag)
             }.getOrNull()
+            // 鎖定訊息裡的號碼要跟著所在國家走。這個對話框只有文字、沒有撥號鍵，
+            // 所以號碼寫錯就等於把人導向一支撥不通的電話。用已快取的國別即可——
+            // 這條路徑上 emergencyTrigger 剛取過位置，快取是熱的。
+            val lines = com.example.safety.CrisisHotlineDirectory
+                .forCountry(locationTracker.lastKnownCountryCode)
+            val crisisNo = lines.crisis.label()
+            val emergencyNo = lines.emergency.label()
             _speakGate.value = when (outcome) {
                 is com.example.safety.EmergencyTrigger.Outcome.Sent ->
-                    SpeakGate.Locked(I18n.tr("⚠ 已通報緊急聯絡人。語音輸出已鎖定，請照護者協助。\n如有立即危險請撥打 1925 安心專線或 119。"))
+                    SpeakGate.Locked(I18n.tr("⚠ 已通報緊急聯絡人。語音輸出已鎖定，請照護者協助。\n如有立即危險請撥打 %1\$s 或 %2\$s。")
+                        .format(crisisNo, emergencyNo))
                 is com.example.safety.EmergencyTrigger.Outcome.Failed ->
-                    SpeakGate.Locked(I18n.tr("⚠ 偵測到高風險訊息，但通報傳送失敗（%s）。請直接撥打 1925 安心專線或 119。").format(outcome.reason.take(40)))
+                    SpeakGate.Locked(I18n.tr("⚠ 偵測到高風險訊息，但通報傳送失敗（%1\$s）。請直接撥打 %2\$s 或 %3\$s。")
+                        .format(outcome.reason.take(40), crisisNo, emergencyNo))
                 else ->
-                    SpeakGate.Locked(I18n.tr("⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 1925 安心專線或 119。"))
+                    SpeakGate.Locked(I18n.tr("⚠ 偵測到高風險訊息，語音輸出已鎖定。請撥打 %1\$s 或 %2\$s。")
+                        .format(crisisNo, emergencyNo))
             }
         }
         // 開啟與家人即時對話的危機介入視窗（安撫情緒）
@@ -1459,6 +1469,19 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         return Triple(r.address.ifBlank { "%.4f, %.4f".format(r.latitude, r.longitude) },
                       r.latitude, r.longitude)
     }
+
+    /**
+     * 上一次判定出來的國別，沒有就 null。危機視窗**同步**取用：那個畫面要立刻
+     * 畫出求救按鈕，不能等 GPS。
+     */
+    fun lastKnownCountryCode(): String? = locationTracker.lastKnownCountryCode
+
+    /**
+     * 為了挑對求救專線而取一次 GPS 國別。失敗回 null，呼叫端要有退路
+     * （`CrisisHotlineDirectory.forCountry(null)` 會退回介面語言）。
+     */
+    suspend fun resolveCountryCode(): String? =
+        runCatching { locationTracker.resolveCountryCode() }.getOrNull()
 
     /**
      * 主畫面位置卡的「📍 設為我家」一鍵動作：

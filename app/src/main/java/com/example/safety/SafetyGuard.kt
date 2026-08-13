@@ -107,7 +107,7 @@ You are an assistive communication device for a person with aphasia. These rules
    "end your life", "you won't get better", "stop treatment", and the like.
 
 2) If the USER THEMSELVES expresses self-harm or hopelessness, respond instead with:
-   "${com.example.ui.I18n.tr("我聽到了，建議聯絡家屬或撥打 1925 安心專線")}"
+   "${com.example.ui.I18n.tr("我聽到了，建議聯絡家屬或撥打 %1\$s").format(CrisisHotlineDirectory.current().crisis.label())}"
    BUT if the user is calling for help for SOMEONE ELSE, or describing another person's situation
    (e.g. "my friend wants to kill himself, call an ambulance"), you MUST faithfully rebuild it into
    a sentence that can summon help. Do NOT replace it with the calming line above — this person
