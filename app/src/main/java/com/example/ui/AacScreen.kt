@@ -678,6 +678,65 @@ internal fun aacScaleFor(mode: com.example.data.SeverityMode): Float =
         com.example.data.SeverityMode.Severe -> 2.1f
     }
 
+/** 卡片再怎麼擠也不能小於這個邊長，否則手抖或視力差的人根本點不到。 */
+internal val AAC_CARD_FLOOR = 96.dp
+
+/**
+ * 圖卡格線要開幾欄。
+ *
+ * **為什麼不能只用 `GridCells.Adaptive(minSize)`：** 卡片是正方形
+ * （`aspectRatio(1f)`），所以邊長＝欄寬＝可用寬度÷欄數——**完全由寬度決定，
+ * 跟高度無關**。橫向手機是「又寬又矮」（實測 933×387dp，圖卡區只剩約 290dp 高），
+ * 寬度算出 3 欄 → 卡片邊長 164dp → 一列就吃掉 164dp，加上分組標題之後
+ * **連第一列都露不完整**，畫面上就是一大片白配半張卡。
+ *
+ * 所以欄數要同時滿足兩件事：
+ *  1. 卡片不小於嚴重程度想要的大小（`aacCardMinSize`）——這是無障礙需求
+ *  2. 至少**一整列**要看得完整；空間夠的話盡量讓**兩列**看得到
+ *
+ * 兩者衝突時以「看得到」優先，但不會小於 [AAC_CARD_FLOOR]：一張點不到的卡片
+ * 和看不到的卡片一樣沒用。
+ *
+ * @param availableWidth 格線可用寬度（已扣掉外距）
+ * @param availableHeight 格線可用高度。<= 0 表示量不到，就只照寬度算
+ */
+internal fun aacGridColumns(
+    availableWidth: androidx.compose.ui.unit.Dp,
+    availableHeight: androidx.compose.ui.unit.Dp,
+    preferredCardSize: androidx.compose.ui.unit.Dp,
+    gap: androidx.compose.ui.unit.Dp = 12.dp,
+): Int {
+    if (availableWidth <= 0.dp) return 1
+    // 給定欄數時，一張卡的邊長（欄與欄之間有間距）
+    fun cardSize(cols: Int): androidx.compose.ui.unit.Dp =
+        ((availableWidth - gap * (cols - 1)) / cols).coerceAtLeast(0.dp)
+
+    // ① 先照嚴重程度想要的大小算——這是沒有高度限制時的答案
+    var cols = 1
+    while (cols < MAX_AAC_COLUMNS && cardSize(cols + 1) >= preferredCardSize) cols++
+
+    if (availableHeight <= 0.dp) return cols
+
+    // ② 高度不夠時往上加欄（欄越多卡越小），直到**一整列**放得下。
+    //
+    //    只做到「一列」為止，不再往下擠。曾經多寫一步「盡量讓兩列看得到」，
+    //    結果把重度模式的大卡片也縮掉了——重度的 240dp 就是要「一次看一張」，
+    //    那是無障礙需求不是版面偏好。單元測試抓到的正是這件事。
+    fun rowFits(cols: Int): Boolean {
+        val c = cardSize(cols)
+        return c > 0.dp && c <= availableHeight
+    }
+    while (!rowFits(cols) && cols < MAX_AAC_COLUMNS && cardSize(cols + 1) >= AAC_CARD_FLOOR) cols++
+    return cols
+}
+
+/** 欄數上限。再多就變成一排小圖示，失去圖卡的意義。 */
+private const val MAX_AAC_COLUMNS = 8
+
+/** 分組標題（「基礎溝通」等）大致佔掉的高度。算卡片可用高度時要先扣掉，
+ *  不然標題的位置會被當成卡片能用的空間，第一列還是會被切掉。 */
+private val AAC_GROUP_HEADER_H = 32.dp
+
 @Composable
 private fun CategoryGrid(
     p: com.example.ui.theme.AppPalette,
@@ -695,10 +754,13 @@ private fun CategoryGrid(
         )
     }
     val orderedCategories = remember(groups) { groups.flatMap { it.second } }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // 欄數同時考慮寬與高。只看寬度的話，橫向手機（又寬又矮）會算出大卡片，
+    // 然後連第一列都露不完整——見 aacGridColumns 的說明。
+    // 扣掉分組標題大致佔掉的高度，才不會把標題的位置也算進卡片可用高度。
+    val gridCols = aacGridColumns(maxWidth, maxHeight - AAC_GROUP_HEADER_H, cardMin)
     LazyVerticalGrid(
-        // 自適應欄數：平板與橫向自動變多欄，不再把卡片拉長變形。
-        // 最小邊長跟著嚴重程度走——這是「超大圖卡」真正生效的地方。
-        columns = GridCells.Adaptive(minSize = cardMin),
+        columns = GridCells.Fixed(gridCols),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
@@ -741,6 +803,7 @@ private fun CategoryGrid(
             }
         }
     }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)   // combinedClickable：圖卡長按選單要用
@@ -769,8 +832,12 @@ private fun ItemGrid(
         }
         return
     }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // 同 CategoryGrid：欄數要看高度，否則橫向下第一列就露不完整。
+    // 這個格線沒有分組標題，整片高度都是卡片的。
+    val gridCols = aacGridColumns(maxWidth, maxHeight, cardMin, gap = 10.dp)
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = cardMin),
+        columns = GridCells.Fixed(gridCols),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize()
@@ -864,6 +931,7 @@ private fun ItemGrid(
                 }
             }
         }
+    }
     }
 }
 
