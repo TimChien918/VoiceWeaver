@@ -50,6 +50,18 @@ object DemoController {
     // 停的長度是縮短的，但「要等」這件事本身不是演的。
     private const val VOICE_SYNTH_DELAY_MS = 2_000L
 
+    // ── 預錄旁白的重試 ──────────────────────────────────────────────────
+    //
+    // 一段旁白大約 60 句，每句要電腦合成 10～30 秒。USB（adb reverse）是直通的，
+    // 幾乎不會掉；但走 Wi-Fi／Tailscale／ngrok(Colab) 只要**其中一句**遇到一次
+    // 抖動，原本的寫法就整支中止——而且是在使用者等完全部 60 句之後才中止。
+    // 體感就是「只有插線才錄得起來」。
+    //
+    // 一次失敗不代表這條線不能用，所以每句重試。退避是為了讓隧道有時間重建：
+    // 剛掉包的下一秒通常還是掉包。
+    private const val PRERECORD_ATTEMPTS = 3
+    private const val PRERECORD_BACKOFF_MS = 1_500L
+
     // 捲動動畫跑完要一點時間。不等就開始講，觀眾看到的是「畫面還在滑」而旁白
     // 已經在講那個東西了；而且太早檢查可見性也會誤報。
     private const val FOCUS_SETTLE_MS = 650L
@@ -461,6 +473,41 @@ object DemoController {
     private fun usableClip(line: String): java.io.File? =
         clips[line]?.takeIf { it.exists() && it.length() > 0 }
             ?: run { clips.remove(line); null }
+
+    /**
+     * 預錄一句，失敗就重試。
+     *
+     * 為什麼要重試：走 Wi-Fi／Tailscale／ngrok(Colab) 時，掉一句的原因幾乎都是
+     * 暫時的（隧道剛冷啟動、手機剛從休眠醒來、DERP 中繼換路徑），不是「這條線
+     * 不能用」。原本沒有重試，於是六十句裡掉一句就整支中止——而且是在使用者
+     * 等完全部六十句之後。USB 幾乎不會遇到，所以看起來像「只有插線才能錄」。
+     *
+     * 退避是必要的：剛掉包的下一秒通常還是掉包，立刻重打只是把三次機會一次用完。
+     *
+     * @return 錄好的檔案；重試用盡仍失敗則 null（由呼叫端決定要不要中止）。
+     */
+    internal suspend fun prerecordWithRetry(
+        line: String,
+        record: (String, (java.io.File?) -> kotlin.Unit) -> kotlin.Unit,
+        /** 還在跑嗎。使用者按停止就不要再重試。抽成參數是為了讓測試能驅動它。 */
+        stillRunning: () -> Boolean = { _active.value },
+    ): java.io.File? {
+        repeat(PRERECORD_ATTEMPTS) { attempt ->
+            if (!stillRunning()) return null          // 使用者已經按了停止
+            val f = suspendCancellableCoroutine<java.io.File?> { cont ->
+                var resumed = false
+                record(line) { file ->
+                    if (!resumed) { resumed = true; if (cont.isActive) cont.resume(file) }
+                }
+            }
+            if (f != null && f.exists() && f.length() > 0) return f
+            if (attempt < PRERECORD_ATTEMPTS - 1) {
+                // 線性退避就夠了：合成本身要 10～30 秒，等待成本相對很小。
+                kotlinx.coroutines.delay(PRERECORD_BACKOFF_MS * (attempt + 1))
+            }
+        }
+        return null
+    }
     private var player: android.media.MediaPlayer? = null
 
     /** 讓 App 唸一句並等它唸完。不等的話畫面會跳到下一段，聲音才姍姍來遲蓋在別段上。
@@ -622,13 +669,18 @@ object DemoController {
                     _prep.value = 0 to todo.size
                     todo.forEachIndexed { i, line ->
                         _prep.value = i to todo.size
-                        val f = suspendCancellableCoroutine<java.io.File?> { cont ->
-                            var resumed = false
-                            prerecord(line) { file ->
-                                if (!resumed) { resumed = true; if (cont.isActive) cont.resume(file) }
-                            }
+                        prerecordWithRetry(line, prerecord)?.let { clips[line] = it }
+                    }
+                    // 補漏輪：跑完整批之後，把還缺的再收一次。
+                    // 隧道剛拉起來的那幾句最容易掉，等整批跑完連線通常已經穩了——
+                    // 這一輪常常就把它們補回來，省掉使用者重跑六十句的時間。
+                    val stillMissing = todo.filter { clips[it]?.exists() != true }
+                    if (stillMissing.isNotEmpty()) {
+                        _prep.value = 0 to stillMissing.size
+                        stillMissing.forEachIndexed { i, line ->
+                            _prep.value = i to stillMissing.size
+                            prerecordWithRetry(line, prerecord)?.let { clips[line] = it }
                         }
-                        if (f != null && f.exists() && f.length() > 0) clips[line] = f
                     }
                     // 專屬聲音的示範句另外錄一輪（不同角色，所以不能混在同一批）。
                     // 錄不起來不中止——退回系統 TTS 仍然演得下去，只是音色不對；
@@ -637,13 +689,7 @@ object DemoController {
                         .distinct().filter { voiceClips[it]?.exists() != true }
                     samples.forEachIndexed { i, line ->
                         _prep.value = (todo.size + i) to (todo.size + samples.size)
-                        val f = suspendCancellableCoroutine<java.io.File?> { cont ->
-                            var resumed = false
-                            prerecordVoice(line) { file ->
-                                if (!resumed) { resumed = true; if (cont.isActive) cont.resume(file) }
-                            }
-                        }
-                        if (f != null && f.exists() && f.length() > 0) voiceClips[line] = f
+                        prerecordWithRetry(line, prerecordVoice)?.let { voiceClips[line] = it }
                     }
                     _prep.value = null
 
