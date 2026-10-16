@@ -56,7 +56,7 @@ ENV_PY    = os.path.join(ENV_DIR, "python.exe")
 ENV_PYW   = os.path.join(ENV_DIR, "pythonw.exe")
 GS_DIR    = os.path.join(TOOLS_DIR, "GPT-SoVITS")
 READY_MARK = os.path.join(APPSUP, ".ready")
-CONTROL_VER = "3"
+CONTROL_VER = "5"
 
 # GPT-SoVITS 推論引擎程式碼來源（官方上游，使用者已授權）
 GPTSOVITS_CODE_URL = "https://codeload.github.com/RVC-Boss/GPT-SoVITS/zip/refs/heads/main"
@@ -146,6 +146,25 @@ try:
     import drive_uploader as gdrive   # 上傳曲庫到「使用者自己的」Google Drive（OAuth）
 except Exception:
     gdrive = None
+
+def _provision_client_secret():
+    """把 App 內建的 google_client_secret.json 就位到 %LOCALAPPDATA%\\VoiceWeaver，
+    讓 Drive 登入「安裝即可用」、使用者永遠不用手動放。桌面版 OAuth 的 client_secret
+    依 Google 定義非機密（本就隨 App 散布），所以內建進 App。"""
+    try:
+        target = os.path.join(APPSUP, "google_client_secret.json")
+        if os.path.isfile(target):
+            return
+        for d in (_MEIPASS, EXE_DIR, os.path.dirname(os.path.abspath(__file__))):
+            src = os.path.join(d, "google_client_secret.json")
+            if os.path.isfile(src):
+                os.makedirs(APPSUP, exist_ok=True)
+                shutil.copy2(src, target)
+                return
+    except Exception:
+        pass
+
+_provision_client_secret()
 
 # 預設曲庫根：App 自己的儲存空間（Mac: ~/Library/Application Support/VoiceWeaver，
 # Windows: %LOCALAPPDATA%\VoiceWeaver），不是使用者家目錄／外接磁碟。
@@ -345,6 +364,9 @@ def run_bootstrap(progress):
                 "x_transformers", "torchmetrics<=1.5", "pydantic<=2.10.6",
                 "ctranslate2>=4.0,<5", "av>=11", "pytorch-lightning",
                 "qrcode",   # 控制台「掃描連線」用，產生 QR Code 給手機掃
+                # 曲庫上傳使用者自己的 Google Drive（zip 版控制程式跑在此環境時需要；
+                # exe 版另把這些收進凍結檔，見 build_win_exe.ps1）
+                "google-api-python-client", "google-auth", "google-auth-oauthlib",
             ]
             _nvp = len(voice_pkgs)
             for _i, pkg in enumerate(voice_pkgs):
@@ -3256,7 +3278,9 @@ class App:
         if not gdrive.deps_ok():
             return "（缺 google-api-python-client；請更新環境）"
         if not gdrive.client_secret_path():
-            return f"（尚未放 google_client_secret.json 到 {os.path.expanduser('~/Library/Application Support/VoiceWeaver')}）"
+            _app_dir = getattr(gdrive, "_APP_DIR",
+                               APPSUP if IS_WIN else os.path.expanduser('~/Library/Application Support/VoiceWeaver'))
+            return f"（尚未放 google_client_secret.json 到 {_app_dir}）"
         try:
             if gdrive.is_signed_in():
                 ident = gdrive.firebase_identity() or {}
@@ -3521,10 +3545,11 @@ class App:
             messagebox.showinfo("VoiceWeaver", "環境缺 google 套件；請更新語音中心。")
             return
         if not gdrive.client_secret_path():
+            _app_dir = getattr(gdrive, "_APP_DIR",
+                               APPSUP if IS_WIN else os.path.expanduser('~/Library/Application Support/VoiceWeaver'))
             messagebox.showinfo("VoiceWeaver",
                                 "尚未放置 google_client_secret.json。\n請放到：\n"
-                                + os.path.join(os.path.expanduser('~/Library/Application Support/VoiceWeaver'),
-                                               'google_client_secret.json'))
+                                + os.path.join(_app_dir, 'google_client_secret.json'))
             return
         self.set_adv_status(self.t("開啟瀏覽器登入 Google…"))
         def task():

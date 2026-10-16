@@ -31,7 +31,7 @@ $LOG      = Join-Path $LOG_DIR 'install.log'
 $READY    = Join-Path $APPSUP '.ready'                     # 安裝完成標記（含版本）
 
 # 後端程式碼：自帶在安裝包內（私有 repo，不從網路取）
-$CONTROL_VER   = '3'                                       # 控制程式碼版本（更新就刷新後端）
+$CONTROL_VER   = '5'                                       # 控制程式碼版本（更新就刷新後端）
 
 # 快速路徑：既成環境（自帶或下載）
 $ENV_TAR_LOCAL = Join-Path $RES 'gpt-sovits-env.tar.gz'

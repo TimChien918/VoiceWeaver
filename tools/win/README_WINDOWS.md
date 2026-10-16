@@ -83,8 +83,8 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 ### 單一 exe（推薦）
 
 ```powershell
-# 任何系統 Python 皆可（不需 AI 環境），先裝打包工具：
-python -m pip install pyinstaller pillow
+# 任何系統 Python 皆可（不需 AI 環境），先裝打包工具 + Google 套件（Drive 上傳要內建進 exe）：
+python -m pip install pyinstaller pillow google-api-python-client google-auth google-auth-oauthlib
 # 打包：
 pwsh tools\win\build_win_exe.ps1
 # 產出：dist\VoiceWeaver語音中心.exe
@@ -92,6 +92,11 @@ pwsh tools\win\build_win_exe.ps1
 
 `build_win_exe.ps1` 會即時把正規的後端檔（`api_v2.py`、各 server、`GPT_SoVITS/configs`）塞進 exe，
 不需在 repo 提交重複的 `backend/` 目錄。
+
+> **Google Drive 上傳的 OAuth 用戶端**：`google_client_secret.json`（桌面版 client_secret）依 `.gitignore`
+> **不進 repo**。打包時若 `tools/GPT-SoVITS/google_client_secret.json` 存在，會自動內建進 exe/zip，
+> App 開機時 `_provision_client_secret()` 再把它就位到 `%LOCALAPPDATA%\VoiceWeaver`，使用者永遠不用手動放。
+> 缺這個檔也能打包，只是 Drive 登入會提示要放憑證。憑證取自 Google Cloud Console →「桌面應用程式」OAuth 用戶端。
 
 ### 既成環境 zip（快速路徑用）
 
@@ -126,6 +131,23 @@ pwsh tools\win\build_win_exe.ps1
 > **完整消除（給發行者）**：唯一能對所有下載者根本免除 SmartScreen 的方式是用 **Authenticode 程式碼
 > 簽章憑證**簽 exe（EV 憑證即時生效，一般憑證需累積下載量建立信譽）。自簽憑證無法消除 SmartScreen
 > （它看的是微軟雲端信譽，不是本機信任），僅能去除 UAC「不明發行者」提示。
+
+### 自簽憑證（把「發行者」改成自己的名字）
+
+若只想讓「發行者」從「不明的發行者」變成自己的名字（例：TimChien918），可用自簽憑證簽 exe：
+
+```powershell
+pwsh tools\win\sign_win_exe.ps1 -Trust
+```
+
+- 私鑰建立在 `Cert:\CurrentUser\My`，日後重簽會沿用同一張（發行者身分固定）。
+- `-Trust` 會把公開憑證裝進「本機使用者」的受信任根 + 受信任發行者，並匯出 `TimChien918-codesign.cer`。
+  之後**本機**的 UAC / 檔案簽章頁會顯示「已驗證：TimChien918」。
+- **別台電腦**要顯示為已驗證，需自行匯入那個 `.cer`（會跳一次 Windows 安全確認框，這是刻意防護）。
+
+> ⚠️ 自簽憑證**不會消除 SmartScreen**——SmartScreen 看的是微軟雲端信譽，自簽沒有。首次從網路下載
+> 執行時仍可能跳，只是「發行者」會顯示 TimChien918 而非「不明」。要根本消除仍需付費 EV 憑證，
+> 或用上面的「解除封鎖」移除網路標記。也不建議要求一般下載者去安裝你的自簽根憑證。
 
 ---
 
