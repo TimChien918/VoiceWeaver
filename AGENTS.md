@@ -1,5 +1,7 @@
 # VoiceWeaver Agent Guide
 
+> 🏷 **Product renamed to 「拾語者 Speak My Life」** (2026-10). User-facing text uses the new name (繁中「拾語者」, EN/JA/KO "Speak My Life"); code identifiers still use VoiceWeaver on purpose — package/applicationId, class & file names (`VoiceWeaverCore`, `VoiceWeaverScreen`…), Google Drive library folder `VoiceWeaver/…`, SharedPreferences/DB/Firestore keys, repo & Live URLs, `~/VoiceWeaver-電腦端/`, desktop bundle/exe file names. Do not rename those (compatibility with existing users' data).
+
 > 📦 **Computer-side runtime moved out of this project** (2026-06): GPT-SoVITS, the conda
 > env, and miniforge now live in `~/VoiceWeaver-電腦端/` (separate from the Android code).
 > The `tools/GPT-SoVITS/`, `tools/gpt-sovits-env/`, `tools/miniforge3/` paths below now map

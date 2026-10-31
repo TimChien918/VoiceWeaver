@@ -187,7 +187,7 @@ object I18n {
         "切換到識字卡" to arrayOf("Switch to flashcards", "カードに切替", "카드로 전환"),
         "這次有傳達到嗎？" to arrayOf("Did it get through this time?", "今回は伝わった？", "이번엔 전달됐나요?"),
         "已連續 %d 次選錯，再 %d 次將呼叫家屬" to arrayOf("%d wrong picks in a row; %d more will call family", "連続%d回の誤選択、あと%d回で家族に連絡", "연속 %d회 오선택, %d회 더면 가족 호출"),
-        "我目前需要協助，請聯絡我（VoiceWeaver 緊急通報）。" to arrayOf("I need help right now, please contact me (VoiceWeaver alert).", "今すぐ助けが必要です、連絡してください（VoiceWeaver 通報）。", "지금 도움이 필요해요, 연락해 주세요 (VoiceWeaver 알림)."),
+        "我目前需要協助，請聯絡我（拾語者 緊急通報）。" to arrayOf("I need help right now, please contact me (Speak My Life alert).", "今すぐ助けが必要です、連絡してください（Speak My Life 通報）。", "지금 도움이 필요해요, 연락해 주세요 (Speak My Life 알림)."),
         "搜尋圖卡" to arrayOf("Search cards", "カードを検索", "카드 검색"),
         "全部分類" to arrayOf("All categories", "すべてのカテゴリ", "모든 분류"),
         "基礎溝通" to arrayOf("Basic", "基本コミュニケーション", "기본 소통"),
@@ -274,8 +274,11 @@ object I18n {
             "Restored {n}. Another {total} have text only — record them on this phone to activate.",
             "{n} 件を復元。他に {total} 件はテキストのみ — この端末で録音すると有効になります。",
             "{n}개 복원. 다른 {total}개는 텍스트만 있습니다 — 이 기기에서 녹음하면 활성화됩니다."),
-        "VoiceWeaver 復健成績報告" to arrayOf(
-            "VoiceWeaver rehab report", "VoiceWeaver リハビリ成績表", "VoiceWeaver 재활 리포트"),
+        // 產品名（更名後）：繁中顯示「拾語者」，英日韓一律用「Speak My Life」。
+        // 通知標題、Telegram 成績單標題等不走 strings.xml 的地方用這個鍵。
+        "拾語者" to arrayOf("Speak My Life", "Speak My Life", "Speak My Life"),
+        "拾語者 復健成績報告" to arrayOf(
+            "Speak My Life rehab report", "Speak My Life リハビリ成績表", "Speak My Life 재활 리포트"),
         "總練習 {n} 次    平均 {total} / 100" to arrayOf(
             "{n} sessions    average {total} / 100",
             "練習 {n} 回    平均 {total} / 100",
@@ -346,8 +349,8 @@ object I18n {
         // SafetyGuard.EmergencyAlert.toTelegramMessage() 用。
         // 這是發給照顧者的通知，跟著介面語言走——照顧者與使用者共用同一台裝置，
         // 介面語言是目前唯一能拿到的線索。
-        "🆘 VoiceWeaver 緊急通報" to arrayOf(
-            "🆘 VoiceWeaver emergency alert", "🆘 VoiceWeaver 緊急通報", "🆘 VoiceWeaver 긴급 알림"),
+        "🆘 拾語者 緊急通報" to arrayOf(
+            "🆘 Speak My Life emergency alert", "🆘 Speak My Life 緊急通報", "🆘 Speak My Life 긴급 알림"),
         "使用者輸入觸發危機關鍵字，請立即聯絡。" to arrayOf(
             "The user's input triggered a crisis keyword. Please make contact immediately.",
             "利用者の入力が危機キーワードに該当しました。至急ご連絡ください。",
@@ -655,10 +658,10 @@ object I18n {
             "Record the screen to a video file", "画面を動画ファイルに録画", "화면을 동영상 파일로 녹화"),
         "把旁白一起錄進影片" to arrayOf(
             "Include the narration in the video", "ナレーションを動画に含める", "내레이션을 영상에 포함"),
-        "Android 規定 App 錄自己的畫面要你同意，會跳出系統視窗。旁白是直接取自 App 自己的音訊，不經過麥克風，所以不會錄到房間裡的聲音。影片會存到 Movies/VoiceWeaver，在相簿裡看得到。" to arrayOf(
-            "Android only lets an app record its own screen with your permission — a system prompt will appear. The narration is taken straight from the app's own audio, not through the microphone, so nothing in the room is recorded.\nThe finished video is saved to Movies/VoiceWeaver and shows up in your gallery.",
-            "Androidではアプリが自分の画面を録画するのに許可が必要で、システムの確認画面が出ます。ナレーションはアプリ自身の音声から直接取得し、マイクは使わないため周囲の音は入りません。\n動画は Movies/VoiceWeaver に保存され、ギャラリーに表示されます。",
-            "Android에서는 앱이 자기 화면을 녹화하려면 권한이 필요해 시스템 창이 나타납니다. 내레이션은 앱 자체 오디오에서 직접 가져오며 마이크를 쓰지 않으므로 주변 소리는 녹음되지 않습니다.\n영상은 Movies/VoiceWeaver에 저장되어 갤러리에 표시됩니다."),
+        "Android 規定 App 錄自己的畫面要你同意，會跳出系統視窗。旁白是直接取自 App 自己的音訊，不經過麥克風，所以不會錄到房間裡的聲音。影片會存到 Movies/SpeakMyLife，在相簿裡看得到。" to arrayOf(
+            "Android only lets an app record its own screen with your permission — a system prompt will appear. The narration is taken straight from the app's own audio, not through the microphone, so nothing in the room is recorded.\nThe finished video is saved to Movies/SpeakMyLife and shows up in your gallery.",
+            "Androidではアプリが自分の画面を録画するのに許可が必要で、システムの確認画面が出ます。ナレーションはアプリ自身の音声から直接取得し、マイクは使わないため周囲の音は入りません。\n動画は Movies/SpeakMyLife に保存され、ギャラリーに表示されます。",
+            "Android에서는 앱이 자기 화면을 녹화하려면 권한이 필요해 시스템 창이 나타납니다. 내레이션은 앱 자체 오디오에서 직접 가져오며 마이크를 쓰지 않으므로 주변 소리는 녹음되지 않습니다.\n영상은 Movies/SpeakMyLife에 저장되어 갤러리에 표시됩니다."),
         "準備旁白中…" to arrayOf("Preparing narration…", "ナレーションを準備中…", "내레이션 준비 중…"),
         "句" to arrayOf("lines", "行", "문장"),
         "停止" to arrayOf("Stop", "停止", "중지"),
@@ -1634,5 +1637,74 @@ object I18n {
             "Turning this off stops the waveform matching. Your recordings are kept.",
             "オフにすると波形照合を行いません。録音はそのまま残ります。",
             "끄면 파형 대조를 하지 않습니다. 녹음은 그대로 남습니다."),
+
+        // ── 復健軌跡趨勢圖（成績單頁 + CSV／PDF 匯出）──
+        "📉 復健軌跡趨勢圖（逐日，最近 30 天）" to arrayOf(
+            "📉 Rehab progress trend (daily, last 30 days)",
+            "📉 リハビリ推移グラフ（日ごと・直近 30 日）",
+            "📉 재활 추이 그래프 (일별, 최근 30일)"),
+        "⏱ 反應時間（秒，越低越好）" to arrayOf(
+            "⏱ Response time (sec, lower is better)",
+            "⏱ 反応時間（秒・低いほど良い）",
+            "⏱ 반응 시간 (초, 낮을수록 좋음)"),
+        "最近：%s" to arrayOf("Latest: %s", "直近：%s", "최근: %s"),
+        "🎯 選句命中率（%）" to arrayOf("🎯 Sentence hit rate (%)", "🎯 候補文の的中率（%）", "🎯 문장 선택 적중률 (%)"),
+        "供語言治療師追蹤參考；沒有使用的日子不畫點。逐日數字可用上方「匯出 CSV／PDF」取得。" to arrayOf(
+            "For the speech therapist's reference; days without use are not plotted. Use \"Export CSV / PDF\" above for the daily numbers.",
+            "言語聴覚士の経過観察用です。使わなかった日は点を描きません。日ごとの数値は上の「CSV／PDF を書き出す」で取得できます。",
+            "언어치료사의 경과 관찰용입니다. 사용하지 않은 날은 표시하지 않습니다. 일별 수치는 위의 \"CSV/PDF 내보내기\"로 받을 수 있습니다."),
+        "復健命中率（%，分數 ≥ 70）" to arrayOf(
+            "Practice hit rate (%, score ≥ 70)",
+            "リハビリ的中率（%・70 点以上）",
+            "재활 적중률 (%, 70점 이상)"),
+        "日期" to arrayOf("Date", "日付", "날짜"),
+        "平均反應時間（秒）" to arrayOf("Avg response time (sec)", "平均反応時間（秒）", "평균 반응 시간 (초)"),
+        "選句次數" to arrayOf("Sentence picks", "候補文の選択回数", "문장 선택 횟수"),
+        "選句命中率（%）" to arrayOf("Sentence hit rate (%)", "候補文の的中率（%）", "문장 선택 적중률 (%)"),
+        "復健命中率（%）" to arrayOf("Practice hit rate (%)", "リハビリ的中率（%）", "재활 적중률 (%)"),
+        "復健軌跡（逐日）" to arrayOf("Rehab progress (daily)", "リハビリの推移（日ごと）", "재활 추이 (일별)"),
+        "復健軌跡趨勢圖（逐日）" to arrayOf("Rehab progress trend (daily)", "リハビリ推移グラフ（日ごと）", "재활 추이 그래프 (일별)"),
+
+        // ── 隱私：聲紋同意可撤回 ──
+        "5. 同意可隨時撤回：在本頁按「撤回同意」，自訂聲紋會立即停用、改回一般語音；電腦上的檔案由你自行決定是否刪除。" to arrayOf(
+            "5. You can withdraw consent at any time: tap \"Withdraw consent\" on this page and the custom voice stops immediately, falling back to the regular voice. Whether to delete the files on your computer is up to you.",
+            "5. 同意はいつでも撤回できます：このページの「同意を撤回」を押すと、カスタム音声はすぐに停止し通常の音声に戻ります。パソコン上のファイルを消すかどうかはご自身で決めてください。",
+            "5. 동의는 언제든 철회할 수 있습니다: 이 페이지에서 \"동의 철회\"를 누르면 맞춤 음성이 즉시 중지되고 일반 음성으로 돌아갑니다. 컴퓨터의 파일 삭제 여부는 직접 정하시면 됩니다."),
+        "🔒 已同意使用自訂聲紋（可隨時撤回）" to arrayOf(
+            "🔒 Consent given for the custom voice (can be withdrawn anytime)",
+            "🔒 カスタム音声の使用に同意済み（いつでも撤回可）",
+            "🔒 맞춤 음성 사용에 동의함 (언제든 철회 가능)"),
+        "🔒 尚未同意：不會使用任何自訂聲紋" to arrayOf(
+            "🔒 No consent yet: no custom voice will be used",
+            "🔒 未同意：カスタム音声は一切使いません",
+            "🔒 아직 동의하지 않음: 맞춤 음성을 사용하지 않습니다"),
+        "撤回同意" to arrayOf("Withdraw consent", "同意を撤回", "동의 철회"),
+
+        // ── 隱私：危機訊息只送指定家人 ──
+        "尚未設定：危機訊息、定位與照片不會傳送到任何地方。" to arrayOf(
+            "Not set: crisis messages, location and photos will not be sent anywhere.",
+            "未設定：緊急メッセージ・位置情報・写真はどこにも送信されません。",
+            "미설정: 위기 메시지, 위치, 사진은 어디로도 전송되지 않습니다."),
+        "危機訊息、定位與照片只會傳送到這個 Chat ID（你指定的家人），不會送給其他人。" to arrayOf(
+            "Crisis messages, location and photos go only to this Chat ID (the family member you chose) and to no one else.",
+            "緊急メッセージ・位置情報・写真は、この Chat ID（あなたが指定した家族）にだけ送られ、他の人には送られません。",
+            "위기 메시지, 위치, 사진은 이 Chat ID(지정한 가족)에게만 전송되며 다른 사람에게는 보내지 않습니다."),
+
+        // ── 隱私：錄音評分後刪除 ──
+        "🔒 跟讀錄音只用來評分，評分完成後立即從手機刪除。" to arrayOf(
+            "🔒 Practice recordings are used only for scoring and are deleted from the phone right after.",
+            "🔒 復唱の録音は採点にだけ使い、採点後すぐに端末から削除します。",
+            "🔒 따라 말하기 녹음은 채점에만 쓰이고 채점 후 즉시 휴대폰에서 삭제됩니다."),
+
+        // ── 復健 AI 分項回饋 ──
+        "流暢度 %d" to arrayOf("Fluency %d", "流暢さ %d", "유창성 %d"),
+        "語調 %d" to arrayOf("Intonation %d", "抑揚 %d", "억양 %d"),
+        "錯誤內容：%s" to arrayOf("Errors: %s", "誤り：%s", "틀린 부분: %s"),
+
+        // ── 四級題庫 ──
+        "第 1 級・單詞命名" to arrayOf("Level 1 · Single words", "レベル 1・単語の呼称", "1단계 · 단어 이름 대기"),
+        "第 2 級・詞組與招呼語" to arrayOf("Level 2 · Phrases & greetings", "レベル 2・フレーズとあいさつ", "2단계 · 구문과 인사말"),
+        "第 3 級・日常短句" to arrayOf("Level 3 · Everyday short sentences", "レベル 3・日常の短文", "3단계 · 일상 짧은 문장"),
+        "第 4 級・情境長句" to arrayOf("Level 4 · Situational sentences", "レベル 4・場面のある長文", "4단계 · 상황 문장"),
     )
 }

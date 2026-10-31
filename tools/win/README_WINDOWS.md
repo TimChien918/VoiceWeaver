@@ -1,4 +1,7 @@
-# VoiceWeaver 語音中心 — Windows 版
+# 拾語者 Speak My Life 語音中心 — Windows 版
+
+> 產品已更名為「拾語者 Speak My Life」（原名 VoiceWeaver）。視窗標題與 exe 產品資訊用新名字；
+> 檔名（`VoiceWeaver語音中心.exe`）與資料夾（`%LOCALAPPDATA%\VoiceWeaver`）沿用舊名以維持既有安裝相容。
 
 macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制視窗本體
 （`tools/GPT-SoVITS/voice_center_app.py`）與後端（`model_setup_server.py`、`sync_voice_models.py`）
@@ -112,9 +115,9 @@ pwsh tools\win\build_win_exe.ps1
 ### 關於 SmartScreen「Windows 已保護您的電腦」
 
 第一次執行時可能跳出藍色的 **Microsoft Defender SmartScreen**「已防止某個無法辨識的應用程式啟動」。
-這**不是病毒警告**，而是 Windows 對「**未經程式碼簽章 + 從網路下載**」的 exe 一律先攔。VoiceWeaver
+這**不是病毒警告**，而是 Windows 對「**未經程式碼簽章 + 從網路下載**」的 exe 一律先攔。本專案
 未購買程式碼簽章憑證，所以會被歸類為「無法辨識」。exe 已內嵌產品資訊，按「其他資訊」會看到
-發行者顯示 **VoiceWeaver 語音中心**。處理方式（任選）：
+產品名稱顯示 **拾語者 語音中心**。處理方式（任選）：
 
 1. **點過去（一次性）**：按「**其他資訊**」→「**仍要執行**」。
 2. **解除封鎖（讓它不再跳）**：對 exe 按右鍵 →「**內容**」→ 最下面勾「**解除封鎖 (Unblock)**」→ 確定。

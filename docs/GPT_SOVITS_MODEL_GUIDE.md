@@ -1,14 +1,17 @@
-# VoiceWeaver GPT-SoVITS 換模型手冊
+# 拾語者 Speak My Life — GPT-SoVITS 換模型手冊
+
+> 產品已更名為「拾語者 Speak My Life」（原名 VoiceWeaver）。下文的資料夾、檔名與路徑
+> （`~/VoiceWeaver-電腦端/`、`voiceweaver_tts_infer.yaml`…）為維持相容性沿用舊名，照原樣使用即可。
 
 > 📦 **電腦端已搬出本專案**（2026-06）：本手冊中的 `tools/GPT-SoVITS/` 一律改讀為
 > `~/VoiceWeaver-電腦端/GPT-SoVITS/`（conda 環境、miniforge 同樣在 `~/VoiceWeaver-電腦端/` 下）。
 > 你的聲音模型（user_models / *weights*）都已隨資料夾一起搬過去，內容不變。
 
-這份手冊說明如何在 VoiceWeaver 專案中更換 GPT-SoVITS 模型。請只使用你自己錄製、取得明確授權，或 license 明確允許的模型與參考音檔。
+這份手冊說明如何在拾語者（VoiceWeaver 專案）中更換 GPT-SoVITS 模型。請只使用你自己錄製、取得明確授權，或 license 明確允許的模型與參考音檔。
 
 ## 目前架構
 
-VoiceWeaver 的 GPT-SoVITS 分成兩邊：
+拾語者的 GPT-SoVITS 分成兩邊：
 
 | 位置 | 功能 |
 | --- | --- |
@@ -23,7 +26,7 @@ VoiceWeaver 的 GPT-SoVITS 分成兩邊：
 | --- | --- |
 | `tools/GPT-SoVITS/start_api.sh` | 啟動 GPT-SoVITS API |
 | `tools/GPT-SoVITS/stop_api.sh` | 停止 9880 port 上的 API |
-| `tools/GPT-SoVITS/GPT_SoVITS/configs/voiceweaver_tts_infer.yaml` | VoiceWeaver 預設載入模型 |
+| `tools/GPT-SoVITS/GPT_SoVITS/configs/voiceweaver_tts_infer.yaml` | 拾語者預設載入模型 |
 | `tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav` | 中文參考音檔槽位 |
 | `tools/GPT-SoVITS/ref_audio/myvoice/ref_en.wav` | 英文參考音檔槽位 |
 | `app/src/main/java/com/example/ai/LocalSovitsHelper.kt` | App 端參考音檔路徑與 prompt 文字 |
@@ -361,7 +364,7 @@ const val PROMPT_EN = "..."
 
 ## App 端設定
 
-1. 打開 VoiceWeaver。
+1. 打開拾語者 App。
 2. 進入設定。
 3. 開啟開發者模式。
 4. 開啟 GPT-SoVITS 實驗語音。

@@ -208,6 +208,20 @@ object AphasiaPracticeI18n {
         "起床" to arrayOf("get up", "起きる", "일어나다"),
         "睡覺" to arrayOf("go to sleep", "寝る", "자다"),
 
+        // ── 第 2 級：詞組與招呼語 ──
+        "你好" to arrayOf("Hello", "こんにちは", "안녕하세요"),
+        "謝謝" to arrayOf("Thank you", "ありがとう", "고마워요"),
+        "對不起" to arrayOf("I'm sorry", "ごめんなさい", "미안해요"),
+        "沒關係" to arrayOf("That's okay", "大丈夫です", "괜찮아요"),
+        "再見" to arrayOf("Goodbye", "さようなら", "안녕히 가세요"),
+        "早安" to arrayOf("Good morning", "おはようございます", "좋은 아침이에요"),
+        "晚安" to arrayOf("Good night", "おやすみなさい", "안녕히 주무세요"),
+        "好的" to arrayOf("Okay", "わかりました", "알겠어요"),
+        "不要" to arrayOf("No, I don't want it", "いりません", "싫어요"),
+        "我餓了" to arrayOf("I'm hungry", "お腹がすいた", "배고파요"),
+        "我渴了" to arrayOf("I'm thirsty", "のどが渇いた", "목말라요"),
+        "我不舒服" to arrayOf("I don't feel well", "気分が悪い", "몸이 안 좋아요"),
+
         // ── 短句 ──
         "我想喝水" to arrayOf("I want to drink water", "水が飲みたい", "물 마시고 싶어요"),
         "我要吃飯" to arrayOf("I want to eat", "ご飯が食べたい", "밥 먹고 싶어요"),

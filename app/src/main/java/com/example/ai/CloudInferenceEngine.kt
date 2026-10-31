@@ -909,7 +909,7 @@ class HybridInferenceEngine(
                 0 = nothing was said.
 
                 Return JSON only:
-                {"score":0-100 integer, "feedback":"one short encouraging or corrective line in ${com.example.ui.I18n.outputLanguageNameEn()}, under 20 words", "wrongChars":["words or characters that were inaccurate or missing"]}
+                {"score":0-100 integer, "fluency":0-100 integer, "prosody":0-100 integer, "feedback":"one short encouraging or corrective line in ${com.example.ui.I18n.outputLanguageNameEn()}, under 20 words — name the main error if there was one", "wrongChars":["words or characters that were inaccurate or missing"]}
 
                 ${com.example.ui.I18n.outputLanguageDirective("feedback")}
             """.trimIndent(),
@@ -928,7 +928,10 @@ class HybridInferenceEngine(
         o.optJSONArray("wrongChars")?.let { arr ->
             for (i in 0 until arr.length()) arr.optString(i).trim().takeIf { it.isNotBlank() }?.let(wrong::add)
         }
-        return RehabEvaluation(score, feedback, wrong)
+        // 分項是加分資訊：舊模型／舊格式沒給、或給了範圍外的值，就當沒有，不影響總分
+        val fluency = o.optInt("fluency", -1).takeIf { it in 0..100 }
+        val prosody = o.optInt("prosody", -1).takeIf { it in 0..100 }
+        return RehabEvaluation(score, feedback, wrong, fluency, prosody)
     }
 
     private fun buildReconstructPrompt(vault: GlobalTagsVault): CloudPrompt {

@@ -117,7 +117,7 @@ class ScreenRecordService : Service() {
 
     private fun startInForeground() {
         val n: Notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("VoiceWeaver")
+            .setContentTitle(com.example.ui.I18n.tr("拾語者"))
             .setContentText(com.example.ui.I18n.tr("正在錄製功能介紹…"))
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setOngoing(true)
@@ -161,7 +161,7 @@ class ScreenRecordService : Service() {
         projection = mpm.getMediaProjection(code, data)?.also { it.registerCallback(projectionCallback, null) }
             ?: throw IllegalStateException("拿不到 MediaProjection")
 
-        // 先寫進 App 私有的快取，停止時再複製到相簿看得到的 Movies/VoiceWeaver。
+        // 先寫進 App 私有的快取，停止時再複製到相簿看得到的 Movies/SpeakMyLife。
         // 直接寫 MediaStore 的 fd 也可以，但中途被砍時會留下一個 pending 的空項目
         // 掛在相簿裡；寫本地檔、成功才發布，失敗就什麼都不會出現。
         val f = File(cacheDir, "demo-recording.mp4")
@@ -184,19 +184,22 @@ class ScreenRecordService : Service() {
     }
 
     /**
-     * 把錄好的檔案發布到相簿的 Movies/VoiceWeaver，回使用者看得到的顯示名稱。
+     * 把錄好的檔案發布到相簿的 Movies/SpeakMyLife，回使用者看得到的顯示名稱。
+     *
+     * 相簿資料夾與檔名跟著產品更名（拾語者 Speak My Life）走：這裡只寫不讀，
+     * 舊影片留在 Movies/VoiceWeaver 不受影響，改名不會讓任何東西找不到。
      *
      * 放 MediaStore 而不是 Android/data/<套件>/files——後者在檔案管理員裡幾乎找不到，
      * 而這支影片的用途就是「拿出去給別人看」。
      */
     private fun publish(src: File, stamp: String, suffix: String = ""): String? {
-        val name = "VoiceWeaver-Demo-$stamp$suffix.mp4"
+        val name = "SpeakMyLife-Demo-$stamp$suffix.mp4"
         return runCatching {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, name)
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/VoiceWeaver")
+                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/SpeakMyLife")
                     put(MediaStore.Video.Media.IS_PENDING, 1)
                 }
             }
@@ -210,7 +213,7 @@ class ScreenRecordService : Service() {
                 }, null, null)
             }
             src.delete()
-            "Movies/VoiceWeaver/$name"
+            "Movies/SpeakMyLife/$name"
         }.getOrElse {
             Log.e(TAG, "發布到相簿失敗：${it.message}")
             null

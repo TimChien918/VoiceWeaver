@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">VoiceWeaver</string>
+    <string name="app_name">拾語者</string>
 
     <!-- 底部導覽（6 tab 同時顯示，故壓在 2 字內避免 label 截斷） -->
     <string name="nav_main">重組</string>

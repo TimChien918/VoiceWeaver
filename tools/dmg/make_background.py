@@ -26,7 +26,7 @@ def render(scale: int) -> Image.Image:
     img = Image.new("RGBA", (w, h), (246, 246, 248, 255))
     d = ImageDraw.Draw(img)
     # 標題
-    title = "安裝 VoiceWeaver 語音中心"
+    title = "安裝 拾語者 語音中心"
     sub = "把左邊的 App 拖到右邊的「應用程式」資料夾即可"
     tf, sf = font(30 * scale), font(17 * scale)
     for text, fnt, y, col in ((title, tf, 44 * scale, (40, 40, 45)),

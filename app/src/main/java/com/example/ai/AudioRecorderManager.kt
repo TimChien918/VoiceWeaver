@@ -82,9 +82,13 @@ class AudioRecorderManager(private val context: Context) {
             return@withContext currentOutputFile?.absolutePath
         }
 
+        // 先清掉上次沒刪成的評分錄音（App 在評分途中被殺、轉寫丟例外…）。
+        // 隱私承諾是「錄音評分後刪除」，不能只靠正常路徑上的那一行 delete()。
+        purgeLeftoverClips()
+
         try {
             // 建立高安全性之 cache 緩存暫存檔
-            val fileName = "aphasia_voice_${System.currentTimeMillis()}.${format.ext}"
+            val fileName = "$CLIP_PREFIX${System.currentTimeMillis()}.${format.ext}"
             val tempFile = File(context.cacheDir, fileName)
             currentOutputFile = tempFile
 
@@ -162,6 +166,8 @@ class AudioRecorderManager(private val context: Context) {
             currentOutputFile?.absolutePath
         } catch (e: Exception) {
             Log.e("AudioRecorderManager", "Error stopping MediaRecorder (clip may be too short)", e)
+            // 停止失敗＝呼叫端拿不到路徑、也就不會去刪，這裡自己把半截檔清掉
+            currentOutputFile?.let { runCatching { it.delete() } }
             null
         } finally {
             mediaRecorder = null
@@ -169,9 +175,40 @@ class AudioRecorderManager(private val context: Context) {
         }
     }
 
-    private companion object {
+    /**
+     * 刪掉 cacheDir 裡殘留的評分／理解用暫存錄音，回傳刪了幾個。
+     * 只認 [isDisposableClip] 的檔名，使用者自己錄的聲學快捷詞樣本不在這裡、也不會被刪。
+     */
+    fun purgeLeftoverClips(): Int {
+        if (isRecording) return 0   // 錄音中不清，免得把正在寫的檔刪掉
+        val files = context.cacheDir.listFiles() ?: return 0
+        // 只刪放了一陣子的：剛產生的檔可能正在另一條流程裡上傳轉寫（例如主畫面的「AI 直接聽」），
+        // 那條流程用完自己會刪。
+        val cutoff = System.currentTimeMillis() - STALE_CLIP_MS
+        return files.count { f ->
+            f.isFile && isDisposableClip(f.name) && f.lastModified() < cutoff &&
+                runCatching { f.delete() }.getOrDefault(false)
+        }
+    }
+
+    companion object {
         /** 100ms 夠密——一次跟讀至少幾百毫秒，不會整段錯過音量高點。 */
-        const val PEAK_POLL_INTERVAL_MS = 100L
+        private const val PEAK_POLL_INTERVAL_MS = 100L
+        /** 超過這個時間還留著的暫存錄音＝沒刪成的殘留。比任何一次轉寫的逾時都長。 */
+        private const val STALE_CLIP_MS = 5 * 60_000L
+
+        /** 跟讀評分錄音的檔名前綴。 */
+        const val CLIP_PREFIX = "aphasia_voice_"
+        /** 「AI 直接聽」送去理解的暫存 wav 前綴（VoiceWeaverViewModel 產生）。 */
+        const val DIRECT_PREFIX = "direct_"
+
+        /**
+         * 這個檔名是不是「用完就該刪」的暫存錄音。純字串判斷，單元測試直接跑。
+         * 刻意只認自己產生的兩種前綴＋副檔名，寧可漏刪也不要誤刪別的快取。
+         */
+        fun isDisposableClip(name: String): Boolean =
+            (name.startsWith(CLIP_PREFIX) && (name.endsWith(".aac") || name.endsWith(".m4a"))) ||
+                (name.startsWith(DIRECT_PREFIX) && name.endsWith(".wav"))
     }
 
     private fun hasAudioPermission(): Boolean {

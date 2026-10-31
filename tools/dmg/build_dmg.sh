@@ -41,8 +41,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>VoiceWeaver 語音中心</string>
-    <key>CFBundleDisplayName</key><string>VoiceWeaver 語音中心</string>
+    <key>CFBundleName</key><string>拾語者 語音中心</string>
+    <key>CFBundleDisplayName</key><string>拾語者 語音中心</string>
     <key>CFBundleIdentifier</key><string>com.example.voiceweaver.voicecenter</string>
     <key>CFBundleVersion</key><string>1.0</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
@@ -106,7 +106,7 @@ BG="$STAGE/background.png"
 echo "==> 建立「拖到應用程式」安裝 DMG（dmgbuild）"
 rm -f "$OUT_DMG"
 OUT="$OUT_DMG" SET="$DMGDIR/dmgbuild_settings.py" APP_PATH="$APP" BG_PATH="$BG" ICON_PATH="$ICON" \
-  "$PY" -c "import dmgbuild, os; dmgbuild.build_dmg(os.environ['OUT'], 'VoiceWeaver 語音中心', settings_file=os.environ['SET'])"
+  "$PY" -c "import dmgbuild, os; dmgbuild.build_dmg(os.environ['OUT'], '拾語者 語音中心', settings_file=os.environ['SET'])"
 
 echo "==> 完成"
 echo "    $OUT_DMG"

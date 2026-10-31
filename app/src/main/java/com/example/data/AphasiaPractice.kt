@@ -1,16 +1,34 @@
 package com.example.data
 
 /**
+ * 復健題庫的四個等級（中英日韓共用同一份分級，譯文見 [AphasiaPracticeI18n]）。
+ *
+ * 由「單詞 → 詞組 → 短句 → 情境長句」逐級加長：失語症復健的常規順序是先把
+ * 單一詞彙的命名與構音找回來，再往語法與語境走。分四級而不是三級，是因為
+ * 單詞直接跳到完整需求句的落差太大——中間那一級（招呼語、兩三個字的需求）
+ * 是很多中度患者每天真正用得到、也最容易建立信心的。
+ *
+ * displayName 是繁中原文，顯示時要走 I18n.tr()。
+ */
+enum class PracticeLevel(val displayName: String, val previewCount: Int) {
+    Words("第 1 級・單詞命名", 14),
+    Phrases("第 2 級・詞組與招呼語", 10),
+    Short("第 3 級・日常短句", 8),
+    Situational("第 4 級・情境長句", 6),
+}
+
+/**
  * 失語症復健練習語料（繁體中文）。
  *
  * 內容取自「漢語標準失語症檢查表（CRRCAE）」常用之復述／命名範式，以及失語症
  * 語音研究文獻所列的標準復述名詞、動詞與情境句（屬臨床通用測驗內容，非任何專利
  * 之獨創）。用作復健的跟讀題庫與離線時 AI 推薦的備援，難度分級、自適應。
  *
- * 難度三級（對應復健的平均分自適應）：
- *  - 易（avg < 60）：高頻單／雙字（命名 + 構音）。
- *  - 中（60–79）：日常需求短句。
- *  - 難（≥ 80）：完整情境句（語法 + 語境）。
+ * 難度四級（對應復健的平均分自適應，見 [PracticeLevel] / [levelFor]）：
+ *  - 第 1 級（avg < 45）：高頻單／雙字（命名 + 構音）。
+ *  - 第 2 級（45–59）：詞組與招呼語。
+ *  - 第 3 級（60–79）：日常需求短句。
+ *  - 第 4 級（≥ 80）：完整情境句（語法 + 語境）。
  *
  * 公開 API（[easyWords] / [mediumSentences] / [hardSentences] / [pick]）維持不變，
  * UI 與備援不需改動。
@@ -54,6 +72,37 @@ object AphasiaPractice {
 
     /** 易級：名詞 + 動詞 + 社交（合併池）。 */
     val easyWords: List<String> = nouns + verbs + social
+
+    /**
+     * 第 2 級：詞組與招呼語（2–4 字的固定說法）。
+     * 每一句都要在 [AphasiaPracticeI18n] 有英日韓譯文，四種語言才都練得到。
+     */
+    val phrases: List<String> = listOf(
+        "你好", "謝謝", "對不起", "沒關係", "再見", "早安",
+        "晚安", "好的", "不要", "我餓了", "我渴了", "我不舒服"
+    )
+
+    /** 某一級的完整題目（繁中原文；顯示／比對前用 [AphasiaPracticeI18n.target] 換語言）。 */
+    fun levelItems(level: PracticeLevel): List<String> = when (level) {
+        PracticeLevel.Words -> nouns + verbs
+        PracticeLevel.Phrases -> phrases
+        PracticeLevel.Short -> mediumSentences
+        PracticeLevel.Situational -> hardSentences
+    }
+
+    /** 畫面上每級先露出的幾題。第 1 級名詞動詞各取一些，不然整排都是名詞。 */
+    fun levelPreview(level: PracticeLevel): List<String> = when (level) {
+        PracticeLevel.Words -> nouns.take(8) + verbs.take(level.previewCount - 8)
+        else -> levelItems(level).take(level.previewCount)
+    }
+
+    /** 依平均分決定建議練哪一級（離線備援出題用）。 */
+    fun levelFor(avgScore: Double): PracticeLevel = when {
+        avgScore < 45 -> PracticeLevel.Words
+        avgScore < 60 -> PracticeLevel.Phrases
+        avgScore < 80 -> PracticeLevel.Short
+        else -> PracticeLevel.Situational
+    }
 
     /** 中級：日常需求短句（5–10 字）。 */
     val mediumSentences: List<String> = listOf(
@@ -276,10 +325,11 @@ object AphasiaPractice {
      * 隨機抽樣以增加變化（離線備援，變化比可重現更重要）。
      */
     fun pick(avgScore: Double, location: String, recent: List<String> = emptyList(), count: Int = 3): List<String> {
-        val pool = when {
-            avgScore < 60 -> easyWords
-            avgScore < 80 -> mediumSentences
-            else -> hardSentences.map { s ->
+        val pool = when (levelFor(avgScore)) {
+            PracticeLevel.Words -> easyWords
+            PracticeLevel.Phrases -> phrases
+            PracticeLevel.Short -> mediumSentences
+            PracticeLevel.Situational -> hardSentences.map { s ->
                 if (s.startsWith("我覺得")) "在${location.ifBlank { "這裡" }}，$s" else s
             }
         }

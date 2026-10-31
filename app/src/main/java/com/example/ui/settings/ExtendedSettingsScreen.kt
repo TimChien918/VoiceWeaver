@@ -243,8 +243,13 @@ fun ExtendedSettingsScreen(
                         value = chatIdDraft,
                         onValueChange = { chatIdDraft = it.filter { c -> c.isDigit() || c == '-' }.take(16) },
                         label = { Text("Chat ID") },
+                        // 原本寫「預設值：…（測試帳號）」，但預設值其實是空的，而且
+                        // 這裡最需要讓家屬知道的是「訊息只會送到這裡」——隱私承諾要寫在設定的地方。
                         supportingText = {
-                            Text(I18n.tr("預設值：%s（Tim Chien 測試帳號）").format(AppSettings.DEFAULT_EMERGENCY_CHAT_ID),
+                            Text(
+                                if (settings.emergencyChatId.isBlank())
+                                    I18n.tr("尚未設定：危機訊息、定位與照片不會傳送到任何地方。")
+                                else I18n.tr("危機訊息、定位與照片只會傳送到這個 Chat ID（你指定的家人），不會送給其他人。"),
                                 fontSize = 11.sp, color = p.textMuted)
                         },
                         singleLine = true,

@@ -1,5 +1,5 @@
 #!/bin/bash
-# VoiceWeaver 語音中心（發行版 / .dmg 安裝）— 雙擊即用。
+# 拾語者 Speak My Life 語音中心（發行版 / .dmg 安裝；bundle 檔名仍是 VoiceWeaver語音中心.app）— 雙擊即用。
 #
 # 這個版本是「自帶環境」的：.app 內含 conda-pack 打包好的 Python 環境與全部
 # 後端程式碼。第一次開啟時會自動把環境解壓到使用者資料夾並完成重定位，之後
@@ -13,7 +13,7 @@
 
 set -u
 
-TITLE="VoiceWeaver 語音中心"
+TITLE="拾語者 語音中心"
 
 # ---- 路徑 --------------------------------------------------------------------
 BUNDLE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"           # …/VoiceWeaver語音中心.app
@@ -51,7 +51,7 @@ if [ ! -x "$PY" ] || [ "$(cat "$ENV_MARK" 2>/dev/null)" != "$ENV_VERSION" ]; the
     exit 1
   fi
   notify "安裝/更新環境中" "正在解開 AI 環境，約需 1~3 分鐘，請勿關閉…"
-  ( /usr/bin/osascript -e "display dialog \"VoiceWeaver 正在解壓 AI 環境（約 1~3 分鐘）。\n完成後會自動開啟。\n\n您可以先關閉此視窗。\" with title \"$TITLE\" buttons {\"好\"} default button 1 with icon note giving up after 8" >/dev/null 2>&1 ) &
+  ( /usr/bin/osascript -e "display dialog \"拾語者 正在解壓 AI 環境（約 1~3 分鐘）。\n完成後會自動開啟。\n\n您可以先關閉此視窗。\" with title \"$TITLE\" buttons {\"好\"} default button 1 with icon note giving up after 8" >/dev/null 2>&1 ) &
   rm -rf "$ENV_DIR" 2>/dev/null
   mkdir -p "$ENV_DIR"
   if ! /usr/bin/tar -xzf "$ENV_TAR" -C "$ENV_DIR" 2>>"$LOG_DIR/install.log"; then

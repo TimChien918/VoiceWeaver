@@ -56,7 +56,7 @@ fun LineChartCompose(
         ) {
             if (data.isEmpty()) {
                 Text(
-                    "尚無資料",
+                    I18n.tr("尚無資料"),
                     color = palette.textMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.align(Alignment2.Center)
@@ -93,11 +93,14 @@ fun LineChartCompose(
                     style = Stroke(width = 3f, cap = StrokeCap.Round)
                 )
 
-                // 資料點 + X 軸 label
+                // 資料點 + X 軸 label。點一多（月報 30 天）標籤會疊成一團黑，
+                // 所以只畫約 8 個，最後一個一定畫（治療師最在意「最近一次」）。
+                val labelEvery = ((data.size + 7) / 8).coerceAtLeast(1)
                 data.forEachIndexed { i, p ->
                     val x = i * stepX
                     val y = h - (p.value / yMax).coerceIn(0f, 1f) * h
                     drawCircle(palette.neonGreen, radius = 4f, center = Offset(x, y))
+                    if (i % labelEvery != 0 && i != data.size - 1) return@forEachIndexed
                     drawContext.canvas.nativeCanvas.drawText(
                         p.labelShort,
                         x - labelPx,

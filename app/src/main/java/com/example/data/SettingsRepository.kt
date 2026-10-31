@@ -372,6 +372,8 @@ class SettingsRepository(private val context: Context) {
         val BmUndoCount       = longPreferencesKey("bm_undo_count")
         val BmAacInputCount   = longPreferencesKey("bm_aac_input_count")
         val BmTextInputCount  = longPreferencesKey("bm_text_input_count")
+        /** 逐日的反應時間／選句（[DailyTrendCodec] 格式），給復健軌跡趨勢圖。 */
+        val BmDailyTrend      = stringPreferencesKey("bm_daily_trend")
         val AutoLocalAiCleanup  = booleanPreferencesKey("auto_local_ai_cleanup")
         val DeveloperMode       = booleanPreferencesKey("developer_mode")
         val DefaultCurrency     = stringPreferencesKey("default_currency")
@@ -505,6 +507,15 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNgrokDomain(v: String) = update { it[Keys.NgrokDomain] = v.trim() }
     suspend fun setNgrokPairCode(v: String) = update { it[Keys.NgrokPairCode] = v }
     suspend fun setSovitsConsentAccepted(on: Boolean) = update { it[Keys.SovitsConsent] = on }
+    /**
+     * 撤回聲紋同意：同意旗標與 GPT-SoVITS 開關在**同一次寫入**裡一起關掉。
+     * 分兩次寫的話，中間那一瞬間會是「未同意但仍啟用」，TTS 可能剛好用自訂聲紋念出一句。
+     * 參考音檔與模型放在使用者自己的電腦上，App 碰不到也不該代刪，這裡只停止使用。
+     */
+    suspend fun revokeSovitsConsent() = update {
+        it[Keys.SovitsConsent] = false
+        it[Keys.GptSovitEnabled] = false
+    }
     suspend fun setAacIntentConfirmEnabled(on: Boolean) = update { it[Keys.AacIntentConfirm] = on }
     suspend fun setAacFlashcardMode(on: Boolean) = update { it[Keys.AacFlashcardMode] = on }
     suspend fun setAacIntentImageEnabled(on: Boolean) = update { it[Keys.AacIntentImage] = on }
@@ -603,16 +614,30 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
+    /**
+     * 逐日行為數據（復健軌跡趨勢圖用）。彙總值看不出「進步」，逐日才看得出來，
+     * 見 [DailyTrendDay]。跟彙總值寫在同一次 edit 裡，兩邊不會對不上。
+     */
+    val dailyTrend: Flow<List<DailyTrendDay>> = context.settingsDataStore.data.map { p ->
+        DailyTrendCodec.decode(p[Keys.BmDailyTrend] ?: "")
+    }
+
     /** 反應時間：開 App → 第一次發聲的耗時，每次啟動最多記一筆。 */
     suspend fun recordFirstSpeakLatency(ms: Long) = update {
         it[Keys.BmFirstSpeakCount] = (it[Keys.BmFirstSpeakCount] ?: 0) + 1
         it[Keys.BmFirstSpeakSumMs] = (it[Keys.BmFirstSpeakSumMs] ?: 0) + ms.coerceAtLeast(0)
+        it[Keys.BmDailyTrend] = DailyTrendCodec.addReaction(
+            it[Keys.BmDailyTrend] ?: "", DailyTrendCodec.dayKey(System.currentTimeMillis()), ms
+        )
     }
 
     /** 選句：每次點候選句記一筆；點的是 AI 第一候選則 firstHit +1。 */
     suspend fun recordCandidateChoice(firstHit: Boolean) = update {
         it[Keys.BmCandidateTotal] = (it[Keys.BmCandidateTotal] ?: 0) + 1
         if (firstHit) it[Keys.BmCandidateFirstHit] = (it[Keys.BmCandidateFirstHit] ?: 0) + 1
+        it[Keys.BmDailyTrend] = DailyTrendCodec.addCandidate(
+            it[Keys.BmDailyTrend] ?: "", DailyTrendCodec.dayKey(System.currentTimeMillis()), firstHit
+        )
     }
 
     /** 修改：退回重選 / 刪除圖卡 +1。 */

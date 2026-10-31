@@ -410,7 +410,7 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                         // SMS Intent（無收件人，由使用者在簡訊 App 中選聯絡人）
                         runCatching {
                             ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))
-                                .putExtra("sms_body", I18n.tr("我目前需要協助，請聯絡我（VoiceWeaver 緊急通報）。")))
+                                .putExtra("sms_body", I18n.tr("我目前需要協助，請聯絡我（拾語者 緊急通報）。")))
                         }
                         viewModel.aacDismissAlert()
                     }) { Text(alertSendSms, color = p.dangerRose) }

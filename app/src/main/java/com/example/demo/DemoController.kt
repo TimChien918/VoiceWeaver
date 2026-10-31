@@ -216,7 +216,7 @@ object DemoController {
         Unit("intro", "🎬", "Title & overview", steps = listOf(
             Step("Imagine knowing exactly what you want to say, and not one word will come out."),
             Step("That is aphasia. The thought is intact. The bridge to speech is broken."),
-            Step("VoiceWeaver rebuilds that bridge."),
+            Step("Speak My Life rebuilds that bridge."),
         )),
         Unit("compose", "💬", "Sentence reconstruction", steps = listOf(
             Step("What comes out is fragments. Water. Rest. Now.", route = "main",
@@ -712,8 +712,8 @@ object DemoController {
                         _progress.value = "${u.icon} ${u.title} · $done/$total"
                         // 片頭／片尾卡蓋住畫面；其他單元一定要先把卡收掉
                         _titleCard.value = when (u.id) {
-                            "intro" -> TitleCard("VoiceWeaver", "Communication support for people with aphasia")
-                            "outro" -> TitleCard("VoiceWeaver", "Giving words back — in your own voice")
+                            "intro" -> TitleCard("拾語者 Speak My Life", "Communication support for people with aphasia")
+                            "outro" -> TitleCard("拾語者 Speak My Life", "Giving words back — in your own voice")
                             else -> null
                         }
                         s.route?.let { navigate(it) }

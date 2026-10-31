@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import com.example.ai.ReportAggregator
 import com.example.ai.ReportRange
 import com.example.ai.ReportSnapshot
+import com.example.ai.reactionTrendBuckets
+import com.example.ai.selectionHitTrendBuckets
 import com.example.data.SettingsRepository
 import com.example.net.TelegramClient
 import com.example.ui.theme.LocalAppPalette
@@ -166,6 +168,51 @@ fun ReportScreen(
                 }
             }
 
+            // === 復健軌跡趨勢圖（逐日，最近 30 天）===
+            // 上面的行為數據是全期平均，看不出「有沒有在進步」；這裡把同樣兩個指標
+            // 按日畫成折線，才是治療師追蹤復健表現要看的東西。跟上方時間維度無關：
+            // 「今日」只有一個點，畫不出趨勢。
+            item {
+                val trend by settingsRepo.dailyTrend.collectAsState(
+                    initial = emptyList<com.example.data.DailyTrendDay>()
+                )
+                val reaction = remember(trend) { reactionTrendBuckets(trend) }
+                val hit = remember(trend) { selectionHitTrendBuckets(trend) }
+                // 反應時間沒有固定上限，用最大值留兩成空間，線才不會貼著頂
+                val reactionMax = remember(reaction) {
+                    ((reaction.maxOfOrNull { it.value } ?: 0f) * 1.2f).coerceAtLeast(1f)
+                }
+                val secUnit = I18n.tr("秒")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(I18n.tr("📉 復健軌跡趨勢圖（逐日，最近 30 天）"),
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = p.textLight)
+                    LineChartCompose(
+                        data = reaction,
+                        palette = p,
+                        modifier = Modifier.fillMaxWidth(),
+                        yMax = reactionMax,
+                        title = I18n.tr("⏱ 反應時間（秒，越低越好）") +
+                            (reaction.lastOrNull()?.let { b ->
+                                " · " + I18n.tr("最近：%s").format("%.1f".format(b.value) + " " + secUnit)
+                            } ?: "")
+                    )
+                    LineChartCompose(
+                        data = hit,
+                        palette = p,
+                        modifier = Modifier.fillMaxWidth(),
+                        yMax = 100f,
+                        title = I18n.tr("🎯 選句命中率（%）") +
+                            (hit.lastOrNull()?.let { b ->
+                                " · " + I18n.tr("最近：%s").format("${b.value.toInt()}%")
+                            } ?: "")
+                    )
+                    Text(
+                        I18n.tr("供語言治療師追蹤參考；沒有使用的日子不畫點。逐日數字可用上方「匯出 CSV／PDF」取得。"),
+                        fontSize = 9.sp, color = p.textMuted, lineHeight = 13.sp
+                    )
+                }
+            }
+
             // === 摘要卡 ===
             val s = snapshot
             if (s == null) {
@@ -190,6 +237,17 @@ fun ReportScreen(
                         data = s.rehabDaily,
                         palette = p,
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // === 折線圖：復健命中率（跟讀分數達「意思有傳達到」的比例）===
+                item {
+                    LineChartCompose(
+                        data = s.rehabHitDaily,
+                        palette = p,
+                        modifier = Modifier.fillMaxWidth(),
+                        yMax = 100f,
+                        title = I18n.tr("復健命中率（%，分數 ≥ 70）")
                     )
                 }
 

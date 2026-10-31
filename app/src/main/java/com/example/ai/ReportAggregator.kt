@@ -1,6 +1,8 @@
 package com.example.ai
 
 import com.example.data.AacComboLogDao
+import com.example.data.DailyTrendCodec
+import com.example.data.DailyTrendDay
 import com.example.data.RehabLogDao
 import com.example.data.StoryTrainingLogDao
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,8 @@ data class ReportSnapshot(
     val emotionDaily: List<TimeBucket>,          // 長條圖：正向情緒字眼每日次數
     val storyAttempts: Int,
     val storyAverageScore: Float,
+    /** 折線圖：復健命中率（分數 ≥ [DailyTrendCodec.REHAB_HIT_SCORE] 的比例，0–100）。 */
+    val rehabHitDaily: List<TimeBucket> = emptyList(),
     val generatedAt: Long = System.currentTimeMillis()
 ) {
     /**
@@ -61,7 +65,7 @@ data class ReportSnapshot(
      */
     fun toTelegramText(): String = buildString {
         val tr = com.example.ui.I18n::tr
-        appendLine("📊 <b>VoiceWeaver ${tr("成績單")} · ${tr(range.displayName)}</b>")
+        appendLine("📊 <b>${tr("拾語者")} ${tr("成績單")} · ${tr(range.displayName)}</b>")
         appendLine("─────────────")
         appendLine("🎯 ${tr("復健次數")}：$totalRehabSessions")
         appendLine("📈 ${tr("平均分數")}：${"%.1f".format(averageScore)} / 100")
@@ -146,6 +150,10 @@ class ReportAggregator(
 
         val rehabDaily = bucketize(range, rehabRows.map { it.timestamp to it.score.toFloat() }) { avg(it) }
         val emotionDaily = bucketize(range, rehabRows.map { it.timestamp to countPositiveWords(it.targetSentence).toFloat() }) { it.sum() }
+        // 命中＝0 或 100，取平均就是該時段的命中百分比
+        val rehabHitDaily = bucketize(range, rehabRows.map {
+            it.timestamp to (if (it.score >= DailyTrendCodec.REHAB_HIT_SCORE) 100f else 0f)
+        }) { avg(it) }
 
         ReportSnapshot(
             range = range,
@@ -156,7 +164,8 @@ class ReportAggregator(
             rehabDaily = rehabDaily,
             emotionDaily = emotionDaily,
             storyAttempts = storyRows.size,
-            storyAverageScore = if (storyRows.isEmpty()) 0f else storyRows.map { it.score }.average().toFloat()
+            storyAverageScore = if (storyRows.isEmpty()) 0f else storyRows.map { it.score }.average().toFloat(),
+            rehabHitDaily = rehabHitDaily
         )
     }
 
@@ -189,3 +198,43 @@ class ReportAggregator(
         return groups.map { (k, vs) -> TimeBucket(k, reducer(vs)) }
     }
 }
+
+// ─── 復健軌跡趨勢圖：逐日行為數據 → 折線圖資料點 ────────────────────────────
+
+/**
+ * 最近 [windowDays] 天裡**有資料**的日子，取一個值變成折線圖的點。
+ *
+ * 沒資料的日子直接跳過、不補 0：反應時間補 0 會畫成「那天反應超快」，
+ * 命中率補 0 會畫成「那天全錯」，兩種都是假訊號，治療師會被誤導。
+ */
+internal fun trendBuckets(
+    days: List<DailyTrendDay>,
+    now: Long,
+    windowDays: Int,
+    value: (DailyTrendDay) -> Float?,
+): List<TimeBucket> {
+    val from = DailyTrendCodec.dayKey(now - (windowDays - 1).coerceAtLeast(0) * 86_400_000L)
+    return days
+        .filter { it.day >= from }
+        .sortedBy { it.day }
+        .mapNotNull { d ->
+            val v = value(d) ?: return@mapNotNull null
+            // "2026-10-31" → "10/31"
+            val label = d.day.substring(5).split('-').joinToString("/") { it.trimStart('0').ifEmpty { "0" } }
+            TimeBucket(label, v)
+        }
+}
+
+/** 反應時間趨勢（秒）。 */
+fun reactionTrendBuckets(
+    days: List<DailyTrendDay>,
+    now: Long = System.currentTimeMillis(),
+    windowDays: Int = 30,
+): List<TimeBucket> = trendBuckets(days, now, windowDays) { d -> d.avgReactionMs?.let { it / 1000f } }
+
+/** 選句命中率趨勢（0–100）。 */
+fun selectionHitTrendBuckets(
+    days: List<DailyTrendDay>,
+    now: Long = System.currentTimeMillis(),
+    windowDays: Int = 30,
+): List<TimeBucket> = trendBuckets(days, now, windowDays) { d -> d.hitRate?.let { it * 100f } }

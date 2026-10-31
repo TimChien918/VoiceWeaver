@@ -260,7 +260,13 @@ interface InferenceEngine {
 data class RehabEvaluation(
     val score: Int,
     val feedback: String = "",
-    val wrongChars: List<String> = emptyList()
+    val wrongChars: List<String> = emptyList(),
+    /**
+     * 分項：流暢度、語調（0–100）。null＝這個引擎沒給分項（Levenshtein 備援、
+     * 小模型），畫面就不顯示，不拿總分去冒充。
+     */
+    val fluency: Int? = null,
+    val prosody: Int? = null
 )
 
 /**
@@ -763,7 +769,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun startCrisisConversation(triggerText: String) {
         if (_crisisConv.value.active) return
         // 即時視訊通話房：病患與家人開同一個網址即可視訊（Jitsi Meet 免帳號）。房名難猜。
-        val room = "VoiceWeaver-" + java.util.UUID.randomUUID().toString().take(8)
+        val room = "SpeakMyLife-" + java.util.UUID.randomUUID().toString().take(8)
         // 直接進入通話：略過 prejoin 名字頁 + 預設顯示名稱（免輸入名字）；
         // 用免登入的社群實例（可在設定改），meet.jit.si 建立會議需登入故不用。
         val base = settings.value.videoCallBaseUrl.trimEnd('/').ifBlank { AppSettings.DEFAULT_VIDEO_CALL_BASE }
@@ -771,7 +777,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             "config.prejoinPageEnabled=false&" +
             "config.prejoinConfig.enabled=false&" +
             "config.requireDisplayName=false&" +
-            "userInfo.displayName=%22VoiceWeaver%22"
+            "userInfo.displayName=%22Speak%20My%20Life%22"
         _crisisConv.value = CrisisConvState(
             active = true,
             status = I18n.tr("正在通知家人…"),
@@ -1027,8 +1033,10 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = s.currentLocationTag)
             }
             ttsModule.configureGptSovit(
-                // 角色語音已搬出「開發者模式」變成一般設定，不再需要 developerMode 開關才能用
-                enabled = s.gptSovitEnabled,
+                // 角色語音已搬出「開發者模式」變成一般設定，不再需要 developerMode 開關才能用。
+                // 聲紋需經同意：沒有知情同意（或已撤回）就不用自訂聲紋，即使開關殘留在 on——
+                // 同意對話框是後來才加的，舊版使用者可能「已啟用但從沒同意過」。
+                enabled = s.gptSovitEnabled && s.sovitsConsentAccepted,
                 mode = s.gptSovitVoiceMode,
                 chineseVoiceUri = s.gptSovitChineseVoiceUri,
                 englishVoiceUri = s.gptSovitEnglishVoiceUri,
@@ -1096,11 +1104,15 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 匯出復健成績為 CSV，回傳可分享的 Intent（治療師用 Excel 開）。 */
     suspend fun buildRehabCsvShare(): android.content.Intent =
-        com.example.work.ReportExporter.exportCsv(getApplication(), rehabLogs.value)
+        com.example.work.ReportExporter.exportCsv(
+            getApplication(), rehabLogs.value, settingsRepo.dailyTrend.first()
+        )
 
-    /** 匯出復健成績為 PDF，回傳可分享的 Intent。 */
+    /** 匯出復健成績為 PDF，回傳可分享的 Intent（含復健軌跡趨勢圖）。 */
     suspend fun buildRehabPdfShare(): android.content.Intent =
-        com.example.work.ReportExporter.exportPdf(getApplication(), rehabLogs.value)
+        com.example.work.ReportExporter.exportPdf(
+            getApplication(), rehabLogs.value, settingsRepo.dailyTrend.first()
+        )
 
     // MediaPipe 模型下載狀態
     private val _modelDownloadState = MutableStateFlow<ModelDownloadState>(ModelDownloadState.Idle)
@@ -1318,7 +1330,7 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         // App 重啟後會掉回預設值 — 偵測後 ref/prompt 才會對上使用者匯入的模型）。
         viewModelScope.launch {
             val s = settings.firstOrNull() ?: return@launch
-            if (s.gptSovitEnabled && s.gptSovitApiBaseUrl.isNotBlank()) {
+            if (s.gptSovitEnabled && s.sovitsConsentAccepted && s.gptSovitApiBaseUrl.isNotBlank()) {
                 runCatching { LocalSovitsHelper.pingServer(s.gptSovitApiBaseUrl) }
             }
         }
@@ -1695,8 +1707,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 DiagnosticLog.Cat.STT, "使用者選擇「AI 直接聽」，送出錄音",
                 "大小=${recordedKb}KB 峰值=$peak 長度=${durMs}ms 格式=wav"
             )
-            val result = activeEngine.reconstructFromAudio(wav, _globalTagsVault.value)
-            runCatching { wav.delete() }   // 語音是敏感資料，理解完立刻刪掉，不留在裝置上
+            // 語音是敏感資料，理解完立刻刪掉，不留在裝置上；finally 讓例外／取消時也刪得到
+            val result = try {
+                activeEngine.reconstructFromAudio(wav, _globalTagsVault.value)
+            } finally {
+                runCatching { wav.delete() }
+            }
 
             result.onSuccess { data ->
                 DiagnosticLog.i(
@@ -2277,8 +2293,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             }
             // 目標句當偏置詞彙餵給 Whisper：同音誤判會少很多。餵的是「目標」不是
             // 「答案」——Whisper 的 prompt 只影響詞彙傾向，不會讓它憑空補出沒唸的字。
-            val result = activeEngine.transcribe(file, rehabLanguageTag(), rehabTarget)
-            runCatching { file.delete() }   // 語音是敏感資料，評完立刻刪
+            // finally：轉寫丟例外（或協程被取消）時也一定刪——語音是敏感資料，評完立刻刪
+            val result = try {
+                activeEngine.transcribe(file, rehabLanguageTag(), rehabTarget)
+            } finally {
+                runCatching { file.delete() }
+            }
             result.onSuccess { heard ->
                 _rehabCloudStt.value = null
                 scoreRehabAttempt(heard)
@@ -2331,7 +2351,9 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
                 lastScore = eval.score,
                 aiFeedback = eval.feedback,
                 wrongChars = eval.wrongChars,
-                isRecording = false
+                isRecording = false,
+                lastFluency = eval.fluency,
+                lastProsody = eval.prosody
             )
             val log = RehabLog(
                 locationTag = _globalTagsVault.value.locationTag,
@@ -2377,6 +2399,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     fun enterRehabScreen() {
         rehabScreenVisible = true
         if (settings.value.eyeControlEnabled) startEyeScanLoop()
+        // 錄音評分後刪除：進復健頁就順手清掉上次沒刪成的暫存錄音（App 在評分途中被殺之類）
+        viewModelScope.launch(Dispatchers.IO) { runCatching { audioRecorder.purgeLeftoverClips() } }
     }
 
     fun exitRehabScreen() {
@@ -2869,6 +2893,8 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     fun resetImageGen() { _imageGenState.value = ImageGenState.Idle }
     fun setSovitsConsentAccepted(on: Boolean) = viewModelScope.launch { settingsRepo.setSovitsConsentAccepted(on) }
+    /** 撤回聲紋同意：同時停用 GPT-SoVITS，改回一般語音。見 [SettingsRepository.revokeSovitsConsent]。 */
+    fun revokeSovitsConsent() = viewModelScope.launch { settingsRepo.revokeSovitsConsent() }
     fun setAacIntentConfirmEnabled(on: Boolean) = viewModelScope.launch { settingsRepo.setAacIntentConfirmEnabled(on) }
     fun setAacIntentImageEnabled(on: Boolean) = viewModelScope.launch { settingsRepo.setAacIntentImageEnabled(on) }
 
@@ -3626,7 +3652,10 @@ data class RehabUiState(
     val lastScore: Int? = null,
     val aiFeedback: String = "",
     val wrongChars: List<String> = emptyList(),
-    val isRecording: Boolean = false
+    val isRecording: Boolean = false,
+    /** AI 分項回饋：流暢度、語調（0–100）；null＝沒有分項。 */
+    val lastFluency: Int? = null,
+    val lastProsody: Int? = null
 ) {
     val isActive: Boolean get() = target.isNotBlank()
 }

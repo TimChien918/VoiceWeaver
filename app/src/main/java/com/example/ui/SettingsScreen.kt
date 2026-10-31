@@ -918,6 +918,11 @@ private fun GptSovitDeveloperPanel(
                                 I18n.tr("啟用 GPT-SoVITS 語音克隆前請確認：\n1. 參考音檔之聲音主體已同意其聲紋被用於本機語音合成。\n2. 合成語音僅供本人輔助溝通之個人非商業用途。\n3. 不得用合成語音冒充他人或散布誤導內容。\n4. 錄音與模型只存於你的手機與自己的電腦，不上傳雲端。"),
                                 fontSize = 12.sp, color = p.textMuted, lineHeight = 18.sp
                             )
+                            // 知情同意必須講清楚「可以撤回」與撤回的效果，不然不算知情。
+                            Text(
+                                I18n.tr("5. 同意可隨時撤回：在本頁按「撤回同意」，自訂聲紋會立即停用、改回一般語音；電腦上的檔案由你自行決定是否刪除。"),
+                                fontSize = 12.sp, color = p.textMuted, lineHeight = 18.sp
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.clickable { agreeChecked = !agreeChecked }
@@ -944,6 +949,21 @@ private fun GptSovitDeveloperPanel(
                     },
                     containerColor = p.surface
                 )
+            }
+        }
+
+        // ── 聲紋同意狀態 + 撤回 ── 同意不是一次性的：要看得到目前狀態，也要有一鍵收回的出口。
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                if (consentAccepted) I18n.tr("🔒 已同意使用自訂聲紋（可隨時撤回）")
+                else I18n.tr("🔒 尚未同意：不會使用任何自訂聲紋"),
+                fontSize = 11.sp, color = if (consentAccepted) p.neonGreen else p.textMuted,
+                lineHeight = 15.sp, modifier = Modifier.weight(1f)
+            )
+            if (consentAccepted) {
+                TextButton(onClick = { viewModel.revokeSovitsConsent() }) {
+                    Text(I18n.tr("撤回同意"), fontSize = 12.sp, color = p.dangerRose)
+                }
             }
         }
 
@@ -2023,7 +2043,8 @@ private fun GptSovitSection(
         GptSovitDeveloperPanel(
             viewModel = viewModel,
             settings = settings,
-            enabled = settings.gptSovitEnabled,
+            // 沒同意（或已撤回）就顯示為關閉：跟 TTS 實際的行為一致，見 VoiceWeaverViewModel 的 configureGptSovit。
+            enabled = settings.gptSovitEnabled && settings.sovitsConsentAccepted,
             mode = settings.gptSovitVoiceMode,
             chineseVoiceUri = settings.gptSovitChineseVoiceUri,
             englishVoiceUri = settings.gptSovitEnglishVoiceUri,
@@ -2320,7 +2341,7 @@ private fun DiagnosticLogPanel(p: com.example.ui.theme.AppPalette) {
                         android.content.Intent.createChooser(
                             android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_SUBJECT, "VoiceWeaver 診斷日誌")
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, I18n.tr("拾語者") + " " + I18n.tr("診斷日誌"))
                                 putExtra(android.content.Intent.EXTRA_TEXT, text)
                             }, I18n.tr("分享診斷日誌")
                         )

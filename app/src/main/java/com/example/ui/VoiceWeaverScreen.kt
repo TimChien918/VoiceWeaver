@@ -126,7 +126,7 @@ fun VoiceWeaverScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Hearing,
-                                contentDescription = "VoiceWeaver Logo",
+                                contentDescription = stringResource(R.string.app_name),
                                 tint = textLight,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -139,7 +139,7 @@ fun VoiceWeaverScreen(
                         val fsBar = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
                         Column {
                             Text(
-                                text = "VoiceWeaver",
+                                text = stringResource(R.string.app_name),
                                 fontSize = com.example.ui.theme.chromeSp(19f),
                                 fontWeight = FontWeight.Bold,
                                 color = textLight,
@@ -1440,7 +1440,7 @@ fun VoiceWeaverScreen(
                                         OutlinedButton(
                                             onClick = {
                                                 val clip = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                clip.setPrimaryClip(android.content.ClipData.newPlainText("VoiceWeaver", data.reconstructedText))
+                                                clip.setPrimaryClip(android.content.ClipData.newPlainText("Speak My Life", data.reconstructedText))
                                             },
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                             shape = RoundedCornerShape(10.dp),

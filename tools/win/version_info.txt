@@ -19,13 +19,13 @@ VSVersionInfo(
         StringTable(
           '040404b0',
           [
-            StringStruct('CompanyName', 'VoiceWeaver'),
-            StringStruct('FileDescription', 'VoiceWeaver 語音中心'),
+            StringStruct('CompanyName', 'Speak My Life'),
+            StringStruct('FileDescription', '拾語者 語音中心'),
             StringStruct('FileVersion', '1.1.0.0'),
             StringStruct('InternalName', 'VoiceWeaver語音中心'),
-            StringStruct('LegalCopyright', 'VoiceWeaver'),
+            StringStruct('LegalCopyright', 'Speak My Life'),
             StringStruct('OriginalFilename', 'VoiceWeaver語音中心.exe'),
-            StringStruct('ProductName', 'VoiceWeaver 語音中心'),
+            StringStruct('ProductName', '拾語者 語音中心'),
             StringStruct('ProductVersion', '1.1.0.0'),
           ],
         )

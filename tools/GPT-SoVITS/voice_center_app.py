@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 語音中心 — Windows / macOS / Linux 原生控制台。"""
+"""拾語者 Speak My Life 語音中心（原 VoiceWeaver）— Windows / macOS / Linux 原生控制台。"""
 from __future__ import annotations
 
 import os
@@ -573,7 +573,7 @@ I18N = {
     "同步失敗：%s": {"zh-TW":"同步失敗：%s", "en":"Sync failed: %s", "ja":"同期失敗：%s", "ko":"동기화 실패: %s"},
     # 標題列
     "ui.langLabel": {"zh-TW":"介面語言", "en":"Language", "ja":"言語", "ko":"언어"},
-    "app.title":    {"zh-TW":"VoiceWeaver 語音中心", "en":"VoiceWeaver Voice Center", "ja":"VoiceWeaver ボイスセンター", "ko":"VoiceWeaver 보이스 센터"},
+    "app.title":    {"zh-TW":"拾語者 語音中心", "en":"Speak My Life Voice Center", "ja":"Speak My Life ボイスセンター", "ko":"Speak My Life 보이스 센터"},
     "header.sub":   {"zh-TW":"關閉視窗即停止所有服務", "en":"Closing the window stops all services", "ja":"ウィンドウを閉じると全サービス停止", "ko":"창을 닫으면 모든 서비스 중지"},
     # 分頁
     "tab.main": {"zh-TW":"   控制台   ", "en":"   Console   ", "ja":"   コンソール   ", "ko":"   콘솔   "},
@@ -1751,7 +1751,7 @@ class App:
         t = self.theme()
         self.iv = tk.Frame(self.root, bg=t["bg"])
         self.iv.place(relx=0, rely=0, relwidth=1, relheight=1)
-        tk.Label(self.iv, text="VoiceWeaver 首次安裝", font=(FONT_UI, SZ_H1, "bold"),
+        tk.Label(self.iv, text="拾語者 首次安裝", font=(FONT_UI, SZ_H1, "bold"),
                  bg=t["bg"], fg=t["fg"]).pack(pady=(110, 8))
         tk.Label(self.iv, text="正在自動下載並安裝本機 AI 環境（約 2GB）——只需這一次。",
                  font=(FONT_UI, SZ_BODY), bg=t["bg"], fg=t["muted"]).pack(pady=(0, 10))
@@ -2671,7 +2671,7 @@ class App:
         char = m.get("character") or m.get("name", "")
         if gdrive is None or not gdrive.is_signed_in():
             self.set_adv_status(self.t("請先登入 Google")); return
-        if not messagebox.askyesno("VoiceWeaver",
+        if not messagebox.askyesno("拾語者",
                                    f"要從雲端刪除「{char}」嗎？\n\n"
                                    "所有裝置（手機／網頁／Colab）都會看不到這個角色。\n"
                                    "檔案會進 Google Drive 垃圾桶，可自行還原。"):
@@ -3293,7 +3293,7 @@ class App:
         """把曲庫搬成 Models/ 版面（本機＋Drive）。"""
         from tkinter import messagebox
         if not messagebox.askyesno(
-                "VoiceWeaver",
+                "拾語者",
                 self.t("要把曲庫整理成新版面嗎？\n\n"
                        "語音模型會移到 Models/ 底下，聲波模型（專屬發音）放 AcousticModels/，"
                        "兩種模型分開放才不會互相誤刪。\n\n"
@@ -3316,7 +3316,7 @@ class App:
             self.set_adv_status(self.t("基礎語音模型已齊全"))
             return
         if not messagebox.askyesno(
-                "VoiceWeaver",
+                "拾語者",
                 f"語音合成需要 GPT-SoVITS 基礎模型，目前缺 {len(miss)} 個檔（約 1.6GB）。\n\n"
                 "要現在下載嗎？下載完語音服務就能啟動。\n"
                 "（用行動網路分享的話會很久，建議接 Wi-Fi）"):
@@ -3518,10 +3518,10 @@ class App:
     def adv_gdrive_login(self):
         from tkinter import messagebox
         if gdrive is None or not gdrive.deps_ok():
-            messagebox.showinfo("VoiceWeaver", "環境缺 google 套件；請更新語音中心。")
+            messagebox.showinfo("拾語者", "環境缺 google 套件；請更新語音中心。")
             return
         if not gdrive.client_secret_path():
-            messagebox.showinfo("VoiceWeaver",
+            messagebox.showinfo("拾語者",
                                 "尚未放置 google_client_secret.json。\n請放到：\n"
                                 + os.path.join(os.path.expanduser('~/Library/Application Support/VoiceWeaver'),
                                                'google_client_secret.json'))

@@ -336,10 +336,14 @@ private fun TargetPicker(
             // 有雲端 Whisper（多語）就整題換成介面語言；只有裝置端 Vosk（中文單一模型）
             // 時題目必須維持中文，改成在下面補一行語意註解。
             val multiStt = multilingualStt
-            ClinicalBankRow(I18n.tr("字詞（名詞）"), com.example.data.AphasiaPractice.nouns.take(12), multiStt, onPick, neonCyan, textLight)
-            ClinicalBankRow(I18n.tr("字詞（動作）"), com.example.data.AphasiaPractice.verbs.take(10), multiStt, onPick, neonCyan, textLight)
-            ClinicalBankRow(I18n.tr("短句"), com.example.data.AphasiaPractice.mediumSentences.take(8), multiStt, onPick, neonCyan, textLight)
-            ClinicalBankRow(I18n.tr("情境句"), com.example.data.AphasiaPractice.hardSentences.take(4), multiStt, onPick, neonCyan, textLight)
+            // 四級題庫：單詞 → 詞組 → 短句 → 情境長句（中英日韓同一份分級，見 PracticeLevel）
+            com.example.data.PracticeLevel.values().forEach { level ->
+                ClinicalBankRow(
+                    I18n.tr(level.displayName),
+                    com.example.data.AphasiaPractice.levelPreview(level),
+                    multiStt, onPick, neonCyan, textLight
+                )
+            }
 
             // AI 智慧推薦（依使用者程度）
             Spacer(Modifier.height(16.dp))
@@ -695,6 +699,12 @@ private fun PracticeCard(
                     fontSize = 13.sp, fontWeight = FontWeight.Bold
                 )
             }
+            // 隱私承諾要讓使用者看得到，不是只寫在程式註解裡
+            Spacer(Modifier.height(4.dp))
+            Text(
+                I18n.tr("🔒 跟讀錄音只用來評分，評分完成後立即從手機刪除。"),
+                fontSize = 10.sp, color = textMuted, lineHeight = 14.sp
+            )
 
             // 評分結果
             AnimatedVisibility(visible = rehab.lastScore != null) {
@@ -730,6 +740,27 @@ private fun PracticeCard(
                         if (rehab.aiFeedback.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
                             Text("💬 ${rehab.aiFeedback}", fontSize = 12.sp, color = scoreColor, fontWeight = FontWeight.Medium)
+                        }
+                        // AI 分項回饋：流暢度、語調、錯誤內容。只有引擎真的給了才顯示——
+                        // 備援的字元比對沒有這些分項，用總分冒充等於給治療師假資料。
+                        val fluency = rehab.lastFluency
+                        val prosody = rehab.lastProsody
+                        if (fluency != null || prosody != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                listOfNotNull(
+                                    fluency?.let { I18n.tr("流暢度 %d").format(it) },
+                                    prosody?.let { I18n.tr("語調 %d").format(it) }
+                                ).joinToString("  ·  "),
+                                fontSize = 11.sp, color = textLight
+                            )
+                        }
+                        if (rehab.wrongChars.isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                I18n.tr("錯誤內容：%s").format(rehab.wrongChars.take(8).joinToString("、")),
+                                fontSize = 11.sp, color = dangerRose, lineHeight = 15.sp
+                            )
                         }
                         if (rehab.lastRecognized.isNotBlank()) {
                             Spacer(Modifier.height(4.dp))

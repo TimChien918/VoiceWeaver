@@ -217,7 +217,7 @@ object LocalSovitsHelper {
      * 舊版腳本會在 `pip install torch` 停住；保留按鈕但改成不再執行失敗安裝。
      */
     val TERMUX_SETUP_SCRIPT = """
-        # ====== VoiceWeaver GPT-SoVITS 說明 ======
+        # ====== 拾語者 Speak My Life GPT-SoVITS 說明 ======
         echo "原因：官方 PyTorch pip wheel 不支援 Android/Termux。"
         echo "所以 pip install torch --index-url https://download.pytorch.org/whl/cpu 會失敗。"
         echo ""
@@ -232,7 +232,7 @@ object LocalSovitsHelper {
         echo ""
         echo "重要：上面的指令要在 Mac 的「終端機」執行，不是在 Termux 執行。"
         echo ""
-        echo "VoiceWeaver 的 GPT-SoVITS API 位址填："
+        echo "拾語者 App 的 GPT-SoVITS API 位址填："
         echo "  http://你的電腦IP:9880    （無線/LAN）"
         echo "  http://127.0.0.1:9880     （有線/USB，需先 adb reverse tcp:9880 tcp:9880）"
         echo "  http://100.x.x.x:9880     （全域網 Tailscale，外網/4G/5G 皆可）"

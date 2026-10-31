@@ -1,6 +1,6 @@
-# tools/GPT-SoVITS — 電腦端語音中心（VoiceWeaver 自訂部分）
+# tools/GPT-SoVITS — 電腦端語音中心（拾語者 Speak My Life 自訂部分）
 
-這裡放的是 **VoiceWeaver 專屬**的電腦端控制台、伺服器與啟動腳本（跨平台：macOS / Windows / Linux）。
+這裡放的是 **拾語者（原 VoiceWeaver）專屬**的電腦端控制台、伺服器與啟動腳本（跨平台：macOS / Windows / Linux）。
 上游 GPT-SoVITS 框架本體、conda 環境、模型權重、參考音檔**不在此**（體積大／版權／已 `.gitignore`），
 需另外安裝。
 

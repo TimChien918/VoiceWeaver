@@ -15,7 +15,7 @@
   全程有進度視窗，安裝紀錄寫在 %LOCALAPPDATA%\VoiceWeaver\logs\install.log。
 #>
 $ErrorActionPreference = 'Stop'
-$Title = 'VoiceWeaver 語音中心'
+$Title = '拾語者 語音中心'
 
 # ── 路徑 ─────────────────────────────────────────────────────────────────
 $RES      = $PSScriptRoot                                  # 安裝包資料夾

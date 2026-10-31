@@ -241,7 +241,7 @@ data class CrisisAction(
             java.util.Locale.TAIWAN
         ).format(java.util.Date())
         return buildString {
-            appendLine("<b>${tr("🆘 VoiceWeaver 緊急通報")}</b>")
+            appendLine("<b>${tr("🆘 拾語者 緊急通報")}</b>")
             appendLine(tr("使用者輸入觸發危機關鍵字，請立即聯絡。"))
             appendLine()
             appendLine("${tr("🗣 輸入")}：${userText.take(120)}")

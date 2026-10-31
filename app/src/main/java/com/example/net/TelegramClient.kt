@@ -22,12 +22,20 @@ import java.util.concurrent.TimeUnit
  * 使用方式：
  * ```
  * TelegramClient.sendEmergency(
- *   "🆘 [VoiceWeaver] 失語症使用者送出求救\n地點: 24.123, 120.456",
- *   chatId = null  // null = 用 BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
+ *   "🆘 [拾語者] 失語症使用者送出求救\n地點: 24.123, 120.456",
+ *   chatId = settings.emergencyChatId  // 使用者在設定頁指定的家人
  * )
  * ```
+ *
+ * **危機訊息僅傳送給指定家人。** 收件者只認使用者在設定頁填的 Chat ID；沒填就不送，
+ * 回 [Result.failure] 讓畫面改提示撥 119。以前空值會退回 BuildConfig 的預設 Chat ID——
+ * 那是「建置這支 App 的人」寫在 .env 裡的對象，不是這位使用者指定的家人，
+ * 等於把病人的求救訊息、定位與照片送給一個他從沒同意過的人。
  */
 object TelegramClient {
+
+    /** 收件者：只用呼叫端給的（＝設定頁指定的）Chat ID，空白就是「沒有收件者」。 */
+    internal fun resolveTarget(chatId: String?): String = chatId?.trim().orEmpty()
 
     private const val BASE_URL = "https://api.telegram.org/"
 
@@ -77,8 +85,13 @@ object TelegramClient {
         val token = com.example.data.ApiKeyOverrides.resolve(
             com.example.data.ApiKeyOverrides.telegramBotToken, BuildConfig.TELEGRAM_BOT_TOKEN
         )
-        val target = chatId ?: BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
-        if (token.isBlank() || target.isBlank()) {
+        val target = resolveTarget(chatId)
+        if (target.isBlank()) {
+            return@withContext Result.failure(
+                IllegalStateException("No family Chat ID set in Settings — not sending anywhere")
+            )
+        }
+        if (token.isBlank()) {
             return@withContext Result.failure(
                 IllegalStateException("Telegram secrets missing in BuildConfig (.env not picked up)")
             )
@@ -104,7 +117,7 @@ object TelegramClient {
     private fun token(): String = com.example.data.ApiKeyOverrides.resolve(
         com.example.data.ApiKeyOverrides.telegramBotToken, BuildConfig.TELEGRAM_BOT_TOKEN
     )
-    private fun target(chatId: String?): String = chatId ?: BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
+    private fun target(chatId: String?): String = resolveTarget(chatId)
 
     /** 上傳照片（前/後鏡頭擷取）給家人。method = sendPhoto，欄位 photo。 */
     suspend fun sendPhoto(file: File, caption: String, chatId: String? = null): Result<String> =
