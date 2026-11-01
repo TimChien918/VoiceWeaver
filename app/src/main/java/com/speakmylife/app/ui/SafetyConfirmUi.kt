@@ -31,6 +31,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +56,12 @@ fun SpeakGateDialogs(viewModel: SpeakMyLifeViewModel, p: AppPalette) {
     when (val g = gate) {
         is SpeakMyLifeViewModel.SpeakGate.NeedConfirm -> AlertDialog(
             onDismissRequest = { viewModel.dismissSpeakGate() },
+            // 液態玻璃對話框：彈簧彈出（減少動態時直接出現）＋高光描邊，底色 0.92 半透明
+            // ——後面是壓暗過的畫面，0.92 才能讓灰色說明字維持 4.5:1。高對比為實色＋ 2dp 框。
+            modifier = Modifier
+                .popIn(key = g.text)
+                .glassDecor(p, MaterialTheme.shapes.extraLarge),
+            tonalElevation = 0.dp,
             icon = { Icon(Icons.Default.Warning, null, tint = p.auraAmber) },
             title = { Text(I18n.tr("醫療相關內容，請確認"), color = p.textLight) },
             text = {
@@ -76,7 +85,7 @@ fun SpeakGateDialogs(viewModel: SpeakMyLifeViewModel, p: AppPalette) {
                     Text(I18n.tr("取消"), color = p.textMuted)
                 }
             },
-            containerColor = p.surface
+            containerColor = glassFill(p, 0.92f)
         )
         is SpeakMyLifeViewModel.SpeakGate.Locked -> {
             // 演示進行中把對話框視窗的「壓暗」關掉。
@@ -91,6 +100,10 @@ fun SpeakGateDialogs(viewModel: SpeakMyLifeViewModel, p: AppPalette) {
             }
             AlertDialog(
             onDismissRequest = { viewModel.dismissSpeakGate() },
+            modifier = Modifier
+                .popIn(key = g.reason)
+                .glassDecor(p, MaterialTheme.shapes.extraLarge, hcBorder = p.dangerRose),
+            tonalElevation = 0.dp,
             icon = { Icon(Icons.Default.Block, null, tint = p.dangerRose) },
             title = { Text(I18n.tr("語音輸出已鎖定"), color = p.dangerRose) },
             text = { Text(g.reason, color = p.textMuted, fontSize = 14.sp, lineHeight = 20.sp) },
@@ -99,7 +112,7 @@ fun SpeakGateDialogs(viewModel: SpeakMyLifeViewModel, p: AppPalette) {
                     Text(I18n.tr("我知道了"), color = p.textLight)
                 }
             },
-            containerColor = p.surface
+            containerColor = glassFill(p, 0.92f)
             )
         }
         else -> Unit
@@ -135,9 +148,17 @@ fun AacPendingConfirmCard(
             // AI 換了一句（再猜）也會重播，讓患者知道「這是新的一句」。
             .popIn(key = pendingText)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(p.neonCyan.copy(alpha = 0.10f))
-            .border(2.dp, p.neonCyan.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            // 液態玻璃確認卡：帶一點主色的半透明玻璃、主色下緣描邊、柔和陰影。
+            // 高對比：實色黑底＋ 2dp 主色框（同原本的醒目外框）。
+            .liquidGlass(
+                palette = p,
+                shape = RoundedCornerShape(20.dp),
+                opacity = 0.88f,
+                tint = p.neonCyan,
+                tintAlpha = 0.10f,
+                elevation = 6.dp,
+                hcBorder = p.neonCyan
+            )
             .padding(if (bigCard) 16.dp else 10.dp),
         verticalArrangement = Arrangement.spacedBy(if (bigCard) 12.dp else 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -183,10 +204,14 @@ fun AacPendingConfirmCard(
             color = p.textMuted
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            val acceptSrc = remember { MutableInteractionSource() }
+            val regenSrc = remember { MutableInteractionSource() }
+            val dismissSrc = remember { MutableInteractionSource() }
             Button(
                 onClick = onAccept,
                 colors = ButtonDefaults.buttonColors(containerColor = p.neonGreen),
-                modifier = Modifier.weight(1.6f).height(if (bigCard) 56.dp else 40.dp)
+                interactionSource = acceptSrc,
+                modifier = Modifier.weight(1.6f).height(if (bigCard) 56.dp else 40.dp).pressBounce(acceptSrc)
             ) {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, null, modifier = Modifier.size(if (bigCard) 24.dp else 16.dp))
                 Spacer(Modifier.width(6.dp))
@@ -195,7 +220,8 @@ fun AacPendingConfirmCard(
             OutlinedButton(
                 onClick = onRegenerate,
                 border = BorderStroke(1.dp, p.neonCyan.copy(alpha = 0.55f)),
-                modifier = Modifier.weight(1f).height(if (bigCard) 56.dp else 40.dp)
+                interactionSource = regenSrc,
+                modifier = Modifier.weight(1f).height(if (bigCard) 56.dp else 40.dp).pressBounce(regenSrc)
             ) {
                 Icon(Icons.Default.Refresh, null, tint = p.neonCyan, modifier = Modifier.size(if (bigCard) 20.dp else 14.dp))
                 Spacer(Modifier.width(4.dp))
@@ -204,7 +230,8 @@ fun AacPendingConfirmCard(
             OutlinedButton(
                 onClick = onDismiss,
                 border = BorderStroke(1.dp, p.dangerRose.copy(alpha = 0.55f)),
-                modifier = Modifier.weight(1f).height(if (bigCard) 56.dp else 40.dp)
+                interactionSource = dismissSrc,
+                modifier = Modifier.weight(1f).height(if (bigCard) 56.dp else 40.dp).pressBounce(dismissSrc)
             ) {
                 Icon(Icons.Default.Close, null, tint = p.dangerRose, modifier = Modifier.size(if (bigCard) 20.dp else 14.dp))
                 Spacer(Modifier.width(4.dp))

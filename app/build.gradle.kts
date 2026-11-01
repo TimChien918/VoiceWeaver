@@ -16,8 +16,8 @@ android {
     applicationId = "com.speakmylife.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 160
-    versionName = "1.6.0"
+    versionCode = 162
+    versionName = "1.6.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

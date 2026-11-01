@@ -77,6 +77,14 @@ import com.speakmylife.app.ui.report.ReportScreen
 import com.speakmylife.app.ui.settings.ExtendedSettingsScreen
 import com.speakmylife.app.ui.training.StoryTrainingScreen
 import com.speakmylife.app.ui.theme.LocalAppPalette
+import com.speakmylife.app.ui.theme.backgroundGradient
+import com.speakmylife.app.ui.BouncyNavIcon
+import com.speakmylife.app.ui.GlassEdge
+import com.speakmylife.app.ui.GlassNavItem
+import com.speakmylife.app.ui.LiquidAmbientBackdrop
+import com.speakmylife.app.ui.LiquidGlassNavBar
+import com.speakmylife.app.ui.liquidGlassBar
+import androidx.compose.foundation.background
 import com.speakmylife.app.ui.theme.MyApplicationTheme
 import coil.compose.AsyncImage
 import android.content.Intent
@@ -191,13 +199,6 @@ class MainActivity : ComponentActivity() {
                     // 幾乎看不出「現在在哪一頁」。膠囊本身由 Material 動畫展開／收起，
                     // 這裡只負責顏色夠明顯（高對比下是黑底上的淡黃膠囊＋亮黃圖示）。
                     val navIndicator = palette.neonCyan.copy(alpha = if (palette.isLight) 0.14f else 0.20f)
-                    val navColors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = palette.neonCyan,
-                        selectedTextColor = palette.neonCyan,
-                        unselectedIconColor = palette.textMuted,
-                        unselectedTextColor = palette.textMuted,
-                        indicatorColor = navIndicator
-                    )
                     // 切頁方向跟著導覽列的左右順序：往右邊的分頁就從右邊滑進來，
                     // 讓「我現在在第幾頁」有空間感。位移只有 1/12 寬、搭配淡入，
                     // 夠表達方向又不會整片甩過去讓人頭暈。不在分頁列上的子頁（設定內頁、
@@ -209,7 +210,12 @@ class MainActivity : ComponentActivity() {
                         return if (a < 0 || b < 0) 0 else if (b > a) 1 else if (b < a) -1 else 0
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 主題漸層底改畫在最外層：各分頁、玻璃標題列、玻璃導覽列都透出同一片底
+                            .then(if (hasCustomBackground) Modifier else Modifier.background(palette.backgroundGradient))
+                    ) {
                         if (hasCustomBackground) {
                             AsyncImage(
                                 model = settings.customBackgroundUri,
@@ -217,12 +223,16 @@ class MainActivity : ComponentActivity() {
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        } else {
+                            // Liquid Glass 後面的品牌色光暈（緩慢漂移；高對比不畫、減少動態時靜止）
+                            LiquidAmbientBackdrop(palette, Modifier.fillMaxSize())
                         }
                         Row(modifier = Modifier.fillMaxSize()) {
                         if (useRail) {
                             NavigationRail(
-                                containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface,
+                                containerColor = androidx.compose.ui.graphics.Color.Transparent,
                                 modifier = Modifier
+                                    .liquidGlassBar(palette, if (hasCustomBackground) 0.92f else 0.82f, GlassEdge.End)
                                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical))
                                     .verticalScroll(rememberScrollState())
                             ) {
@@ -252,7 +262,8 @@ class MainActivity : ComponentActivity() {
                         }
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
-                            containerColor = if (hasCustomBackground) palette.darkBg.copy(alpha = 0.78f) else palette.darkBg,
+                            // 沒有自訂背景時透明：漸層底與光暈畫在外層 Box，玻璃導覽列才透得到
+                            containerColor = if (hasCustomBackground) palette.darkBg.copy(alpha = 0.78f) else androidx.compose.ui.graphics.Color.Transparent,
                             bottomBar = {
                                 // 寬螢幕改用左側導覽軌（在 Scaffold 外層），這裡就不重複出現
                                 if (!useRail) {
@@ -262,21 +273,15 @@ class MainActivity : ComponentActivity() {
                                     // 而且選中的那個有底色，所以字大到放不下就直接不顯示文字。
                                     val fsNav = LocalDensity.current.fontScale.coerceAtLeast(0.1f)
                                     val navLabels = fsNav < 1.8f
-                                    NavigationBar(containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface) {
-                                        tabs.forEach { tab ->
-                                            val selected = currentRoute == tab.route
-                                            NavigationBarItem(
-                                                icon = { NavIcon(tab, selected) },
-                                                label = if (!navLabels) null else {
-                                                    { Text(tab.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                                           fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
-                                                },
-                                                selected = selected,
-                                                onClick = { navController.go(tab.route) },
-                                                colors = navColors
-                                            )
-                                        }
-                                    }
+                                    // 液態玻璃導覽列＋會拉伸回彈的液體指示器（見 LiquidGlass.kt）
+                                    LiquidGlassNavBar(
+                                        palette = palette,
+                                        items = tabs.map { GlassNavItem(it.icon, it.label) },
+                                        selectedIndex = tabs.indexOfFirst { it.route == currentRoute },
+                                        onSelect = { i -> navController.go(tabs[i].route) },
+                                        showLabels = navLabels,
+                                        opacity = if (hasCustomBackground) 0.92f else 0.80f
+                                    )
                                 }
                             }
                         ) { innerPadding ->
@@ -576,12 +581,8 @@ class MainActivity : ComponentActivity() {
  */
 @androidx.compose.runtime.Composable
 private fun NavIcon(tab: NavTab, selected: Boolean) {
-    val s by animateFloatAsState(
-        targetValue = if (selected) 1.12f else 1f,
-        animationSpec = tween(Motion.Standard, easing = Motion.Emphasized),
-        label = "navIcon"
-    )
-    Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.scale(s))
+    // 選中時輕跳一下再彈回（減少動態時靜止），與底部液態導覽列同一套動態
+    BouncyNavIcon(icon = tab.icon, selected = selected, contentDescription = tab.label)
 }
 
 /** 一個一級分頁。底部導覽列與側邊導覽軌共用同一份定義，兩邊不會漂移。 */

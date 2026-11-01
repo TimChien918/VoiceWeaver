@@ -374,13 +374,17 @@ fun Modifier.enterStaggered(index: Int, key: Any?): Modifier {
     LaunchedEffect(key) {
         if (p.value < 1f) {
             delay(index.coerceAtLeast(0) * Motion.Stagger.toLong())
-            p.animateTo(1f, tween(Motion.Standard + 80, easing = Motion.Emphasized))
+            // 低回彈彈簧（dampingRatio 0.68）：浮上來時會微微超過一點再落定，像輕輕放下一張紙
+            p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.68f, stiffness = 220f))
         }
     }
     return this.graphicsLayer {
         val v = p.value
-        alpha = v
+        alpha = v.coerceIn(0f, 1f)
         translationY = (1f - v) * 20.dp.toPx()
+        val sc = 0.97f + 0.03f * v.coerceAtMost(1f)
+        scaleX = sc
+        scaleY = sc
     }
 }
 

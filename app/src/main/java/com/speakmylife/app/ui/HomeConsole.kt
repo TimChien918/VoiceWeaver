@@ -1,9 +1,6 @@
 package com.speakmylife.app.ui
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -12,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -155,6 +151,13 @@ fun HomeHeroCard(
             .background(heroBrush)
             .then(if (hc) Modifier.border(2.dp, palette.neonCyan, BrandCardShape) else Modifier)
     ) {
+        // 流動光暈：右上一團暖黃、左下一團玉綠，各自慢慢繞圈（20 秒上下一圈）。
+        // 亮度壓得很低——白字壓在光暈正中央也要有 4.5:1。漂移只動 graphicsLayer，
+        // 不重組、不重畫；減少動態時停在原位，高對比不畫。
+        if (!hc) {
+            GlowBlob(BrandGold, 0.18f, 0.92f, 0.10f, 0.55f, 26.dp, 18.dp, 19000, !reduce, blurRadius = 20.dp)
+            GlowBlob(Color(0xFF7FCDB3), 0.16f, 0.06f, 0.95f, 0.60f, 30.dp, 14.dp, 23000, !reduce, phaseOffset = 0.5f, blurRadius = 20.dp)
+        }
         // 暖黃絲線（裝飾，不參與無障礙樹）。高對比下不畫，避免干擾文字。
         if (!hc) {
             Canvas(modifier = Modifier.matchParentSize()) {
@@ -187,7 +190,9 @@ fun HomeHeroCard(
                 container = if (hc) palette.neonCyan else BrandGold,
                 content = if (hc) Color.Black else BrandGoldInk,
                 onClick = onStartSpeaking,
-                minHeight = 56.dp
+                minHeight = 56.dp,
+                glass = true,
+                palette = palette
             )
         }
     }
@@ -205,26 +210,35 @@ fun PillButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     minHeight: Dp = 52.dp,
+    glass: Boolean = false,
+    palette: AppPalette? = null,
 ) {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = if (pressed) tween(Motion.Quick) else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
-        label = "pillPress"
-    )
+    // 液態玻璃膠囊：同色但半透明（0.86）、上半部一道白色高光、上亮下暗的描邊。
+    // 底下是深綠問候卡，深棕字在這顆膠囊上仍有 ~6:1。高對比：實色＋ 2dp 白框。
+    val useGlass = glass && palette != null
+    val glassMod = if (useGlass && palette != null) {
+        if (palette.isHighContrast) Modifier.clip(CircleShape).background(container).border(2.dp, Color.White, CircleShape)
+        else Modifier.liquidGlass(
+            palette = palette,
+            shape = CircleShape,
+            fill = container.copy(alpha = 0.86f),
+            elevation = 6.dp,
+        )
+    } else Modifier
     Button(
         onClick = onClick,
         shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (useGlass) Color.Transparent else container,
+            contentColor = content
+        ),
         contentPadding = PaddingValues(horizontal = 26.dp, vertical = 12.dp),
         interactionSource = source,
         modifier = modifier
             .heightIn(min = minHeight)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .pressBounce(source)
+            .then(glassMod)
     ) {
         Text(text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
@@ -294,20 +308,12 @@ private fun FeatureTile(
 ) {
     val hc = palette == HighContrastPalette
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = if (pressed) tween(Motion.Quick) else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
-        label = "featPress"
-    )
     val tileShape = RoundedCornerShape(20.dp)
     Column(
         modifier = modifier
             .heightIn(min = 120.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            // 彈簧按壓回饋（減少動態時不縮放）
+            .pressBounce(source)
             .clip(tileShape)
             .background(if (hc) Color.Black else spec.tint.copy(alpha = if (palette.isLight) 0.06f else 0.10f))
             .border(

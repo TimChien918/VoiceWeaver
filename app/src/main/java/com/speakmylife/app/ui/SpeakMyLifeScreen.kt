@@ -152,10 +152,15 @@ fun SpeakMyLifeScreen(
                         }
                     }
                 },
+                // 液態玻璃標題列：內容從下面捲過去時透出一點顏色。會蓋在任意內容
+                // （包括深綠問候卡）上，所以不透明度 0.86——標語小字壓在深綠上也有 4.5:1。
+                // 高對比：不透明實色＋下緣 2dp 實線。
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = scaffoldBg,
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                     titleContentColor = textLight
-                )
+                ),
+                modifier = Modifier.liquidGlassBar(p, if (hasCustomBackground) 0.92f else 0.86f, GlassEdge.Bottom)
             )
         },
         // 沒有自訂背景圖時用主題漸層底（有深度，不死板平塗）；有圖時維持半透明壓底讓圖透出
@@ -205,13 +210,18 @@ fun SpeakMyLifeScreen(
             state = demoListState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(
-                    if (hasCustomBackground) Modifier
-                    else Modifier.background(p.backgroundGradient)
+                // 主題漸層底與光暈改由 MainActivity 最外層畫（玻璃列才透得到同一片底）。
+                // 不再 padding(innerPadding)：清單延伸到玻璃標題列後面，捲動時內容從玻璃下穿過；
+                // 改用 contentPadding 讓第一項仍從標題列下方開始、捲到某項時也停在標題列下。
+                .padding(
+                    start = innerPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    end = innerPadding.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
                 )
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 28.dp),
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding() + 4.dp,
+                bottom = 28.dp + innerPadding.calculateBottomPadding()
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
@@ -249,8 +259,10 @@ fun SpeakMyLifeScreen(
                             listOf(I18n.tr("😖 我痛") to I18n.tr("我很痛，請幫幫我。"),
                                    I18n.tr("💧 喝水") to I18n.tr("我想要喝水。"),
                                    I18n.tr("🚻 廁所") to I18n.tr("我想上廁所，請帶我去。")).forEachIndexed { i, (label, phrase) ->
+                                val sosSrc = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                                 Button(
                                     onClick = { viewModel.speakClinicalPhrase(phrase) },
+                                    interactionSource = sosSrc,
                                     colors = ButtonDefaults.buttonColors(containerColor = dangerRose),
                                     shape = RoundedCornerShape(20.dp),   // 大圓角膠囊（同網頁求救鈕）
                                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 14.dp),
@@ -258,6 +270,7 @@ fun SpeakMyLifeScreen(
                                     // 畫面上卻沒有任何按鈕動過——觀眾會以為是自己播的。
                                     modifier = Modifier
                                         .weight(1f)
+                                        .pressBounce(sosSrc)
                                         .scale(if (demoPressed == "sos_$i") 0.94f else 1f)
                                 ) {
                                     Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
