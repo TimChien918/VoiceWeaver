@@ -40,7 +40,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
         <activity
-            android:name="com.example.MainActivity"
+            android:name="com.speakmylife.app.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication">
@@ -62,7 +62,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
         <service
-            android:name="com.example.demo.ScreenRecordService"
+            android:name="com.speakmylife.app.demo.ScreenRecordService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
     </application>

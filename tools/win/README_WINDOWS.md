@@ -48,7 +48,7 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 若想跳過 pip、直接解壓一份 conda-pack 好的環境（最快最穩）：
 
 - 安裝包資料夾放一份 `gpt-sovits-env.tar.gz`，或
-- 設定環境變數 `VW_ENV_URL` 指向該檔的下載網址。
+- 設定環境變數 `SML_ENV_URL` 指向該檔的下載網址。
 
 `launch.ps1` / exe 偵測到就會改用「下載／解壓既成環境 + `conda-unpack` 重定位」，而非 pip 自建。
 （conda 環境平台相依，此檔必須在 **Windows** 上用 `conda pack` 產生。）
@@ -77,7 +77,7 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
   > 直接跑不起來，所以門檻會讓它們正確退回 CPU。
 
 生圖／文字服務以 `torch.cuda.is_available()` 自動選裝置；語音(9880) 需在設定檔寫入 `device: cuda`，
-控制視窗啟動時會偵測並設定 `VOICEWEAVER_DEVICE=cuda`，切換模型時 `update_config` 即寫成 GPU（半精度）。
+控制視窗啟動時會偵測並設定 `SML_DEVICE=cuda`，切換模型時 `update_config` 即寫成 GPU（半精度）。
 
 ---
 

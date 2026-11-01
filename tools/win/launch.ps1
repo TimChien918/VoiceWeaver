@@ -9,7 +9,7 @@
   模型（SD-Turbo 生圖、Qwen 文字）會在「第一次使用該功能時」自動下載（免金鑰）。
   聲音模型(9880) 由使用者在控制視窗「模型/進階」分頁自行匯入。
 
-  「快速路徑」：若安裝包自帶 gpt-sovits-env.tar.gz，或設定了 $env:VW_ENV_URL
+  「快速路徑」：若安裝包自帶 gpt-sovits-env.tar.gz，或設定了 $env:SML_ENV_URL
   指向預先 conda-pack 好的環境壓縮檔，就改用「下載/解壓既成環境」（最快最穩）。
 
   全程有進度視窗，安裝紀錄寫在 %LOCALAPPDATA%\VoiceWeaver\logs\install.log。
@@ -35,7 +35,7 @@ $CONTROL_VER   = '3'                                       # 控制程式碼版�
 
 # 快速路徑：既成環境（自帶或下載）
 $ENV_TAR_LOCAL = Join-Path $RES 'gpt-sovits-env.tar.gz'
-$ENV_URL       = $env:VW_ENV_URL                           # 可選：預打包環境的下載網址
+$ENV_URL       = $env:SML_ENV_URL                           # 可選：預打包環境的下載網址
 
 # Python 執行環境：python-build-standalone（免安裝、解壓即用、內含 pip）——比 Miniforge NSIS 可靠
 $PBS_TAG = '20260623'

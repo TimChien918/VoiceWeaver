@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-PORT="${VOICEWEAVER_TEXT_PORT:-9882}"
+PORT="${SML_TEXT_PORT:-9882}"
 
 export MPLCONFIGDIR="$ROOT/.cache/matplotlib"
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"

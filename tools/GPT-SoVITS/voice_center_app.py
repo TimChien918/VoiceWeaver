@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""拾語者 Speak My Life 語音中心（原 VoiceWeaver）— Windows / macOS / Linux 原生控制台。"""
+"""拾語者 Speak My Life 語音中心（原名 VoiceWeaver）— Windows / macOS / Linux 原生控制台。"""
 from __future__ import annotations
 
 import os
@@ -27,12 +27,41 @@ else:
     EXE_DIR = os.path.dirname(os.path.abspath(__file__))
     _MEIPASS = EXE_DIR
 
+# 更名搬遷（原名 VoiceWeaver）：App 資料夾、~/.speakmylife、~/Speak-My-Life-電腦端 —
+# 只有舊的就改名過來（舊位置留捷徑），失敗沿用舊的。規則集中在 sml_migrate.py。
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import sml_migrate as _mig
+except Exception:
+    _mig = None
+
+
+def _app_support_dir() -> str:
+    if _mig is not None:
+        try:
+            return _mig.app_support_dir()
+        except Exception:
+            pass
+    if os.name == "nt":
+        return os.path.join(os.environ.get("LOCALAPPDATA", ""), "Speak-My-Life")
+    return os.path.expanduser("~/Library/Application Support/Speak-My-Life")
+
+
+# App 自己的儲存空間（Mac: ~/Library/Application Support/Speak-My-Life；
+# Windows: %LOCALAPPDATA%\Speak-My-Life，與 tools/win/launch.ps1、tools/dmg/launch.sh 一致）
+APPSUP = _app_support_dir()
+if _mig is not None:
+    try:
+        _mig.desktop_home()      # ~/VoiceWeaver-電腦端 → ~/Speak-My-Life-電腦端（只有舊的才動）
+    except Exception:
+        pass
+
 # 服務腳本搜尋順序：
-#   1. %LOCALAPPDATA%\VoiceWeaver\tools\GPT-SoVITS  (launch.ps1 安裝位置)
+#   1. %LOCALAPPDATA%\Speak-My-Life\tools\GPT-SoVITS  (launch.ps1 安裝位置)
 #   2. exe 同層目錄 / GPT-SoVITS
 #   3. exe 同層目錄（開發者直接執行）
 _SERVICE_ROOTS = [
-    os.path.join(os.environ.get("LOCALAPPDATA", ""), "VoiceWeaver", "tools", "GPT-SoVITS"),
+    os.path.join(APPSUP, "tools", "GPT-SoVITS"),
     os.path.join(EXE_DIR, "GPT-SoVITS"),
     EXE_DIR,
     _MEIPASS,
@@ -48,7 +77,6 @@ def _find_service_root() -> str:
 ROOT = _find_service_root()
 
 # ── 首次安裝位置（與 tools/win/launch.ps1 一致） ──────────────────────────
-APPSUP    = os.path.join(os.environ.get("LOCALAPPDATA", ""), "VoiceWeaver")
 TOOLS_DIR = os.path.join(APPSUP, "tools")
 CONDA_DIR = os.path.join(TOOLS_DIR, "miniforge3")
 ENV_DIR   = os.path.join(TOOLS_DIR, "gpt-sovits-env")
@@ -67,7 +95,7 @@ _PBS_TAG  = "20260623"
 PBS_URL   = ("https://github.com/astral-sh/python-build-standalone/releases/download/"
              f"{_PBS_TAG}/cpython-3.10.20+{_PBS_TAG}-x86_64-pc-windows-msvc-install_only.tar.gz")
 # 可選：預打包環境（conda-pack 產物）的下載網址；設了就走「下載既成環境」快速路徑
-ENV_TAR_URL = os.environ.get("VW_ENV_URL", "")
+ENV_TAR_URL = os.environ.get("SML_ENV_URL", "")
 PY_VERSION = "3.10"
 
 def env_installed() -> bool:
@@ -91,7 +119,7 @@ def _service_env() -> dict:
     n = str(max(1, cores - 2) if cores <= 6 else cores - 3)   # 4 核→2、6 核→4、8 核→5…
     for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
               "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "TORCH_NUM_THREADS",
-              "VOICEWEAVER_NUM_THREADS"):
+              "SML_NUM_THREADS"):
         env[k] = n
     # conda/框架版 Python 的 ssl 沒配系統 CA → 任何子程序內的 urllib/requests 下載
     # （fast_langdetect 語言模型、huggingface…）都會 CERTIFICATE_VERIFY_FAILED。
@@ -127,7 +155,7 @@ try:
     sys.path.insert(0, ROOT)
     sys.path.insert(0, _MEIPASS)
     # 告訴後端模組真正的安裝根（凍結版時 __file__ 在暫存目錄，會找錯 user_models/設定）
-    os.environ["VOICEWEAVER_ROOT"] = ROOT
+    os.environ["SML_ROOT"] = ROOT
     import model_setup_server as cc
     CC_OK = True
 except Exception as _e:
@@ -147,15 +175,13 @@ try:
 except Exception:
     gdrive = None
 
-# 預設曲庫根：App 自己的儲存空間（Mac: ~/Library/Application Support/VoiceWeaver，
-# Windows: %LOCALAPPDATA%\VoiceWeaver），不是使用者家目錄／外接磁碟。
+# 預設曲庫根：App 自己的儲存空間（Mac: ~/Library/Application Support/Speak-My-Life，
+# Windows: %LOCALAPPDATA%\Speak-My-Life），不是使用者家目錄／外接磁碟。
 # 曲庫是「本機快取」，理應由 App 管理、跟著這台電腦的系統帳號走，
 # 不該放在使用者看得到、可能移動/移除的位置（外接硬碟拔掉快取就消失了）。
-DEFAULT_LIBRARY_ROOT = os.path.join(
-    APPSUP if IS_WIN else os.path.expanduser("~/Library/Application Support/VoiceWeaver"),
-    "library")
+DEFAULT_LIBRARY_ROOT = os.path.join(APPSUP, "library")
 
-VOICE_CFG = "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
+VOICE_CFG = "GPT_SoVITS/configs/speakmylife_tts_infer.yaml"   # 舊 voiceweaver_tts_infer.yaml 由 model_setup_server 自動改名
 
 # Python 直譯器（非凍結版直接用 sys.executable；凍結版啟動時背景搜尋）
 _PY_LOCK = threading.Lock()
@@ -274,7 +300,7 @@ def run_bootstrap(progress):
         else:
             # 自建：python-build-standalone（解壓即用）→ pip 裝依賴
             if not os.path.isfile(ENV_PY):
-                tgz = os.path.join(os.environ.get("TEMP", TOOLS_DIR), "vw_python.tar.gz")
+                tgz = os.path.join(os.environ.get("TEMP", TOOLS_DIR), "sml_python.tar.gz")
                 _download(PBS_URL, tgz, progress, "下載 Python 執行環境", 0.02, 0.26)
                 progress(0.30, "解壓 Python 執行環境…")
                 import tarfile
@@ -462,8 +488,8 @@ def _write_mark(v: str):
         pass
 
 
-# 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 VOICEWEAVER_BIND=127.0.0.1 鎖本機。
-_BIND = os.environ.get("VOICEWEAVER_BIND", "0.0.0.0")
+# 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 SML_BIND=127.0.0.1 鎖本機。
+_BIND = os.environ.get("SML_BIND", "0.0.0.0")
 
 SERVICES = [
     ("9880", "語音合成 (GPT-SoVITS)",  "api_v2.py",           ["-a", _BIND, "-p", "9880", "-c", VOICE_CFG], True),
@@ -637,10 +663,10 @@ I18N = {
     "adv.import":   {"zh-TW":"📁 匯入單個資料夾", "en":"📁 Import one folder", "ja":"📁 フォルダを1つ取込", "ko":"📁 폴더 하나 가져오기"},
     "adv.importBatch": {"zh-TW":"📂 批量匯入資料夾", "en":"📂 Batch import folders", "ja":"📂 フォルダを一括取込", "ko":"📂 폴더 일괄 가져오기"},
     "adv.secCloudLib": {"zh-TW":"雲端曲庫（Google Drive）", "en":"Cloud library (Google Drive)", "ja":"クラウド曲庫（Google ドライブ）", "ko":"클라우드 라이브러리 (Google 드라이브)"},
-    "adv.gdHint": {"zh-TW":"用你自己的 Google 帳號登入，把整個曲庫上傳到「你自己的」Google Drive（VoiceWeaver/），Colab／手機／網頁就都讀得到同一份。只碰 App 自己建立的檔案。",
-                   "en":"Sign in with your own Google account to upload the whole library to YOUR Google Drive (VoiceWeaver/). Colab/phone/web then share the same copy. Only touches files this app created.",
-                   "ja":"自分の Google アカウントでログインし、曲庫を自分の Google Drive（VoiceWeaver/）にアップロード。Colab/スマホ/Web が同じものを参照。",
-                   "ko":"본인 Google 계정으로 로그인해 라이브러리를 본인 Google Drive(VoiceWeaver/)에 업로드. Colab/휴대폰/웹이 동일본을 공유."},
+    "adv.gdHint": {"zh-TW":"用你自己的 Google 帳號登入，把整個曲庫上傳到「你自己的」Google Drive（Speak-My-Life/），Colab／手機／網頁就都讀得到同一份。只碰 App 自己建立的檔案。",
+                   "en":"Sign in with your own Google account to upload the whole library to YOUR Google Drive (Speak-My-Life/). Colab/phone/web then share the same copy. Only touches files this app created.",
+                   "ja":"自分の Google アカウントでログインし、曲庫を自分の Google Drive（Speak-My-Life/）にアップロード。Colab/スマホ/Web が同じものを参照。",
+                   "ko":"본인 Google 계정으로 로그인해 라이브러리를 본인 Google Drive(Speak-My-Life/)에 업로드. Colab/휴대폰/웹이 동일본을 공유."},
     "adv.migrateLayout": {"zh-TW":"🗂 整理曲庫資料夾", "en":"🗂 Tidy library folders",
                           "ja":"🗂 曲庫フォルダを整理", "ko":"🗂 라이브러리 폴더 정리"},
     "adv.migrateHint": {"zh-TW":"語音模型移到 Models/、聲波模型（專屬發音）放 AcousticModels/，兩種模型分開放才不會互相誤刪。只移動位置，不重新上傳或下載。",
@@ -733,10 +759,7 @@ def _i18n_pick(entry, lang):
 
 
 def ui_cfg_dir() -> str:
-    if IS_WIN:
-        d = APPSUP
-    else:
-        d = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+    d = APPSUP
     try: os.makedirs(d, exist_ok=True)
     except Exception: pass
     return d
@@ -770,7 +793,7 @@ def _acquire_single_instance() -> bool:
         return True
     import ctypes
     global _WIN_MUTEX
-    _WIN_MUTEX = ctypes.windll.kernel32.CreateMutexW(None, False, "VoiceWeaverVoiceCenterMutex_v1")
+    _WIN_MUTEX = ctypes.windll.kernel32.CreateMutexW(None, False, "SpeakMyLifeVoiceCenterMutex_v1")
     if ctypes.windll.kernel32.GetLastError() == 183:   # ERROR_ALREADY_EXISTS
         try:
             # 視窗標題會隨介面語言變（繁中/英/日/韓），四種都要試——
@@ -1282,7 +1305,7 @@ class App:
         ROOT = GS_DIR
         with _PY_LOCK:
             _PY_PATH = ENV_PY
-        os.environ["VOICEWEAVER_ROOT"] = GS_DIR
+        os.environ["SML_ROOT"] = GS_DIR
         if CC_OK:
             try: cc.set_root(GS_DIR)
             except Exception: pass
@@ -1334,7 +1357,7 @@ class App:
         self.sync_models(arm_serial=serial)
 
     def _start_all_services(self):
-        self._load_emotion_root()   # 設 VOICEWEAVER_EMOTION_ROOT，讓 api_v2 子程序啟動時繼承
+        self._load_emotion_root()   # 設 SML_EMOTION_ROOT，讓 api_v2 子程序啟動時繼承
         self._detect_device_bg()
         self._start_lang_server()
         # 逐一啟動，不要三個服務一起載入模型——每個載入都會吃 ~85% CPU + 數 GB 記憶體，
@@ -1416,7 +1439,9 @@ class App:
                 if self.path == "/" or self.path.startswith("/health"):
                     cur = app_ref._bridge_voice or {}
                     return self._json(200, {
-                        "ok": True, "service": "voiceweaver-bridge",
+                        "ok": True, "service": "speakmylife-bridge",
+                        # 更名前的服務名：讓還在比對舊字串的 App／網頁也認得這台電腦
+                        "aliases": ["voiceweaver-bridge"],
                         "current": cur.get("name", ""), "lang": cur.get("lang", ""),
                         # 電腦端三項運算的即時可用性（給網頁顯示「誰由電腦跑」）
                         "voice": port_up(9880), "image": port_up(9881), "text": port_up(9882),
@@ -1725,7 +1750,7 @@ class App:
                     [py, "-c", "import torch;print('cuda' if torch.cuda.is_available() else 'cpu')"],
                     capture_output=True, text=True, timeout=30, **POPEN_KW)
                 if (r.stdout or "").strip() == "cuda":
-                    os.environ["VOICEWEAVER_DEVICE"] = "cuda"   # 行程共用，cc 也讀得到
+                    os.environ["SML_DEVICE"] = "cuda"   # 行程共用，cc 也讀得到
                     self.root.after(0, lambda: self.set_status(self.t("已啟用 GPU 加速（NVIDIA CUDA）")))
             except Exception:
                 pass
@@ -2302,7 +2327,7 @@ class App:
         elif not gdrive.is_signed_in():
             note = self.t("請先登入 Google 才能看到雲端曲庫")
         else:
-            root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+            root = os.environ.get("SML_EMOTION_ROOT", "")
             try:
                 self.adv_offline = bool(gdrive.cloud_catalog(root).get("offline", False))
                 if self.adv_offline:
@@ -2499,7 +2524,7 @@ class App:
                 pass
 
     def _cache_root(self) -> str:
-        return os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        return os.environ.get("SML_EMOTION_ROOT", "")
 
     def _cloud_characters(self):
         """曲庫角色清單＝雲端 ∪ 本機快取（含 downloaded）。
@@ -3186,11 +3211,12 @@ class App:
         except Exception:
             return ""
 
-    # ── 情緒模型資料夾（Google Drive）：設 VOICEWEAVER_EMOTION_ROOT ──
+    # ── 情緒模型資料夾（Google Drive）：設 SML_EMOTION_ROOT ──
     def _load_emotion_root(self) -> str:
         """讀記憶檔並設進本行程環境變數（api_v2 子程序啟動時繼承、app 橋接即時讀）。回路徑。
 
-        沒設定過就自動用預設曲庫 ~/VoiceWeaver（建好 + ZH/EN/JA/KO 範本），
+        沒設定過就自動用預設曲庫 DEFAULT_LIBRARY_ROOT（建好 + ZH/EN/JA/KO 範本），
+        記住的路徑若是更名前的舊位置（…/VoiceWeaver…），自動換成新位置。
         讓「情緒曲庫」免手動挑資料夾、匯入直接進這裡（合而為一）。
         """
         path = ""
@@ -3208,7 +3234,7 @@ class App:
             except Exception:
                 pass
         if path and os.path.isdir(path):
-            os.environ["VOICEWEAVER_EMOTION_ROOT"] = path
+            os.environ["SML_EMOTION_ROOT"] = path
             # 聲波模型（專屬發音）跟語音模型放同一個曲庫、不同資料夾。
             # 這裡只保證資料夾在，不碰既有版面——搬家要使用者按下去才做。
             try:
@@ -3217,7 +3243,7 @@ class App:
             except Exception:
                 pass
         else:
-            os.environ.pop("VOICEWEAVER_EMOTION_ROOT", None)
+            os.environ.pop("SML_EMOTION_ROOT", None)
             path = ""
         return path
 
@@ -3227,7 +3253,7 @@ class App:
         本機是改目錄項目、Drive 是改父節點，兩邊都不重新複製檔案內容，
         所以幾十 GB 的曲庫也只花幾秒。
         """
-        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        root = os.environ.get("SML_EMOTION_ROOT", "")
         if em is None or not root:
             return self.t("還沒設定曲庫資料夾")
         moved, err = em.migrate_layout(root)
@@ -3256,7 +3282,7 @@ class App:
         if not gdrive.deps_ok():
             return "（缺 google-api-python-client；請更新環境）"
         if not gdrive.client_secret_path():
-            return f"（尚未放 google_client_secret.json 到 {os.path.expanduser('~/Library/Application Support/VoiceWeaver')}）"
+            return f"（尚未放 google_client_secret.json 到 {APPSUP}）"
         try:
             if gdrive.is_signed_in():
                 ident = gdrive.firebase_identity() or {}
@@ -3281,7 +3307,7 @@ class App:
     def _sync_migrate_visibility(self):
         """只有還在舊版面時才顯示「整理曲庫資料夾」，整理完就自己收起來。"""
         try:
-            root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+            root = os.environ.get("SML_EMOTION_ROOT", "")
             if em is not None and root and em.is_legacy_layout(root):
                 self._mig_row.pack(fill="x", pady=(4, 4))
             else:
@@ -3523,7 +3549,7 @@ class App:
         if not gdrive.client_secret_path():
             messagebox.showinfo("拾語者",
                                 "尚未放置 google_client_secret.json。\n請放到：\n"
-                                + os.path.join(os.path.expanduser('~/Library/Application Support/VoiceWeaver'),
+                                + os.path.join(APPSUP,
                                                'google_client_secret.json'))
             return
         self.set_adv_status(self.t("開啟瀏覽器登入 Google…"))
@@ -3564,13 +3590,13 @@ class App:
     def _sync_to_drive_library(self, name, lang, gpt_src, sov_src, ref_src, prompt, emotion=None):
         """匯入即上傳：把模型複製進 Drive 曲庫的 Models/<語言>/<角色>/，並刷新 catalog。
 
-        只有設定了情緒資料夾（VOICEWEAVER_EMOTION_ROOT，即 Drive for Desktop 的曲庫）才動作；
+        只有設定了情緒資料夾（SML_EMOTION_ROOT，即 Drive for Desktop 的曲庫）才動作；
         實際上傳交給 Google Drive 桌面版。回傳目的地資料夾字串（沒動作回 ""）。
         """
         import shutil
         import re as _re
         from pathlib import Path
-        root = os.environ.get("VOICEWEAVER_EMOTION_ROOT", "")
+        root = os.environ.get("SML_EMOTION_ROOT", "")
         if em is None or not root or not os.path.isdir(root):
             return ""
         emotion = emotion or em.NEUTRAL
@@ -3818,7 +3844,7 @@ class App:
                 env["ADB"] = self.adb
                 env["PYTHONUTF8"] = "1"
                 env["PYTHONIOENCODING"] = "utf-8"
-                env["VOICEWEAVER_LANG"] = self.ui_lang    # 同步腳本輸出用目前介面語言
+                env["SML_LANG"] = self.ui_lang    # 同步腳本輸出用目前介面語言
                 cmd = [py, script]
                 if wifi_ip:
                     cmd += ["--wifi", wifi_ip]

@@ -12,7 +12,7 @@
 
 環境變數：
     TEXT_INFER_MODEL（預設 Qwen/Qwen2.5-1.5B-Instruct；想更快可用 Qwen/Qwen2.5-0.5B-Instruct）
-    VOICEWEAVER_TEXT_PORT（預設 9882）
+    SML_TEXT_PORT（預設 9882）
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT = int(os.environ.get("VOICEWEAVER_TEXT_PORT", "9882"))
+PORT = int(os.environ.get("SML_TEXT_PORT", "9882"))
 MODEL = os.environ.get("TEXT_INFER_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
 MAX_NEW_TOKENS = int(os.environ.get("TEXT_INFER_MAX_TOKENS", "96"))
 
@@ -151,8 +151,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     threading.Thread(target=load_model, daemon=True).start()
-    # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 VOICEWEAVER_BIND=127.0.0.1 鎖本機。
-    bind = os.environ.get("VOICEWEAVER_BIND", "0.0.0.0")
+    # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 SML_BIND=127.0.0.1 鎖本機。
+    bind = os.environ.get("SML_BIND", "0.0.0.0")
     server = ThreadingHTTPServer((bind, PORT), Handler)
     print(f"VoiceWeaver text server: http://{bind}:{PORT} (model {MODEL})", flush=True)
     server.serve_forever()

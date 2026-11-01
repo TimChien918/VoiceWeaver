@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.speakmylife.app"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.aphasiaassist.pkztuv"
+    applicationId = "com.speakmylife.app"
     minSdk = 24
     targetSdk = 36
     versionCode = 160

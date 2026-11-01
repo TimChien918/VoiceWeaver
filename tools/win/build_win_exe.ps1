@@ -11,7 +11,7 @@
 
   用法（在 repo 根目錄或任意處）：
       pwsh tools\win\build_win_exe.ps1                 # 用 PATH 上的 python
-      $env:VW_BUILD_PY = 'C:\path\to\python.exe'; tools\win\build_win_exe.ps1
+      $env:SML_BUILD_PY = 'C:\path\to\python.exe'; tools\win\build_win_exe.ps1
 
   產出：dist\VoiceWeaver語音中心.exe
 #>
@@ -21,7 +21,7 @@ $WinDir = $PSScriptRoot
 $Repo   = (Resolve-Path (Join-Path $WinDir '..\..')).Path
 $GS     = Join-Path $Repo 'tools\GPT-SoVITS'
 $Dist   = Join-Path $Repo 'dist'
-$Py     = if ($env:VW_BUILD_PY) { $env:VW_BUILD_PY } else { 'python' }
+$Py     = if ($env:SML_BUILD_PY) { $env:SML_BUILD_PY } else { 'python' }
 
 Write-Host '==> 檢查打包用 Python（需 pyinstaller + pillow）'
 & $Py -c "import PyInstaller, PIL" 2>$null

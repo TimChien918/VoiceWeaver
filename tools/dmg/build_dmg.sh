@@ -15,13 +15,13 @@ STAGE="/tmp/vwdmg"
 ENV_TAR="$STAGE/gpt-sovits-env.tar.gz"
 PAYLOAD="$STAGE/payload"
 APP_NAME="VoiceWeaver語音中心"
-VERSION="${VW_VERSION:-$(date +%Y%m%d%H%M%S)}"     # 每次打包唯一 → 安裝端一定會更新程式碼
+VERSION="${SML_VERSION:-$(date +%Y%m%d%H%M%S)}"     # 每次打包唯一 → 安裝端一定會更新程式碼
 
 BUILD="$STAGE/build"
 APP="$BUILD/$APP_NAME.app"
 DMG_ROOT="$STAGE/dmgroot"
-# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 VW_DIST 覆寫。
-DIST="${VW_DIST:-$HOME/VoiceWeaver-安裝檔}"
+# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 SML_DIST 覆寫。
+DIST="${SML_DIST:-$HOME/VoiceWeaver-安裝檔}"
 mkdir -p "$DIST"
 OUT_DMG="$DIST/VoiceWeaver-語音中心.dmg"
 
@@ -61,7 +61,7 @@ cp "$PROJECT_ROOT/tools/dmg/launch.sh" "$APP/Contents/MacOS/launch"
 chmod +x "$APP/Contents/MacOS/launch"
 
 # 圖示：用產生器做一個 AppIcon.icns 放進 App（聲波長條，藍青漸層）
-PY="${VW_ENV_PY:-$HOME/VoiceWeaver-電腦端/gpt-sovits-env/bin/python}"
+PY="${SML_ENV_PY:-$HOME/VoiceWeaver-電腦端/gpt-sovits-env/bin/python}"
 DMGDIR="$PROJECT_ROOT/tools/dmg"
 ICON="$APP/Contents/Resources/AppIcon.icns"
 if "$PY" "$DMGDIR/make_icon.py" "$ICON" >/dev/null 2>&1; then

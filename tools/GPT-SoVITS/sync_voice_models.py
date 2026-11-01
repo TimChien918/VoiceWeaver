@@ -43,8 +43,8 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-# ── 輸出多語系（由 App 以環境變數 VOICEWEAVER_LANG 傳入；狀態列顯示對應語言）──
-_LANG = (os.environ.get("VOICEWEAVER_LANG", "zh-TW") or "zh-TW").split("-")[0]
+# ── 輸出多語系（由 App 以環境變數 SML_LANG 傳入；狀態列顯示對應語言）──
+_LANG = (os.environ.get("SML_LANG", "zh-TW") or "zh-TW").split("-")[0]
 _STR = {
     "pair":       {"en": "[sync] Wireless pairing {t}: {o}", "ja": "[sync] 無線ペアリング {t}：{o}", "ko": "[sync] 무선 페어링 {t}: {o}"},
     "pair_fail":  {"en": "[sync] Wireless pairing failed: {e}", "ja": "[sync] 無線ペアリング失敗：{e}", "ko": "[sync] 무선 페어링 실패: {e}"},

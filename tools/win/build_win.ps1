@@ -8,26 +8,26 @@
   前置：先在「Windows」上用 conda-pack 產生環境壓縮檔，且備妥精簡後端程式碼——
     1) $Stage\gpt-sovits-env.tar.gz          ← Windows 版 conda 環境（conda-pack 產出）
     2) $Stage\payload\GPT-SoVITS\            ← 後端程式碼（不含權重）
-  （$Stage 預設 %TEMP%\vwwin，可用環境變數 VW_WIN_STAGE 覆寫。）
+  （$Stage 預設 %TEMP%\vwwin，可用環境變數 SML_WIN_STAGE 覆寫。）
 
   產出：%USERPROFILE%\Downloads\VoiceWeaver-語音中心-Windows.zip
 #>
 $ErrorActionPreference = 'Stop'
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$Stage   = if ($env:VW_WIN_STAGE) { $env:VW_WIN_STAGE } else { Join-Path $env:TEMP 'vwwin' }
+$Stage   = if ($env:SML_WIN_STAGE) { $env:SML_WIN_STAGE } else { Join-Path $env:TEMP 'vwwin' }
 $EnvTar  = Join-Path $Stage 'gpt-sovits-env.tar.gz'
 $Payload = Join-Path $Stage 'payload'
 $AppName = 'VoiceWeaver語音中心'
-$Version = if ($env:VW_VERSION) { $env:VW_VERSION } else { Get-Date -Format 'yyyyMMddHHmmss' }
+$Version = if ($env:SML_VERSION) { $env:SML_VERSION } else { Get-Date -Format 'yyyyMMddHHmmss' }
 
 $Build   = Join-Path $Stage 'build'
 $Dist    = Join-Path $Build $AppName
-# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 VW_DIST 覆寫。
-$DistDir = if ($env:VW_DIST) { $env:VW_DIST } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-安裝檔' }
+# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 SML_DIST 覆寫。
+$DistDir = if ($env:SML_DIST) { $env:SML_DIST } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-安裝檔' }
 $OutZip  = Join-Path $DistDir 'VoiceWeaver-語音中心-Windows.zip'
 $WinDir  = $PSScriptRoot
-$EnvPy   = if ($env:VW_ENV_PY) { $env:VW_ENV_PY } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-電腦端\gpt-sovits-env\python.exe' }
+$EnvPy   = if ($env:SML_ENV_PY) { $env:SML_ENV_PY } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-電腦端\gpt-sovits-env\python.exe' }
 
 Write-Host '==> 檢查素材'
 if (-not (Test-Path $EnvTar))                       { throw "缺少 $EnvTar（請先在 Windows 跑 conda-pack）" }

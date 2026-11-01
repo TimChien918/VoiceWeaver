@@ -37,8 +37,8 @@ _NOWIN = {"creationflags": 0x08000000} if _IS_WIN else {}   # CREATE_NO_WINDOW
 
 
 # 凍結版(PyInstaller)時，本檔被解壓到暫存目錄，__file__ 不是真正的安裝根目錄。
-# 由控制程式透過 VOICEWEAVER_ROOT 指定真正的根（含 user_models / 設定 / 權重）。
-ROOT = Path(os.environ.get("VOICEWEAVER_ROOT") or Path(__file__).resolve().parent).resolve()
+# 由控制程式透過 SML_ROOT 指定真正的根（含 user_models / 設定 / 權重）。
+ROOT = Path(os.environ.get("SML_ROOT") or Path(__file__).resolve().parent).resolve()
 def _derive_paths():
     global PROJECT_ROOT, CONFIG_PATH, REF_DIR, HISTORY_PATH
     try:
@@ -61,7 +61,7 @@ TEST_WAV_PATH = (
     if _IS_WIN
     else Path("/private/tmp/voiceweaver_model_setup_test.wav")
 )
-PORT = int(os.environ.get("VOICEWEAVER_MODEL_SETUP_PORT", "9890"))
+PORT = int(os.environ.get("SML_MODEL_SETUP_PORT", "9890"))
 API_BASE = os.environ.get("GPT_SOVITS_API", "http://127.0.0.1:9880").rstrip("/")
 SUPPORTED_VERSIONS = {"v1", "v2", "v3", "v4", "v2Pro", "v2ProPlus"}
 SAMPLE_STEPS_BY_MODE = {"skip": 0, "turbo": 4, "fast": 8, "balanced": 16, "quality": 32}
@@ -425,7 +425,7 @@ def copy_upload_or_local_path(form: cgi.FieldStorage, upload_name: str, path_nam
 def update_config(version: str, gpt_rel: str, sovits_rel: str) -> None:
     text = CONFIG_PATH.read_text(encoding="utf-8")
     # 由控制程式偵測：有支援的 NVIDIA GPU 時走 cuda + 半精度（快很多），否則 cpu。
-    device = os.environ.get("VOICEWEAVER_DEVICE", "cpu")
+    device = os.environ.get("SML_DEVICE", "cpu")
     is_half = "true" if device == "cuda" else "false"
     replacement = (
         "custom:\n"

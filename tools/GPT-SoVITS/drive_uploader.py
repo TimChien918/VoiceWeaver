@@ -10,9 +10,10 @@
 - 與 Colab 一致：Colab drive.mount 掛的是同一位登入者的 Drive → 上傳到這、Colab 讀得到。
 
 憑證檔位置（App 執行時讀，密鑰不進原始碼）：
-  client_secret：環境變數 VOICEWEAVER_GOOGLE_CLIENT_SECRET，或
-                 ~/Library/Application Support/VoiceWeaver/google_client_secret.json，或本檔同目錄。
-  token（登入後自動存）：~/Library/Application Support/VoiceWeaver/google_token.json
+  client_secret：環境變數 SML_GOOGLE_CLIENT_SECRET，或
+                 ~/Library/Application Support/Speak-My-Life/google_client_secret.json，或本檔同目錄。
+  token（登入後自動存）：~/Library/Application Support/Speak-My-Life/google_token.json
+  （舊的 …/VoiceWeaver 資料夾第一次啟動時會自動改名搬過來，見 sml_migrate.py）
 """
 import json
 import os
@@ -36,18 +37,28 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
 FOLDER_MIME = "application/vnd.google-apps.folder"
-ROOT_FOLDER = "VoiceWeaver"                          # Drive 上曲庫根資料夾名
+ROOT_FOLDER = "Speak-My-Life"                        # Drive 上曲庫根資料夾名
+LEGACY_ROOT_FOLDER = "VoiceWeaver"                   # 更名前的根資料夾名：找到就改名成 ROOT_FOLDER
 MODELS_DIR = "Models"                                # 語音模型（GPT-SoVITS 聲文權重）
 ACOUSTIC_DIR = "AcousticModels"                      # 聲波模型（專屬發音的關鍵字樣板）
 LANG_DIRS = {"ZH", "EN", "JA", "KO"}
-_APP_DIR = os.path.expanduser("~/Library/Application Support/VoiceWeaver")
+try:
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import sml_migrate as _mig
+    _APP_DIR = _mig.app_support_dir()
+    _DOT_DIR = _mig.dot_dir()
+except Exception:  # noqa: BLE001
+    _mig = None
+    _APP_DIR = os.path.expanduser("~/Library/Application Support/Speak-My-Life")
+    _DOT_DIR = os.path.expanduser("~/.speakmylife")
 
 # Firebase Web API Key 依設計是公開識別碼（網頁版 config.js 本來就明文內嵌），
 # 安全性靠 Auth + Firestore 規則，不是靠藏這把 key。放預設值讓安裝即可用。
-FIREBASE_API_KEY = os.environ.get("VW_FIREBASE_WEB_API_KEY", "AIzaSyDawUNHovFwAjjxy3jfs55aSOjEnrtk4qQ")
-FIREBASE_PROJECT = os.environ.get("VW_FIREBASE_PROJECT_ID", "voiceweaver-af4da")
+FIREBASE_API_KEY = os.environ.get("SML_FIREBASE_WEB_API_KEY", "AIzaSyDawUNHovFwAjjxy3jfs55aSOjEnrtk4qQ")
+FIREBASE_PROJECT = os.environ.get("SML_FIREBASE_PROJECT_ID", "voiceweaver-af4da")   # Firebase 專案 ID 建立後不能改名
 # 與 firebase_ip_beacon 共用同一個 token 檔 → 登入後 beacon 也變成「這個 Google 帳號」的身分
-_BEACON_TOKEN = os.path.join(os.path.expanduser("~/.voiceweaver"), "beacon_token.json")
+_BEACON_TOKEN = os.path.join(_DOT_DIR, "beacon_token.json")
 
 
 def _here():
@@ -82,7 +93,7 @@ def local_models_dir(local_root):
 
 def client_secret_path():
     """找 client_secret.json：環境變數 → AppSupport → 本檔同目錄。回路徑或 ""。"""
-    cand = [os.environ.get("VOICEWEAVER_GOOGLE_CLIENT_SECRET", ""),
+    cand = [os.environ.get("SML_GOOGLE_CLIENT_SECRET", ""),
             os.path.join(_APP_DIR, "google_client_secret.json"),
             os.path.join(_here(), "google_client_secret.json")]
     for p in cand:
@@ -157,7 +168,7 @@ def get_credentials(interactive=True):
     if not secret:
         raise FileNotFoundError(
             "找不到 google_client_secret.json（放到 "
-            f"{os.path.join(_APP_DIR, 'google_client_secret.json')} 或設 VOICEWEAVER_GOOGLE_CLIENT_SECRET）")
+            f"{os.path.join(_APP_DIR, 'google_client_secret.json')} 或設 SML_GOOGLE_CLIENT_SECRET）")
     from google_auth_oauthlib.flow import InstalledAppFlow
     flow = InstalledAppFlow.from_client_secrets_file(secret, SCOPES)
     creds = flow.run_local_server(port=0, prompt="consent",
@@ -341,7 +352,7 @@ def _ensure_path(svc, parts):
 def _find_folders(svc, name, parent):
     """同名資料夾**全部**列出來。
 
-    Drive 沒有「同一層不能同名」這條規則——雲端硬碟最外層可以有兩個 VoiceWeaver，
+    Drive 沒有「同一層不能同名」這條規則——雲端硬碟最外層可以有兩個 Speak-My-Life，
     在畫面上長得一模一樣。_find_folder 只拿 files[0]，而這個查詢沒有指定排序，
     等於在兩者之間擲骰子：使用者的曲庫在 A，程式卻一直在看 B。
     """
@@ -360,15 +371,38 @@ def _find_folders(svc, name, parent):
 
 
 def _root_folder(svc, create=False):
-    """VoiceWeaver 根資料夾 id。
+    """Speak-My-Life 根資料夾 id。
 
-    有兩個同名根時挑「裝著曲庫的那個」，不是「剛好排第一的那個」——
+    更名搬遷（三端 Android／網頁／電腦同一條規則，見 sml_migrate.resolve_drive_root）：
+    先找 Speak-My-Life；沒有但有舊的 VoiceWeaver → files.update 改名成 Speak-My-Life；
+    改名失敗（例如不是本 App 建的，drive.file 改不動）→ 直接沿用舊資料夾。
+    兩個都有 → 用新的、不動舊的。
+    """
+    def rename(fid, name):
+        _retry(lambda: svc.files().update(fileId=fid, body={"name": name},
+                                          fields="id,name").execute(), tries=2)
+
+    def create_new():
+        return _ensure_folder(svc, ROOT_FOLDER, "root")
+
+    if _mig is not None:
+        return _mig.resolve_drive_root(
+            lambda: _find_folders(svc, ROOT_FOLDER, "root"),
+            lambda: _find_folders(svc, LEGACY_ROOT_FOLDER, "root"),
+            lambda c: _pick_root(svc, c), rename,
+            create_new if create else None)
+    cands = (_find_folders(svc, ROOT_FOLDER, "root")
+             or _find_folders(svc, LEGACY_ROOT_FOLDER, "root"))
+    if not cands:
+        return create_new() if create else None
+    return _pick_root(svc, cands)
+
+
+def _pick_root(svc, cands):
+    """同名根資料夾有好幾個時挑「裝著曲庫的那個」，不是「剛好排第一的那個」——
     否則會出現「聲波模型存得進去、但曲庫永遠是空的」這種前後矛盾的狀態，
     而兩個資料夾使用者在 Drive 上都看得到。三端（Mac／App／網頁）同一條規則。
     """
-    cands = _find_folders(svc, ROOT_FOLDER, "root")
-    if not cands:
-        return _ensure_folder(svc, ROOT_FOLDER, "root") if create else None
     if len(cands) == 1:
         return cands[0]["id"]
     best, best_score = None, -1
@@ -390,8 +424,8 @@ def _root_folder(svc, create=False):
 def _models_parent(svc, create=False):
     """Drive 上語音模型的父資料夾 id。
 
-    新版面是 VoiceWeaver/Models；舊版面把 ZH/EN/JA/KO 直接掛在 VoiceWeaver 底下，
-    那時就回 VoiceWeaver 本身。回 (parent_id, is_legacy)；沒有 VoiceWeaver 回 (None, False)。
+    新版面是 Speak-My-Life/Models；舊版面把 ZH/EN/JA/KO 直接掛在根資料夾底下，
+    那時就回根資料夾本身。回 (parent_id, is_legacy)；沒有根資料夾回 (None, False)。
 
     [create] 為真時（上傳路徑）會把 Models/ 建出來——新上傳一律進新版面，
     但**不會**把舊版面的既有角色搬過去，那是 [migrate_drive_layout] 的事。
@@ -413,7 +447,7 @@ def _models_parent(svc, create=False):
 
 
 def migrate_drive_layout(creds=None, progress=None):
-    """把 Drive 上舊版面的 VoiceWeaver/<LANG> 搬進 VoiceWeaver/Models/<LANG>。
+    """把 Drive 上舊版面的 Speak-My-Life/<LANG> 搬進 Speak-My-Life/Models/<LANG>。
 
     **搬的是資料夾的父節點，不是檔案內容**——Drive 的 addParents/removeParents
     只改 metadata，幾十 GB 的曲庫也是幾秒完成，不會重新上傳任何一個位元組。
@@ -489,7 +523,7 @@ def _upload_file(svc, local, parent, remote_name=None, progress=None):
 
 
 def upload_character(root, lang, char, progress=None):
-    """把本機 <root>/Models/<LANG>/<角色>/ 整包上傳到 Drive VoiceWeaver/Models/<LANG>/<角色>/。
+    """把本機 <root>/Models/<LANG>/<角色>/ 整包上傳到 Drive Speak-My-Life/Models/<LANG>/<角色>/。
 
     回 {ok, character, lang, uploaded, skipped, bytes, error}。
     """
@@ -744,7 +778,7 @@ def delete_character(local_root, lang, char, also_local=True, creds=None):
     return res
 
 
-# ── 聲波模型（專屬發音）VoiceWeaver/AcousticModels/ ────────────────
+# ── 聲波模型（專屬發音）Speak-My-Life/AcousticModels/ ────────────────
 #
 # 跟語音模型分開放，因為兩者的性質完全不同：
 # 語音模型是「可以分享的角色」（幾百 MB，誰拿去都能用），
@@ -754,7 +788,7 @@ def delete_character(local_root, lang, char, also_local=True, creds=None):
 # 一個樣板一個 JSON：手機端一次只會改一筆，整包重寫會讓兩台裝置同時編輯時互相蓋掉。
 
 def _acoustic_parent(svc, create=False):
-    """VoiceWeaver/AcousticModels 的資料夾 id（找不到且不建時回 None）。
+    """Speak-My-Life/AcousticModels 的資料夾 id（找不到且不建時回 None）。
 
     底下不再分一層帳號 id：這是使用者自己的雲端硬碟，一個 Google 帳號一個，
     而 Firebase 身分也是同一個 Google 帳號換來的——多包一層永遠只有一個子資料夾，
@@ -977,7 +1011,7 @@ def cloud_catalog(local_root=None, max_age_s=300, force=False):
 
 
 def upload_catalog(root, creds=None):
-    """把 <root>/catalog.json 上傳到 Drive VoiceWeaver/。"""
+    """把 <root>/catalog.json 上傳到 Drive Speak-My-Life/。"""
     p = os.path.join(root, "catalog.json")
     if not os.path.isfile(p):
         return False
