@@ -96,22 +96,6 @@ object CloudSync {
         return GoogleSignIn.getClient(ctx, opt)
     }
 
-    /** 是否已拿到 Drive 權限（登入合一後應為 true）。 */
-    fun hasDriveScope(ctx: Context): Boolean =
-        GoogleSignIn.getLastSignedInAccount(ctx)?.grantedScopes
-            ?.any { it.scopeUri == DRIVE_SCOPE } == true
-
-    /**
-     * 是否拿到了「讀檔案清單」的權限。
-     *
-     * 舊版登入的人**不會**有——授權是登入當下決定的，改了程式碼不會回頭生效。
-     * 這種人打開專屬聲音會看到空清單，而他的曲庫好端端在 Drive 上。所以要能
-     * 問得出來，畫面才有辦法叫他重新登入一次，而不是丟一句「還沒有語音模型」。
-     */
-    fun hasDriveMetadataScope(ctx: Context): Boolean =
-        GoogleSignIn.getLastSignedInAccount(ctx)?.grantedScopes
-            ?.any { it.scopeUri == DRIVE_METADATA_SCOPE } == true
-
     /**
      * 取 Drive API 用的 access token（阻塞，需在背景執行緒呼叫）。
      * 依附同一個已登入的 Google 帳號 → 存取的是「使用者自己的」Drive。

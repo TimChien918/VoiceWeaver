@@ -23,31 +23,35 @@ fun scaledTypography(scale: Float): Typography {
     val s = scale.coerceIn(0.8f, 1.8f)
     fun size(value: Int) = (value * s).sp
 
+    // 字重層級（拾語者品牌）：標題 Bold → 小標 SemiBold → 內文 Normal → 按鈕 SemiBold。
+    // 中文字在 Medium 跟 Normal 之間幾乎看不出差別，所以層級要拉開到 SemiBold／Bold
+    // 才分得出「這是標題」——對閱讀吃力的失語症使用者，層級就是導覽。
+
     return Typography(
       displaySmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Bold,
         fontSize = size(36),
         lineHeight = size(44),
         letterSpacing = 0.sp,
       ),
       headlineSmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Bold,
         fontSize = size(24),
         lineHeight = size(32),
         letterSpacing = 0.sp,
       ),
       titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.SemiBold,
         fontSize = size(22),
         lineHeight = size(28),
         letterSpacing = 0.sp,
       ),
       titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = size(16),
         lineHeight = size(24),
         letterSpacing = 0.sp,
@@ -69,7 +73,7 @@ fun scaledTypography(scale: Float): Typography {
       ),
       labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = size(14),
         lineHeight = size(20),
         letterSpacing = 0.sp,

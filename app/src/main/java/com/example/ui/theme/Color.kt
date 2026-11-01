@@ -19,3 +19,14 @@ val VWAuraAmber    = Color(0xFFF59E0B)
 val VWDangerRose   = Color(0xFFF43F5E)
 val VWTextLight    = Color(0xFFF1F5F9)
 val VWTextMuted    = Color(0xFF94A3B8)
+
+// ─── 拾語者 Speak My Life 品牌色 ───
+// 取自網頁版 logo：深綠方塊（承載）＋白色對話泡泡（說出口）＋暖黃絲線（把碎詞織成句子）。
+// 只放「品牌原色」；介面要用的明暗變體在 AppPalette.kt 的 BrandDay / BrandNight 推導，
+// 因為原色直接拿來當文字色在淺底上對比不夠（暖黃尤其），要依深淺各調一次。
+val BrandForest     = Color(0xFF2F6F5E)   // logo 深綠
+val BrandForestDeep = Color(0xFF1E4A3F)   // 深綠壓暗：淺色主題的強調文字／按壓態
+val BrandThread     = Color(0xFFFFD27A)   // logo 暖黃絲線
+val BrandThreadDeep = Color(0xFF9A6200)   // 暖黃壓暗：淺底上仍有 4.5:1 的「黃」
+val BrandPaper      = Color(0xFFF6F4EC)   // 淺色底：帶暖的紙色，比純白不刺眼
+val BrandNight      = Color(0xFF0E1D19)   // 深色底：森林夜色，不是死黑

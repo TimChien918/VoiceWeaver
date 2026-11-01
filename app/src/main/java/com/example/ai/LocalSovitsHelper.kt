@@ -1,8 +1,5 @@
 package com.example.ai
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,11 +28,6 @@ import java.util.concurrent.TimeUnit
  * 這個 helper 提供：
  *  - [pingServer]：探測指定 GPT-SoVITS API 位址是否有伺服器在跑
  *  - [DEFAULT_LOCAL_URL]：給設定預設值用，省得使用者第一次要打字
- *  - [openTermux]：用 Intent 啟動 Termux app（找不到 → 帶去 F-Droid 安裝頁）
- *  - [TERMUX_SETUP_SCRIPT]：顯示 Termux 不能直接安裝官方 torch wheel 的說明
- *
- * 為什麼不自動跑腳本：Termux 不允許別的 app 從外部直接執行任意指令（安全限制 Android 10+），
- * 但 clipboard share 是合法的 — 我們複製腳本，使用者貼到 Termux 跑。
  */
 object LocalSovitsHelper {
 
@@ -92,8 +84,6 @@ object LocalSovitsHelper {
         val h = runCatching { URI(baseUrl).host }.getOrNull() ?: return client
         return if (isRemoteHost(h)) remoteClient else client
     }
-
-    suspend fun pingLocalServer(): PingResult = pingServer(DEFAULT_LOCAL_URL)
 
     /**
      * 連線健檢。先用 raw socket 判斷 port 是否開（快、不發 HTTP），
@@ -191,54 +181,6 @@ object LocalSovitsHelper {
          *  這種情況測試會通、合成一定失敗，所以要當成錯誤講清楚。 */
         object BridgePort : PingResult(PingResultKind.BridgePort, "⚠ 這是語音中心的橋接埠（9879）。App 要直接連 GPT-SoVITS，請把位址的埠改成 9880（網頁版才是填 9879）")
     }
-
-    /**
-     * 用 Intent 啟動 Termux 顯示說明。找不到 → 開瀏覽器去 F-Droid 安裝頁
-     * （**不要用 Play Store 版本** — 它停在 SDK 28 而 Android 14+ 會壞掉）
-     */
-    fun openTermux(context: Context) {
-        val pkg = "com.termux"
-        val launch = context.packageManager.getLaunchIntentForPackage(pkg)
-        if (launch != null) {
-            context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return
-        }
-        // 沒裝 → 開 F-Droid 頁面
-        val fdroidUrl = "https://f-droid.org/en/packages/com.termux/"
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(fdroidUrl))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    }
-
-    /**
-     * Termux 說明腳本。使用者複製到 Termux 後會看到清楚原因與 LAN 方案。
-     *
-     * 舊版腳本會在 `pip install torch` 停住；保留按鈕但改成不再執行失敗安裝。
-     */
-    val TERMUX_SETUP_SCRIPT = """
-        # ====== 拾語者 Speak My Life GPT-SoVITS 說明 ======
-        echo "原因：官方 PyTorch pip wheel 不支援 Android/Termux。"
-        echo "所以 pip install torch --index-url https://download.pytorch.org/whl/cpu 會失敗。"
-        echo ""
-        echo "可靠做法：在 Mac/PC 跑 GPT-SoVITS API server，手機用 USB 或同一個 Wi-Fi 連線。"
-        echo ""
-        echo "電腦端：直接雙擊「VoiceWeaver語音中心.app」即可（會自動啟動所有伺服器 + adb reverse）。"
-        echo "手動啟動（電腦端已搬到 ~/VoiceWeaver-電腦端）："
-        echo "  cd ~/VoiceWeaver-電腦端/GPT-SoVITS && ./start_api.sh"
-        echo ""
-        echo "查 Mac Wi-Fi IP："
-        echo "  ipconfig getifaddr en0"
-        echo ""
-        echo "重要：上面的指令要在 Mac 的「終端機」執行，不是在 Termux 執行。"
-        echo ""
-        echo "拾語者 App 的 GPT-SoVITS API 位址填："
-        echo "  http://你的電腦IP:9880    （無線/LAN）"
-        echo "  http://127.0.0.1:9880     （有線/USB，需先 adb reverse tcp:9880 tcp:9880）"
-        echo "  http://100.x.x.x:9880     （全域網 Tailscale，外網/4G/5G 皆可）"
-        echo ""
-        echo "注意：不要加 /tts，App 會自動呼叫 /tts。"
-    """.trimIndent()
 
     /**
      * 連線模式：無線 vs 有線。
@@ -555,8 +497,6 @@ object LocalSovitsHelper {
         }.getOrElse { false to (it.message ?: "連線失敗") }
     }
 
-    /** 向後相容：只取中文清單（設定頁角色切換 chip 用）。 */
-    val ZH_VOICES: List<MacRefVoice> get() = VOICES.filter { it.lang == VoiceLang.ZH }
 
     /** 某語言的所有可用聲音；第一個為該語言預設。 */
     fun voicesFor(lang: VoiceLang): List<MacRefVoice> = VOICES.filter { it.lang == lang }
@@ -708,13 +648,6 @@ object LocalSovitsHelper {
 
     /** server 目前載入的聲音（null = 未知）。供 UI 顯示「現在是哪個角色/語言」。 */
     fun currentVoice(): MacRefVoice? = currentModel
-
-    // 沒有模型時回空字串（合成路徑會先以 hasModels() 擋掉，不會走到這裡）
-    val MAC_REF_ZH_PATH: String get() = currentZhVoice()?.refPath.orEmpty()
-    val MAC_REF_EN_PATH: String get() = (voicesFor(VoiceLang.EN).firstOrNull() ?: currentZhVoice())?.refPath.orEmpty()
-
-    val PROMPT_ZH: String get() = currentZhVoice()?.prompt.orEmpty()
-    val PROMPT_EN: String get() = (voicesFor(VoiceLang.EN).firstOrNull() ?: currentZhVoice())?.prompt.orEmpty()
 
     /**
      * 這個路徑合成伺服器讀得到嗎？讀不到就回一句「為什麼不行」，null 代表可用。

@@ -34,12 +34,6 @@ class SpeechRepositoryImpl(
         active.value = profiles.value.firstOrNull { it.id == id }
     }
 
-    /** 由設定畫面注入目前可用的嗓音。 */
-    fun setProfiles(list: List<VoiceProfile>, activeId: String? = null) {
-        profiles.value = list
-        active.value = list.firstOrNull { it.id == activeId } ?: list.firstOrNull()
-    }
-
     override suspend fun speak(text: String, profile: VoiceProfile?): Result<Unit> {
         val clean = text.trim()
         if (clean.isEmpty()) return Result.failure(IllegalArgumentException("Nothing to speak"))

@@ -138,29 +138,6 @@ object AphasiaPractice {
     )
 
     // ─── 英文語料（AAC 核心詞彙 + 失語症日常功能性溝通句，通用標準內容）──────
-    /** 英文核心高頻詞（AAC core words：代名詞/動詞/方位/否定…）。 */
-    val enCore: List<String> = listOf(
-        "I", "you", "want", "need", "more", "stop", "go", "help", "yes", "no",
-        "like", "have", "do", "get", "give", "come", "see", "look", "here", "this",
-        "that", "my", "please", "thank you", "finish", "again", "not", "can",
-        "where", "what", "who", "when", "why", "how", "good", "bad", "now"
-    )
-
-    /** 英文命名名詞。 */
-    val enNouns: List<String> = listOf(
-        "water", "food", "drink", "bathroom", "toilet", "bed", "phone", "medicine",
-        "doctor", "nurse", "home", "family", "mom", "dad", "pain", "chair", "table",
-        "door", "window", "light", "TV", "glasses", "book", "money", "key", "shoes",
-        "clothes", "hand", "head", "eye", "ear", "mouth", "tea", "coffee", "bread",
-        "rice", "apple", "soup", "wheelchair", "blanket", "pillow", "towel"
-    )
-
-    /** 英文動作動詞。 */
-    val enVerbs: List<String> = listOf(
-        "eat", "drink", "sleep", "sit", "stand", "walk", "wash", "open", "close",
-        "take", "give", "call", "rest", "read", "write", "listen", "wait", "wake up"
-    )
-
     /** 英文日常需求短句。 */
     val enMediumSentences: List<String> = listOf(
         "I want water.", "I'm hungry.", "I need to rest.", "I want to sleep.",
@@ -184,15 +161,6 @@ object AphasiaPractice {
     )
 
     // ─── 日文語料（AAC 核心 + 失語症日常功能性溝通句）────────────────────────
-    val jaNouns: List<String> = listOf(
-        "水", "ご飯", "トイレ", "お手洗い", "薬", "医者", "看護師", "家族", "家", "部屋",
-        "電話", "ベッド", "椅子", "机", "ドア", "窓", "電気", "テレビ", "眼鏡", "お茶",
-        "パン", "りんご", "手", "頭", "目", "口", "お金", "車椅子", "毛布", "枕", "タオル"
-    )
-    val jaVerbs: List<String> = listOf(
-        "食べる", "飲む", "寝る", "座る", "立つ", "歩く", "洗う", "開ける", "閉める",
-        "取る", "休む", "読む", "書く", "待つ", "行く", "来る", "起きる"
-    )
     val jaMediumSentences: List<String> = listOf(
         "水が飲みたいです。", "お腹がすきました。", "休みたいです。", "寝たいです。",
         "トイレに行きたいです。", "薬をください。", "痛いです。", "家に帰りたいです。",
@@ -212,15 +180,6 @@ object AphasiaPractice {
     )
 
     // ─── 韓文語料（AAC 核心 + 失語症日常功能性溝通句）────────────────────────
-    val koNouns: List<String> = listOf(
-        "물", "밥", "화장실", "약", "의사", "간호사", "가족", "집", "방", "전화",
-        "침대", "의자", "책상", "문", "창문", "불", "텔레비전", "안경", "차", "빵",
-        "사과", "손", "머리", "눈", "입", "돈", "휠체어", "이불", "베개", "수건"
-    )
-    val koVerbs: List<String> = listOf(
-        "먹다", "마시다", "자다", "앉다", "서다", "걷다", "씻다", "열다", "닫다",
-        "잡다", "쉬다", "읽다", "쓰다", "기다리다", "가다", "오다", "일어나다"
-    )
     val koMediumSentences: List<String> = listOf(
         "물 마시고 싶어요.", "배고파요.", "쉬고 싶어요.", "자고 싶어요.",
         "화장실 가고 싶어요.", "약 주세요.", "아파요.", "집에 가고 싶어요.",

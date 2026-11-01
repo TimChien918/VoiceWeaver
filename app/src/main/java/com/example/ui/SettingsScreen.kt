@@ -434,12 +434,14 @@ fun SettingsScreen(
 // ─── string res 對應 helper ───
 
 private fun themeLabelRes(t: AppTheme) = when (t) {
+    AppTheme.Brand   -> R.string.theme_brand
     AppTheme.Tech    -> R.string.theme_tech
     AppTheme.Cute    -> R.string.theme_cute
     AppTheme.Anime   -> R.string.theme_anime
     AppTheme.Minimal -> R.string.theme_minimal
 }
 private fun themeBlurbRes(t: AppTheme) = when (t) {
+    AppTheme.Brand   -> R.string.theme_blurb_brand
     AppTheme.Tech    -> R.string.theme_blurb_tech
     AppTheme.Cute    -> R.string.theme_blurb_cute
     AppTheme.Anime   -> R.string.theme_blurb_anime

@@ -123,11 +123,6 @@ object SmartApiRouter {
         persist()
     }
 
-    /** 還在冷卻中（剛失敗過）。 */
-    @Synchronized
-    fun isCoolingDown(id: String): Boolean =
-        (stats[id]?.cooldownUntil() ?: 0L) > System.currentTimeMillis()
-
     // ─── 排序 ──────────────────────────────────────────────────────────────
 
     /** 這次請求需要什麼能力。 */

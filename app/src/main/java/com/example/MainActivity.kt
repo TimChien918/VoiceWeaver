@@ -24,6 +24,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.text.font.FontWeight
+import com.example.ui.theme.Motion
+import com.example.ui.theme.isLight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.GridView
@@ -176,13 +187,27 @@ class MainActivity : ComponentActivity() {
                         NavTab("settings", Icons.Default.Settings, stringResource(R.string.nav_settings)),
                     )
 
+                    // 選中指示器：主色的淡色膠囊。原本用背景色當指示器，在淺色主題上
+                    // 幾乎看不出「現在在哪一頁」。膠囊本身由 Material 動畫展開／收起，
+                    // 這裡只負責顏色夠明顯（高對比下是黑底上的淡黃膠囊＋亮黃圖示）。
+                    val navIndicator = palette.neonCyan.copy(alpha = if (palette.isLight) 0.14f else 0.20f)
                     val navColors = NavigationBarItemDefaults.colors(
                         selectedIconColor = palette.neonCyan,
                         selectedTextColor = palette.neonCyan,
                         unselectedIconColor = palette.textMuted,
                         unselectedTextColor = palette.textMuted,
-                        indicatorColor = palette.darkBg
+                        indicatorColor = navIndicator
                     )
+                    // 切頁方向跟著導覽列的左右順序：往右邊的分頁就從右邊滑進來，
+                    // 讓「我現在在第幾頁」有空間感。位移只有 1/12 寬、搭配淡入，
+                    // 夠表達方向又不會整片甩過去讓人頭暈。不在分頁列上的子頁（設定內頁、
+                    // 訓練）改成由下方輕輕浮上，表示「進到更深一層」。
+                    val tabOrder = tabs.map { it.route }
+                    fun navDirection(from: String?, to: String?): Int {
+                        val a = tabOrder.indexOf(from)
+                        val b = tabOrder.indexOf(to)
+                        return if (a < 0 || b < 0) 0 else if (b > a) 1 else if (b < a) -1 else 0
+                    }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (hasCustomBackground) {
@@ -204,19 +229,21 @@ class MainActivity : ComponentActivity() {
                                 // 導覽軌垂直置中：橫向手機的軌道很矮，靠上排會離拇指太遠
                                 if (!compactRail) Spacer(Modifier.weight(1f))
                                 tabs.forEach { tab ->
+                                    val selected = currentRoute == tab.route
                                     NavigationRailItem(
-                                        icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                        icon = { NavIcon(tab, selected) },
                                         label = if (compactRail) null else {
-                                            { Text(tab.label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                            { Text(tab.label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                   fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
                                         },
-                                        selected = currentRoute == tab.route,
+                                        selected = selected,
                                         onClick = { navController.go(tab.route) },
                                         colors = NavigationRailItemDefaults.colors(
                                             selectedIconColor = palette.neonCyan,
                                             selectedTextColor = palette.neonCyan,
                                             unselectedIconColor = palette.textMuted,
                                             unselectedTextColor = palette.textMuted,
-                                            indicatorColor = palette.darkBg
+                                            indicatorColor = navIndicator
                                         )
                                     )
                                 }
@@ -237,12 +264,14 @@ class MainActivity : ComponentActivity() {
                                     val navLabels = fsNav < 1.8f
                                     NavigationBar(containerColor = if (hasCustomBackground) palette.surface.copy(alpha = 0.92f) else palette.surface) {
                                         tabs.forEach { tab ->
+                                            val selected = currentRoute == tab.route
                                             NavigationBarItem(
-                                                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                                icon = { NavIcon(tab, selected) },
                                                 label = if (!navLabels) null else {
-                                                    { Text(tab.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                                    { Text(tab.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                           fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
                                                 },
-                                                selected = currentRoute == tab.route,
+                                                selected = selected,
                                                 onClick = { navController.go(tab.route) },
                                                 colors = navColors
                                             )
@@ -273,7 +302,26 @@ class MainActivity : ComponentActivity() {
                                 startDestination = "main",
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .widthIn(max = 840.dp)
+                                    .widthIn(max = 840.dp),
+                                // 預設是 700ms 交叉淡化，對「點了沒反應？」的使用者太慢、又看不出方向。
+                                // 系統關掉動畫時 Compose 會把這些時長縮成 0，不需要另外判斷。
+                                enterTransition = {
+                                    val d = navDirection(initialState.destination.route, targetState.destination.route)
+                                    val fade = fadeIn(tween(Motion.Standard, easing = Motion.StandardEasing))
+                                    if (d == 0) fade + slideInVertically(tween(Motion.Standard, easing = Motion.Emphasized)) { h -> h / 24 }
+                                    else fade + slideInHorizontally(tween(Motion.Standard, easing = Motion.Emphasized)) { w -> d * w / 12 }
+                                },
+                                exitTransition = {
+                                    val d = navDirection(initialState.destination.route, targetState.destination.route)
+                                    val fade = fadeOut(tween(Motion.Quick))
+                                    if (d == 0) fade
+                                    else fade + slideOutHorizontally(tween(Motion.Standard, easing = Motion.Emphasized)) { w -> -d * w / 12 }
+                                },
+                                popEnterTransition = { fadeIn(tween(Motion.Standard, easing = Motion.StandardEasing)) },
+                                popExitTransition = {
+                                    fadeOut(tween(Motion.Quick)) +
+                                        androidx.compose.animation.slideOutVertically(tween(Motion.Standard)) { h -> h / 24 }
+                                }
                             ) {
                             composable("main") {
                                 VoiceWeaverScreen(
@@ -520,6 +568,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+}
+
+/**
+ * 導覽圖示：選中時放大一點點（112%）。顏色變化對色弱、視力退化的人不一定看得出來，
+ * 「變大」是第二條線索。時長走 [Motion.Standard]，系統關動畫時 Compose 會直接跳到終值。
+ */
+@androidx.compose.runtime.Composable
+private fun NavIcon(tab: NavTab, selected: Boolean) {
+    val s by animateFloatAsState(
+        targetValue = if (selected) 1.12f else 1f,
+        animationSpec = tween(Motion.Standard, easing = Motion.Emphasized),
+        label = "navIcon"
+    )
+    Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.scale(s))
 }
 
 /** 一個一級分頁。底部導覽列與側邊導覽軌共用同一份定義，兩邊不會漂移。 */

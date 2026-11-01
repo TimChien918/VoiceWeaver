@@ -518,6 +518,5 @@ class SpeechToTextManager(
         private const val N_BEST = 4
         /** 實際往上送給重組 AI 的候選數（扣掉最佳解本身）。 */
         private const val MAX_ALTERNATIVES = 3
-        private const val MODEL_DIR_NAME = "vosk-model-small-cn-0.22"
     }
 }

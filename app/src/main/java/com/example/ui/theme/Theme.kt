@@ -1,15 +1,20 @@
 package com.example.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.min
@@ -75,8 +80,12 @@ fun chromeSp(base: Float, maxScale: Float = 1.5f): TextUnit {
     return (base * min(fs, maxScale) / fs).sp
 }
 
-private fun materialSchemeFor(palette: AppPalette, isLight: Boolean) =
-    if (isLight) lightColorScheme(
+private fun materialSchemeFor(palette: AppPalette, isLight: Boolean): androidx.compose.material3.ColorScheme {
+    // 沒有指定的角色 Material 會填基準紫色（FilterChip 選中、Switch 軌道、選單底…），
+    // 在綠色品牌畫面上冒出一塊紫非常突兀。從 8 色推導出容器色，讓每種風格都自洽。
+    val container = lerp(palette.surface, palette.neonCyan, if (isLight) 0.14f else 0.24f)
+    val variant = lerp(palette.surface, palette.neonCyan, if (isLight) 0.06f else 0.10f)
+    return if (isLight) lightColorScheme(
         primary    = palette.neonCyan,
         secondary  = palette.neonGreen,
         tertiary   = palette.auraAmber,
@@ -85,7 +94,14 @@ private fun materialSchemeFor(palette: AppPalette, isLight: Boolean) =
         onPrimary  = palette.darkBg,
         onSurface  = palette.textLight,
         onBackground = palette.textLight,
-        error      = palette.dangerRose
+        error      = palette.dangerRose,
+        primaryContainer = container,
+        onPrimaryContainer = palette.textLight,
+        secondaryContainer = container,
+        onSecondaryContainer = palette.textLight,
+        surfaceVariant = variant,
+        onSurfaceVariant = palette.textMuted,
+        outline = palette.textMuted
     ) else darkColorScheme(
         primary    = palette.neonCyan,
         secondary  = palette.neonGreen,
@@ -95,11 +111,33 @@ private fun materialSchemeFor(palette: AppPalette, isLight: Boolean) =
         onPrimary  = palette.darkBg,
         onSurface  = palette.textLight,
         onBackground = palette.textLight,
-        error      = palette.dangerRose
+        error      = palette.dangerRose,
+        primaryContainer = container,
+        onPrimaryContainer = palette.textLight,
+        secondaryContainer = container,
+        onSecondaryContainer = palette.textLight,
+        surfaceVariant = variant,
+        onSurfaceVariant = palette.textMuted,
+        outline = palette.textMuted
     )
+}
 
-/** 把 [AppTheme] 設定值對應到具體 [AppPalette] */
+/**
+ * 全 App 共用的圓角階層。手寫 `RoundedCornerShape(16.dp)` 的卡片很多，
+ * 這裡讓 Material 元件（Card、Dialog、Menu…）用同一套數字，畫面才不會一張圓一張方。
+ * 偏大的圓角是刻意的：對手抖、偏癱的使用者，柔和的大區塊比銳角細框更像「可以按」。
+ */
+val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small      = RoundedCornerShape(10.dp),
+    medium     = RoundedCornerShape(16.dp),
+    large      = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
+
+/** 把 [AppTheme] 設定值對應到具體 [AppPalette]（品牌風取淺色版；要跟隨系統深淺用 [MyApplicationTheme]）。 */
 fun paletteOf(theme: AppTheme): AppPalette = when (theme) {
+    AppTheme.Brand   -> BrandDayPalette
     AppTheme.Tech    -> TechPalette
     AppTheme.Cute    -> CutePalette
     AppTheme.Anime   -> AnimePalette
@@ -108,14 +146,22 @@ fun paletteOf(theme: AppTheme): AppPalette = when (theme) {
 
 @Composable
 fun MyApplicationTheme(
-    theme: AppTheme = AppTheme.Tech,
+    theme: AppTheme = AppTheme.Brand,
     fontScale: Float = 1.0f,
     highContrast: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val palette = if (highContrast) HighContrastPalette else paletteOf(theme)
-    // 簡約風是「淺色」風，其餘 3 種為深色（背景色決定）；高對比一律深色
-    val isLight = !highContrast && (theme == AppTheme.Minimal || theme == AppTheme.Cute)
+    // 品牌風是唯一跟隨系統深淺色的風格：其他四種的深淺本來就是風格的一部分
+    // （科技風就是黑底），但品牌風要在白天、夜裡都舒服——夜裡起床的患者
+    // 被一整片紙白照到會刺眼。高對比永遠優先，蓋過任何風格與系統設定。
+    val systemDark = isSystemInDarkTheme()
+    val palette = when {
+        highContrast -> HighContrastPalette
+        theme == AppTheme.Brand -> if (systemDark) BrandNightPalette else BrandDayPalette
+        else -> paletteOf(theme)
+    }
+    // 深淺由背景亮度決定（可愛風、簡約風、品牌白天版為淺色）；高對比一律深色
+    val isLight = !highContrast && palette.isLight
 
     // 字級改由 LocalDensity 統一放大，不再只縮放 typography。
     //
@@ -143,6 +189,7 @@ fun MyApplicationTheme(
         MaterialTheme(
             colorScheme = materialSchemeFor(palette, isLight),
             typography = scaledTypography(1f),
+            shapes = AppShapes,
             content = content
         )
     }

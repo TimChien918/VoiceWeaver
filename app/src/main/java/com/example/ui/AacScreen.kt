@@ -11,6 +11,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import com.example.ui.theme.Motion
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ColumnScope
@@ -274,8 +282,9 @@ fun AacScreen(viewModel: VoiceWeaverViewModel) {
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = p.neonCyan, strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
+                    // 圖卡正被「織」成句子——和主畫面的重組用同一個動畫，同一件事長得一樣
+                    WeavingLoader(palette = p, modifier = Modifier.size(width = 48.dp, height = 26.dp))
+                    Spacer(Modifier.width(10.dp))
                     Text(stringResource(R.string.aac_ai_composing), fontSize = 12.sp, color = p.neonCyan)
                 }
             } else if (state.pendingConfirmText.isNotBlank()) {
@@ -876,12 +885,29 @@ private fun ItemGrid(
             val visualIndex = indexed.index + if (onCustomAmount != null) 1 else 0
             val tint = if (item.isStrongIntent) p.dangerRose else p.neonCyan
             var showMenu by remember { mutableStateOf(false) }  // 問題11：長按菜單狀態
+            // 點擊回饋：按下去縮到 94%、放開時帶一點回彈回到原尺寸。
+            // 手抖或偏癱的使用者常常不確定「剛剛有沒有按到」，卡片自己動一下就是答案；
+            // 回彈幅度刻意很小（dampingRatio 0.55），不會晃到讓人頭暈。
+            val pressSource = remember { MutableInteractionSource() }
+            val pressed by pressSource.collectIsPressedAsState()
+            val pressScale by animateFloatAsState(
+                targetValue = if (pressed) 0.94f else 1f,
+                animationSpec = if (pressed) tween(Motion.Quick)
+                                else spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
+                label = "aacPress"
+            )
             DwellableSurface(
                 onTriggered = { onPick(item) },
                 palette = p,
                 modifier = Modifier
                     .aspectRatio(1f)
+                    .graphicsLayer {
+                        scaleX = pressScale
+                        scaleY = pressScale
+                    }
                     .combinedClickable(
+                        interactionSource = pressSource,
+                        indication = LocalIndication.current,
                         onClick = { onPick(item) },
                         onLongClick = { showMenu = true }
                     ),

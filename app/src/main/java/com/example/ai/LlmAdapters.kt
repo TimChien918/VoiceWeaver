@@ -2,7 +2,6 @@ package com.example.ai
 
 import com.example.data.LlmApiEntry
 import com.example.data.LlmApiStyle
-import com.example.data.LlmAudioStyle
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.Request
@@ -51,10 +50,6 @@ interface LlmAdapter {
 
     /** 從 HTTP 回應本體取出模型講的話。 */
     fun parseResponse(body: String): String
-
-    /** 這家在「這一筆設定」下支不支援直接吃音訊。 */
-    fun supportsAudio(entry: LlmApiEntry): Boolean =
-        entry.provider.audioStyle != LlmAudioStyle.NONE
 
     companion object {
         /** 依設定挑對應的轉接器。 */

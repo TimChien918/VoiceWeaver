@@ -446,10 +446,6 @@ class PhraseShortcutViewModel(
 
     fun stopTest() = stopRequested.set(true)
 
-    fun clearTestResult() {
-        _state.value = _state.value.copy(testResult = null)
-    }
-
     fun toggleHelp() {
         _state.value = _state.value.copy(helpExpanded = !_state.value.helpExpanded)
     }

@@ -2,7 +2,6 @@ package com.example.ai
 
 import com.example.data.AacCategory
 import com.example.data.AacItem
-import com.example.data.DefaultAacItems
 
 /**
  * 依當前所在地點，推薦最可能被使用的 AAC 圖卡。
@@ -191,33 +190,6 @@ object AacContextSuggester {
      * 點哪個就立刻同步 quickPhrases / visionPresets / aacContextHint 三層。
      */
     data class LocationPreset(val emoji: String, val label: String)
-
-    val LOCATION_PRESETS: List<LocationPreset> = listOf(
-        LocationPreset("🏠", "住家"),
-        LocationPreset("🏥", "醫院"),
-        LocationPreset("🩺", "診所"),
-        LocationPreset("💊", "藥局"),
-        LocationPreset("🏪", "便利商店"),
-        LocationPreset("🛒", "超市"),
-        LocationPreset("🍔", "速食店"),
-        LocationPreset("🍽", "餐廳"),
-        LocationPreset("☕", "咖啡店"),
-        LocationPreset("🧋", "飲料店"),
-        LocationPreset("🏬", "百貨"),
-        LocationPreset("🛍", "購物中心"),
-        LocationPreset("👕", "服飾店"),
-        LocationPreset("🚉", "車站"),
-        LocationPreset("🚇", "捷運站"),
-        LocationPreset("⛽", "加油站"),
-        LocationPreset("🏦", "銀行"),
-        LocationPreset("📮", "郵局"),
-        LocationPreset("✈️", "機場"),
-        LocationPreset("🅿️", "停車場"),
-        LocationPreset("🏨", "旅館"),
-        LocationPreset("🌳", "公園"),
-        LocationPreset("⛩", "廟宇"),
-        LocationPreset("⛪", "教堂")
-    )
 
     /**
      * 位置 → 相機鏡頭可能拍到的物品。涵蓋與 [CATEGORY_RULES] 同一組 17+ 位置。

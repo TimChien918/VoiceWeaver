@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -38,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.PI
+import kotlin.math.cos
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -256,22 +260,71 @@ fun CrisisConversationWindow(viewModel: VoiceWeaverViewModel) {
     }
 }
 
+/**
+ * 呼吸引導圓：吸氣 4 秒（變大）→ 吐氣 4 秒（變小），循環。
+ *
+ * 原本是 0.7↔1.0 的線性往返、用「目前大小 > 0.85」判斷吸或吐——圓在變小的前半段
+ * 字還寫著「吸氣」，跟畫面相反；線性速度在兩端也會「頓」一下，不像呼吸。
+ * 改成一條 8 秒的時間軸：前半吸、後半吐，大小走餘弦曲線（兩端自然放慢），
+ * 文字由時間軸的「哪一半」決定，永遠跟圓的方向一致。外圈細環是吸飽時的大小，
+ * 給眼睛一個目標。
+ *
+ * 系統關掉動畫時圓不動（Compose 會把循環動畫跳到終點，凍在半路反而誤導），
+ * 只用計時器每 4 秒換一次「吸氣／吐氣」字樣——引導照樣有，畫面沒有晃動。
+ */
 @Composable
 private fun BreathingOrb() {
+    val reduce = com.example.ui.theme.rememberReduceMotion()
+    val orbSize = 132.dp
+    if (reduce) {
+        var inhale by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                kotlinx.coroutines.delay(4000)
+                inhale = !inhale
+            }
+        }
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(orbSize)) {
+            Box(
+                modifier = Modifier
+                    .size(orbSize)
+                    .clip(RoundedCornerShape(orbSize / 2))
+                    .background(Brush.radialGradient(listOf(CalmAccent.copy(alpha = 0.45f), Color.Transparent)))
+            )
+            Text(if (inhale) I18n.tr("吸氣…") else I18n.tr("吐氣…"), fontSize = 16.sp, color = CalmText, fontWeight = FontWeight.Medium)
+        }
+        return
+    }
     val t = rememberInfiniteTransition(label = "breath")
-    val scale by t.animateFloat(
-        initialValue = 0.7f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(3800), RepeatMode.Reverse), label = "scale"
+    val cycle = t.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Restart),
+        label = "breathCycle"
     )
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(120.dp)) {
+    // 0→0.5 吸氣、0.5→1 吐氣；(1 - cos 2πt)/2 在兩端導數為 0＝自然停頓。
+    // 圓的大小在 graphicsLayer 裡讀（只重畫），文字用 derivedStateOf 只在換段時重組。
+    val inhale by remember(cycle) { derivedStateOf { cycle.value < 0.5f } }
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(orbSize)) {
         Box(
             modifier = Modifier
-                .size(120.dp)
-                .scale(scale)
-                .clip(RoundedCornerShape(60.dp))
-                .background(Brush.radialGradient(listOf(CalmAccent.copy(alpha = 0.55f), Color.Transparent)))
+                .size(orbSize)
+                .clip(RoundedCornerShape(orbSize / 2))
+                .border(1.5.dp, CalmAccent.copy(alpha = 0.35f), RoundedCornerShape(orbSize / 2))
         )
-        Text(if (scale > 0.85f) I18n.tr("吸氣…") else I18n.tr("吐氣…"), fontSize = 14.sp, color = CalmText, fontWeight = FontWeight.Medium)
+        Box(
+            modifier = Modifier
+                .size(orbSize)
+                .graphicsLayer {
+                    val e = (1f - cos(2f * PI.toFloat() * cycle.value)) / 2f
+                    val sc = 0.62f + 0.38f * e
+                    scaleX = sc
+                    scaleY = sc
+                    alpha = 0.75f + 0.25f * e
+                }
+                .clip(RoundedCornerShape(orbSize / 2))
+                .background(Brush.radialGradient(listOf(CalmAccent.copy(alpha = 0.6f), CalmAccent.copy(alpha = 0.08f))))
+        )
+        Text(if (inhale) I18n.tr("吸氣…") else I18n.tr("吐氣…"), fontSize = 16.sp, color = CalmText, fontWeight = FontWeight.Medium)
     }
 }
 

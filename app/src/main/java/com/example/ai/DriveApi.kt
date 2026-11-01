@@ -164,19 +164,6 @@ object DriveApi {
     }
 
     /**
-     * 逐層 ensure 一條路徑，回最後一層的 id。
-     * [create] 為 false 時只找不建，任何一層缺就回 null。
-     */
-    fun folderPath(token: String, parts: List<String>, create: Boolean): String? {
-        var parent = "root"
-        for (name in parts) {
-            parent = (if (create) ensureFolder(token, name, parent)
-                      else findId(token, name, parent, folder = true)) ?: return null
-        }
-        return parent
-    }
-
-    /**
      * 聲波模型資料夾：`VoiceWeaver/AcousticModels`。
      *
      * 底下不再分一層帳號 id。這是「使用者自己的」Drive——一個 Google 帳號一個雲端硬碟，
@@ -190,19 +177,6 @@ object DriveApi {
         val root = voiceWeaverRoot(token, create) ?: return null
         return if (create) ensureFolder(token, ACOUSTIC_DIR, root)
                else findId(token, ACOUSTIC_DIR, root, folder = true)
-    }
-
-    /**
-     * 語音模型資料夾。新版面是 VoiceWeaver/Models，
-     * 舊版面（語言資料夾直接掛在 VoiceWeaver 底下）就回 VoiceWeaver 本身——
-     * 與 Mac 端 emotion_models.models_root 是同一條規則。
-     */
-    fun modelsFolder(token: String): String? {
-        val root = voiceWeaverRoot(token, create = false) ?: return null
-        findId(token, MODELS_DIR, root, folder = true)?.let { return it }
-        val hasLegacy = listChildren(token, root, foldersOnly = true)
-            .any { it.name.uppercase() in LANG_DIRS }
-        return if (hasLegacy) root else null
     }
 
     /** 語言資料夾名。與 Mac 端 drive_uploader.LANG_DIRS、網頁版 LANG_DIRS 一致。 */

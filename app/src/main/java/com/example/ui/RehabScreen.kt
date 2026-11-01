@@ -1,7 +1,13 @@
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import com.example.ui.theme.Motion
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -139,6 +145,15 @@ fun RehabScreen(
                             .background(neonCyan.copy(alpha = 0.10f))
                             .padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
+                        // 進度環：唸完一句就平滑長一格，看得出「還剩多少」而不只是兩個數字
+                        ProgressRing(
+                            progress = (rehabQueueIndex + 1).toFloat() / rehabQueue.size,
+                            color = neonCyan,
+                            trackColor = neonCyan.copy(alpha = 0.18f),
+                            diameter = 30.dp,
+                            strokeWidth = 4.dp
+                        )
+                        Spacer(Modifier.width(10.dp))
                         Text(I18n.tr("📖 整段練習 %d/%d").format(rehabQueueIndex + 1, rehabQueue.size), fontSize = 12.sp, color = textLight, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = {
@@ -611,7 +626,13 @@ private fun PracticeCard(
             var tapped by remember { mutableStateOf(-1) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 rehab.chips.forEachIndexed { idx, chip ->
-                    val scale by animateFloatAsState(if (tapped == idx) 1.3f else 1f, label = "chip")
+                    // 點到的字卡放大 12% 並保持亮起，表示「正在唸這張」。原本放大 30%，
+                    // 會蓋到隔壁字卡（間距只有 6dp），看起來像兩張疊在一起。
+                    val scale by animateFloatAsState(
+                        targetValue = if (tapped == idx) 1.12f else 1f,
+                        animationSpec = tween(Motion.Standard, easing = Motion.Emphasized),
+                        label = "chip"
+                    )
                     val scanned = eyeControl.enabled && idx == eyeControl.scanIndex
                     // 錯誤字高亮：評分後，字卡內任一字落在 wrongChars → 紅框提示重點練
                     val isWrong = rehab.wrongChars.isNotEmpty() && chip.any { c -> rehab.wrongChars.contains(c.toString()) }
@@ -699,6 +720,28 @@ private fun PracticeCard(
                     fontSize = 13.sp, fontWeight = FontWeight.Bold
                 )
             }
+            // 錄音中：脈動圈＋一句話告訴使用者「正在聽、說完按上面的鈕」。
+            // 只在 Listening 出現，動畫本身就是「我在聽」的訊號。
+            AnimatedVisibility(
+                visible = sttState is SttState.Listening,
+                enter = fadeIn(tween(Motion.Standard)) + expandVertically(tween(Motion.Standard, easing = Motion.Emphasized)),
+                exit = fadeOut(tween(Motion.Quick)) + shrinkVertically(tween(Motion.Standard))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(52.dp)) {
+                        ListeningPulse(color = dangerRose, modifier = Modifier.fillMaxSize())
+                        Icon(Icons.Default.Mic, null, tint = dangerRose, modifier = Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        I18n.tr("正在錄音…說完按上面的按鈕。"),
+                        fontSize = 14.sp, color = textLight, fontWeight = FontWeight.Medium, lineHeight = 20.sp
+                    )
+                }
+            }
             // 隱私承諾要讓使用者看得到，不是只寫在程式註解裡
             Spacer(Modifier.height(4.dp))
             Text(
@@ -723,18 +766,25 @@ private fun PracticeCard(
                             .border(1.dp, scoreColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text("$score", fontSize = 36.sp, fontWeight = FontWeight.Black, color = scoreColor)
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.rehab_score_suffix), fontSize = 14.sp, color = scoreColor, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.weight(1f))
+                        // 分數環：從 0 畫到分數、數字一路數上去（約 0.8 秒）。
+                        // 每次重錄評出新分數會從上一個分數補到新分數，進步看得見。
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ScoreRing(
+                                score = score,
+                                color = scoreColor,
+                                trackColor = scoreColor.copy(alpha = 0.18f),
+                                suffix = stringResource(R.string.rehab_score_suffix)
+                            )
+                            Spacer(Modifier.width(14.dp))
                             Text(
                                 when {
                                     score >= 80 -> stringResource(R.string.rehab_score_excellent)
                                     score >= 50 -> stringResource(R.string.rehab_score_good)
                                     else -> stringResource(R.string.rehab_score_again)
                                 },
-                                fontSize = 11.sp, color = scoreColor
+                                fontSize = 15.sp, color = scoreColor, fontWeight = FontWeight.Bold,
+                                lineHeight = 21.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                         if (rehab.aiFeedback.isNotBlank()) {

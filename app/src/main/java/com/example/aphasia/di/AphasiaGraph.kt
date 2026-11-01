@@ -18,8 +18,6 @@ import com.example.aphasia.data.repository.AudioFeatureRepositoryImpl
 import com.example.aphasia.data.repository.LanguageModelRepositoryImpl
 import com.example.aphasia.data.repository.PhrasebookRepositoryImpl
 import com.example.aphasia.data.repository.SpeechRepositoryImpl
-import com.example.aphasia.domain.usecase.EnrollAcousticTemplateUseCase
-import com.example.aphasia.domain.usecase.MatchUtteranceUseCase
 import com.example.aphasia.domain.usecase.ReconstructSentenceUseCase
 import com.example.aphasia.domain.usecase.SpeakUseCase
 
@@ -115,8 +113,6 @@ class AphasiaGraph(
 
     // ── Use cases ───────────────────────────────────────────────────────
 
-    val matchUtterance by lazy { MatchUtteranceUseCase(audioFeatureRepository, templateRepository) }
-    val enrollTemplate by lazy { EnrollAcousticTemplateUseCase(templateRepository) }
     val speak by lazy { SpeakUseCase(speechRepository, phrasebookRepository) }
     val reconstruct: ReconstructSentenceUseCase
         get() = ReconstructSentenceUseCase(languageModelRepository, phrasebookRepository)

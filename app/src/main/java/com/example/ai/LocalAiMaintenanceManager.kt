@@ -70,6 +70,4 @@ class LocalAiMaintenanceManager(private val context: Context) {
 data class CleanupReport(
     val deletedFiles: Int,
     val deletedBytes: Long
-) {
-    val deletedMb: Long get() = deletedBytes / (1024 * 1024)
-}
+)

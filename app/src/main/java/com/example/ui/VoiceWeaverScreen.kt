@@ -52,6 +52,7 @@ import com.example.data.DefaultAacItems
 import com.example.ui.theme.LocalAppPalette
 import com.example.ui.theme.backgroundGradient
 import com.example.ui.theme.accentGradient
+import com.example.ui.theme.Motion
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -116,21 +117,11 @@ fun VoiceWeaverScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(neonCyan, Color.Transparent)))
-                                .border(1.5.dp, neonCyan, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Hearing,
-                                contentDescription = stringResource(R.string.app_name),
-                                tint = textLight,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        // 拾語者 logo（與網頁版同一個圖形）：絲線在開 App 時「織」進來一次
+                        BrandMark(
+                            size = 36.dp,
+                            contentDescription = stringResource(R.string.app_name)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
                         // TopAppBar 高度是固定的 64dp。字級拉到 2 倍以上時，
                         // 標題 19sp + 標語 11sp 加起來就超過那個高度，標語會被下面的
@@ -1069,7 +1060,21 @@ fun VoiceWeaverScreen(
                     color = neonCyan
                 )
 
-                when (val state = reconstructionState) {
+                // 結果區四種狀態之間用淡入＋微縮放切換：Loading → Success 那一下
+                // 是「AI 把句子織好了」的時刻，要讓眼睛注意到，但不能跳。
+                // contentKey 用類別：同樣是 Success、只是換選了另一個候選句時不重播。
+                AnimatedContent(
+                    targetState = reconstructionState,
+                    contentKey = { it::class },
+                    transitionSpec = {
+                        (fadeIn(tween(Motion.Standard)) +
+                            scaleIn(initialScale = 0.96f, animationSpec = tween(Motion.Standard, easing = Motion.Emphasized)))
+                            .togetherWith(fadeOut(tween(Motion.Quick)))
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "reconstructionState"
+                ) { targetState ->
+                when (val state = targetState) {
                         is ReconstructionUiState.Idle -> {
                             Card(
                                 shape = RoundedCornerShape(16.dp),
@@ -1117,8 +1122,12 @@ fun VoiceWeaverScreen(
                                         .fillMaxWidth()
                                         .padding(horizontal = 14.dp, vertical = 12.dp)
                                 ) {
-                                    CircularProgressIndicator(color = neonCyan, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(10.dp))
+                                    // 「拾起碎詞、織成句子」：載入動畫本身就在演這個功能在做什麼
+                                    WeavingLoader(
+                                        palette = p,
+                                        modifier = Modifier.size(width = 64.dp, height = 36.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
                                             text = stringResource(R.string.main_output_loading),
@@ -1277,18 +1286,27 @@ fun VoiceWeaverScreen(
                                         val ranked = remember(data.alternatives) {
                                             data.alternatives.withIndex().sortedByDescending { it.value.confidence }
                                         }
-                                        ranked.forEach { (originalIndex, cand) ->
+                                        ranked.forEachIndexed { rank, (originalIndex, cand) ->
                                             val selected = data.alternativeIndex == originalIndex
+                                            // 選中的邊框顏色平滑過渡：點下去「亮起來」，是確認有選到的回饋
+                                            val candBorder by animateColorAsState(
+                                                targetValue = if (selected) neonCyan else textMuted.copy(alpha = 0.35f),
+                                                animationSpec = tween(Motion.Standard),
+                                                label = "candBorder"
+                                            )
                                             OutlinedButton(
                                                 onClick = { viewModel.selectReconstructionAlternative(originalIndex) },
                                                 shape = RoundedCornerShape(10.dp),
                                                 border = BorderStroke(
                                                     if (selected) 2.dp else 1.dp,
-                                                    if (selected) neonCyan else textMuted.copy(alpha = 0.35f)
+                                                    candBorder
                                                 ),
                                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                                                 modifier = Modifier
                                                     .fillMaxWidth()
+                                                    // 三句依信心高→低一句一句浮上來；換一批（重新生成）時重播
+                                                    .enterStaggered(index = rank, key = data.alternatives)
+                                                    .heightIn(min = 52.dp)
                                                     .padding(bottom = 6.dp)
                                             ) {
                                                 Icon(
@@ -1491,6 +1509,7 @@ fun VoiceWeaverScreen(
                             }
                         }
                 }
+                }   // AnimatedContent
             }
 
             item {

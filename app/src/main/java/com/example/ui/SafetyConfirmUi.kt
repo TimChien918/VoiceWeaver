@@ -131,6 +131,9 @@ fun AacPendingConfirmCard(
     if (pendingText.isBlank()) return
     Column(
         modifier = Modifier
+            // 語意確認卡一出現就要把目光拉過來：輕輕彈出（92%→100%），
+            // AI 換了一句（再猜）也會重播，讓患者知道「這是新的一句」。
+            .popIn(key = pendingText)
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(p.neonCyan.copy(alpha = 0.10f))

@@ -561,8 +561,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     // AAC 圖卡組合工作記憶（含 1-5 星評分，供 ReportAggregator 與 AI 推薦排序）
     private val aacComboLogRepo = com.example.data.AacComboLogRepository(db.aacComboLogDao())
-    val aacComboHistory: StateFlow<List<com.example.data.AacComboLog>> =
-        aacComboLogRepo.recent().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     /** 故事訓練 DAO：給 StoryTrainingScreen 直接 insert */
     val storyTrainingDao: com.example.data.StoryTrainingLogDao = db.storyTrainingLogDao()
@@ -588,7 +586,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 匯入的客製語料庫（合併進 DefaultAacItems 顯示在 AAC 板）*/
     private val _customCorpus = MutableStateFlow<List<com.example.data.AacItem>>(emptyList())
-    val customCorpus: StateFlow<List<com.example.data.AacItem>> = _customCorpus.asStateFlow()
 
     /**
      * AAC 情境提示：根據當前 `globalTagsVault.locationTag` 自動推算「在此場景常用的圖卡」。
@@ -902,9 +899,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /** 開啟即時視訊通話（病患端用網頁跳轉到視訊房）。 */
-    fun crisisVideoCallUrl(): String = _crisisConv.value.videoCallUrl
-
     /** 關閉危機對話：停止輪詢。 */
     fun closeCrisisConversation() {
         crisisPollJob?.cancel(); crisisPollJob = null
@@ -978,26 +972,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
 
     /** 三句都不對 → 沿用同一份 vault 重新呼叫 LLM，生出全新一批候選。 */
     fun regenerateAlternatives() = triggerSentenceReconstruction()
-
-    fun cycleReconstructionAlternative() {
-        val state = _reconstructionState.value as? ReconstructionUiState.Success ?: return
-        val data = state.data
-        if (data.alternatives.size <= 1) return
-        if (data.alternativeIndex >= data.alternatives.size - 1) {
-            triggerSentenceReconstruction()
-            return
-        }
-        val nextIndex = data.alternativeIndex + 1
-        val next = data.alternatives[nextIndex]
-        val updated = data.copy(
-            reconstructedText = next.text,
-            confidence = next.confidence,
-            alternativeIndex = nextIndex
-        )
-        _reconstructionState.value = ReconstructionUiState.Success(updated)
-        if (settings.value.aacIntentImageEnabled) generateIntentImage(updated.reconstructedText)
-        else clearIntentImage()
-    }
 
     /** 臨床高頻一鍵發聲：固定句、預先核可，不過 LLM 直接朗讀。 */
     /**
@@ -1630,11 +1604,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      * 按一下開始錄、再按一下停止並直接送模型理解。
      * 失敗（沒金鑰／網路／模型不支援）時自動退回原本的 Vosk STT 流程，不讓使用者卡住。
      */
-    /** 錄音中的即時音量（0..1），給按鈕畫波形用。 */
-    val directAmplitude: StateFlow<Float> =
-        aphasiaGraph.audioCapture.liveAmplitude
-            .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), 0f)
-
     private val directStopRequested = java.util.concurrent.atomic.AtomicBoolean(false)
     private var directRecordJob: kotlinx.coroutines.Job? = null
 
@@ -2129,10 +2098,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         ttsModule.speakGptSovitTest(testSentenceFor(lang), GptSovitVoiceMode.Auto, onComplete)
     }
 
-    /** 預設測試：跟隨系統/介面語言（向後相容用）。 */
-    fun testGptSovitBilingual(onComplete: () -> Unit = {}) {
-        testGptSovitLang(LocalSovitsHelper.langFromAppTag(settings.value.language.tag), onComplete)
-    }
     fun stopSpeaking() = ttsModule.stopSpeaking()
 
     // ─── 語音復健（Task 5.1 / 5.2 / 5.3）────────────────────────────────────────
@@ -2180,9 +2145,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         startRehab(queue[next])
         return true
     }
-
-    /** 點字卡：單獨播放該字／詞發音 */
-    fun speakRehabToken(token: String) = ttsModule.speak(token)
 
     /**
      * 點字卡：直接播放該字卡文字（chip 本身已是 2 字組，TTS 有上下文，破音字自然解決）。
@@ -2938,17 +2900,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
         DiagnosticLog.i(DiagnosticLog.Cat.UI, "切換音訊理解來源", source.name)
     }
 
-    /**
-     * 主動探測電腦端音訊伺服器並回報狀態，給設定頁的「測試連線」用。
-     * 順帶更新 OffloadManager 的快取旗標，讓主畫面的按鈕顯示跟著校正。
-     */
-    suspend fun probeAudioServer(): Boolean {
-        val base = settings.value.gptSovitApiBaseUrl.ifBlank { LocalSovitsHelper.DEFAULT_LOCAL_URL }
-        val ok = OffloadManager.audioServerReady(base)
-        DiagnosticLog.i(DiagnosticLog.Cat.NET, "探測電腦端音訊伺服器", "位址=$base 就緒=$ok")
-        return ok
-    }
-
     private fun startTelemetry() {
         if (telemetryJob?.isActive == true) return
         telemetryJob = viewModelScope.launch {
@@ -3022,11 +2973,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
             )
             speakRehabChip(target)
         }
-    }
-
-    private fun EyeControlMode.toEyeInteractionMode(): EyeInteractionMode = when (this) {
-        EyeControlMode.GazeDwell -> EyeInteractionMode.GAZE_DWELL
-        EyeControlMode.BlinkScan -> EyeInteractionMode.BLINK_SCAN
     }
 
     // ─── Room DB 歷史 ─────────────────────────────────────────────────────────
@@ -3659,10 +3605,6 @@ data class RehabUiState(
 ) {
     val isActive: Boolean get() = target.isNotBlank()
 }
-
-/** Task 5.1: 依標點與空格拆成字詞清單（詞/句層級） */
-fun String.toRehabTokens(): List<String> =
-    split(Regex("[，。！？、,.!?；;：:\\s]+")).map { it.trim() }.filter { it.isNotEmpty() }
 
 /**
  * 拆成字卡清單：先用標點切分子句，再在每個子句內每 2 字一組。

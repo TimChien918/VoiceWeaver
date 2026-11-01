@@ -38,7 +38,41 @@ val HighContrastPalette = AppPalette(
     textMuted  = Color(0xFFE0E0E0)    // 高對比下次要文字也接近白
 )
 
-/** 科技風（深色，預設）：近黑底 + iOS 系統色（藍/綠/橙/紅），沉穩專業。 */
+/**
+ * 拾語者品牌風（淺色，預設）：暖紙底 + logo 深綠為主色、暖黃為 AI／提示色。
+ *
+ * 每個前景色都對底色與白卡驗過 ≥ 4.5:1（WCAG AA 一般文字）——使用者多是中高齡、
+ * 視力退化，品牌色再好看，讀不到就沒有意義。暖黃原色（[BrandThread]）在淺底上
+ * 只有約 1.4:1，所以這裡用壓暗的 [BrandThreadDeep]；原色留給 logo 與裝飾線。
+ * Material 的 onPrimary 取 darkBg（紙色），綠/紅按鈕上的字也都 ≥ 4.5:1。
+ */
+val BrandDayPalette = AppPalette(
+    darkBg     = BrandPaper,
+    surface    = Color(0xFFFFFFFF),
+    neonCyan   = BrandForest,         // 主色：logo 深綠
+    neonGreen  = Color(0xFF2E7D50),   // 成功：葉綠，比主色亮一階、仍可當按鈕底
+    auraAmber  = BrandThreadDeep,     // AI／推薦：壓暗的暖黃
+    dangerRose = Color(0xFFC0392B),
+    textLight  = Color(0xFF1C2B26),   // 帶綠的墨色，比純黑柔和
+    textMuted  = Color(0xFF56655F)
+)
+
+/**
+ * 拾語者品牌風（深色）：森林夜色底 + 提亮的玉綠主色、logo 原色暖黃。
+ * 系統切到深色模式時自動換上，見 [MyApplicationTheme]。
+ */
+val BrandNightPalette = AppPalette(
+    darkBg     = BrandNight,
+    surface    = Color(0xFF17302A),
+    neonCyan   = Color(0xFF7FCFB2),   // 深綠提亮成玉綠：深底上 9:1
+    neonGreen  = Color(0xFF86D69A),
+    auraAmber  = BrandThread,         // 深底上直接用 logo 暖黃
+    dangerRose = Color(0xFFFF7B6E),
+    textLight  = Color(0xFFEEF4EF),
+    textMuted  = Color(0xFFA9BBB3)
+)
+
+/** 科技風（深色）：近黑底 + iOS 系統色（藍/綠/橙/紅），沉穩專業。 */
 val TechPalette = AppPalette(
     darkBg     = Color(0xFF000000),
     surface    = Color(0xFF1C1C1E),
@@ -151,7 +185,7 @@ val AppPalette.hairline: Color
     get() = neonCyan.copy(alpha = 0.22f)
 
 /** CompositionLocal：所有 Screen 透過 `LocalAppPalette.current.xxx` 讀取當前主題色 */
-val LocalAppPalette = compositionLocalOf { TechPalette }
+val LocalAppPalette = compositionLocalOf { BrandDayPalette }
 
 /** 簡寫存取：`AppColors.neonCyan` 等同 `LocalAppPalette.current.neonCyan` */
 object AppColors {

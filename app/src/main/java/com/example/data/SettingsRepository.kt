@@ -11,8 +11,13 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** 4 種視覺風格 */
+/**
+ * 視覺風格。以 name 存進 DataStore，所以**只能新增、不能改名**。
+ * Brand（拾語者品牌風）是新使用者的預設，深淺色跟隨系統；其餘四種維持原樣，
+ * 已經自己選過風格的使用者不受影響。
+ */
 enum class AppTheme(val displayName: String) {
+    Brand("拾語者"),
     Tech("科技風"),
     Cute("可愛風"),
     Anime("動漫風"),
@@ -130,7 +135,7 @@ const val MAX_FONT_SCALE = 3.0f
 
 /** App 全域設定快照（單一資料源，UI 訂閱 [SettingsRepository.settings] 取得即時值）*/
 data class AppSettings(
-    val theme: AppTheme = AppTheme.Tech,
+    val theme: AppTheme = AppTheme.Brand,
     /** 預設英文：這個 App 以英語使用者為主要對象。 */
     val language: AppLanguage = AppLanguage.En,
     val powerMode: PowerMode = PowerMode.Balanced,
@@ -398,7 +403,7 @@ class SettingsRepository(private val context: Context) {
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { p -> p.toSettings() }
 
     private fun Preferences.toSettings() = AppSettings(
-        theme         = runCatching { AppTheme.valueOf(this[Keys.Theme] ?: AppTheme.Tech.name) }.getOrDefault(AppTheme.Tech),
+        theme         = runCatching { AppTheme.valueOf(this[Keys.Theme] ?: AppTheme.Brand.name) }.getOrDefault(AppTheme.Brand),
         language      = runCatching { AppLanguage.valueOf(this[Keys.Language] ?: AppLanguage.En.name) }.getOrDefault(AppLanguage.En),
         powerMode     = runCatching { PowerMode.valueOf(this[Keys.PowerMode] ?: PowerMode.Balanced.name) }.getOrDefault(PowerMode.Balanced),
         cloudProvider = runCatching { CloudProvider.valueOf(this[Keys.CloudProvider] ?: CloudProvider.Auto.name) }.getOrDefault(CloudProvider.Auto),
@@ -567,10 +572,6 @@ class SettingsRepository(private val context: Context) {
             it[Keys.HomeLon] = longitude.toFloat()
         }
     }
-    suspend fun setHomeRadius(radiusMeters: Float) = update {
-        it[Keys.HomeRadius] = radiusMeters.coerceIn(20f, 1000f)
-    }
-    suspend fun setFavoriteSentences(v: String) = update { it[Keys.FavoriteSentences] = v }
     /** 切換一句的收藏狀態（已收藏→移除，未收藏→加到最前）。回傳是否為「已加入」。 */
     suspend fun toggleFavorite(sentence: String) {
         val s = sentence.trim()
@@ -597,7 +598,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAcousticMatchEnabled(on: Boolean) =
         update { it[Keys.AcousticMatch] = on }
     suspend fun setReportPushFrequency(freq: String) = update { it[Keys.ReportPushFrequency] = freq }
-    suspend fun setLinkedComputerId(id: String) = update { it[Keys.LinkedComputerId] = id.trim() }
     suspend fun setCurrentLocationTag(tag: String) = update { it[Keys.CurrentLocationTag] = tag }  // 問題10：保存地點
 
     // ─── 行為數據彙總（康復追蹤指標）───────────────────────────────────────────

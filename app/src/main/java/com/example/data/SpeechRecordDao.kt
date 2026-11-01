@@ -11,9 +11,6 @@ interface SpeechRecordDao {
     @Query("SELECT * FROM speech_records ORDER BY timestamp DESC")
     fun getAllRecords(): Flow<List<SpeechRecord>>
 
-    @Query("SELECT * FROM speech_records WHERE isFavorite = 1 ORDER BY timestamp DESC")
-    fun getFavoriteRecords(): Flow<List<SpeechRecord>>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecord(record: SpeechRecord): Long
 

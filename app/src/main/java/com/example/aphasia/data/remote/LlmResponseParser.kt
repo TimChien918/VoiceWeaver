@@ -3,7 +3,6 @@ package com.example.aphasia.data.remote
 import com.example.aphasia.domain.model.ReconstructedSentence
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.Types
 
 /**
  * 解析模型回來的 JSON。
@@ -104,6 +103,4 @@ object LlmResponseParser {
 
     private val WHITESPACE = Regex("\\s+")
 
-    @Suppress("unused")
-    private val listType = Types.newParameterizedType(List::class.java, CandidateDto::class.java)
 }

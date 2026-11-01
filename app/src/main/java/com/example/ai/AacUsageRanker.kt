@@ -253,25 +253,6 @@ object AacUsageRanker {
             if (base > 0.0) item to base else null
         }
 
-    /**
-     * 「常用」推薦列（社群的 For You）：全庫依**推薦指數**取前 N 張。
-     * 不只是用過的卡——跟常用卡相關的（喝水→杯子）也會依指數浮進來。
-     * 冷啟動（什麼都沒按過）回空清單，UI 就不顯示這一列——不硬塞猜測。
-     */
-    /**
-     * 這張卡「現在還算不算常用」——回傳衰減後仍有效的使用次數（無條件捨去）。
-     *
-     * 必須看衰減後的分數而不是原始 score：一張三個月前按過五次、之後再沒碰過的卡，
-     * 原始 score 永遠 > 0，但推薦分早已趨近 0，[feed] 根本不會把它排進來。
-     * 若這裡仍算它「用過」，UI 的冷啟動判斷（totalUsed >= 3）就會在推薦列其實
-     * 生不出東西的情況下把空列顯示出來——兩邊要用同一套衰減標準才不會打架。
-     */
-    @Synchronized
-    fun getUsageCount(itemId: String): Int {
-        val stat = stats[itemId] ?: return 0
-        return stat.decayedScore(System.currentTimeMillis()).toInt()
-    }
-
     /** 目前仍有有效分數的卡有幾張（冷啟動判斷用，比在 UI 端逐張 count 便宜）。 */
     @Synchronized
     fun activeItemCount(): Int {
@@ -314,17 +295,6 @@ object AacUsageRanker {
         if (locationTag.isNotBlank()) s.lastLocation = locationTag
         persist()
         Log.i(TAG, "[TEST] 注入 $itemId score=$score ageDays=$ageDays bucket=$bucket loc='$locationTag'")
-    }
-
-    /** 偽造一條共現關聯（測 EdgeRank 的分數傳播：按「喝水」時「杯子」該不該浮上來）。 */
-    @Synchronized
-    fun injectEdgeForTesting(a: String, b: String, score: Double, ageDays: Double = 0.0) {
-        val now = System.currentTimeMillis()
-        val e = edges.getOrPut(pairKey(a, b)) { Edge() }
-        e.score = score
-        e.updatedAt = now - (ageDays * 24 * 3600_000.0).toLong()
-        persist()
-        Log.i(TAG, "[TEST] 注入關聯 $a↔$b score=$score")
     }
 
     /** 清空所有學到的統計與關聯，回到出廠的冷啟動狀態。 */

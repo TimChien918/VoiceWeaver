@@ -5,10 +5,8 @@
     <string name="nav_rehab">재활</string>
     <string name="nav_history">기록</string>
     <string name="nav_settings">설정</string>
-    <string name="nav_aac">AAC</string>
     <string name="nav_report">보고서</string>
 
-    <string name="aac_title">▌ AAC 보드</string>
     <string name="aac_cat_products">상품</string>
     <string name="aac_cat_food_drink">음식</string>
     <string name="aac_cat_money">금액</string>
@@ -43,10 +41,12 @@
     <string name="section_tts_rate">읽기 속도</string>
     <string name="section_font_size">글자 크기</string>
     <string name="section_other">기타</string>
+    <string name="theme_brand">Speak My Life</string>
     <string name="theme_tech">테크</string>
     <string name="theme_cute">큐트</string>
     <string name="theme_anime">애니메</string>
     <string name="theme_minimal">미니멀</string>
+    <string name="theme_blurb_brand">짙은 초록과 따뜻한 노랑 · 시스템 라이트/다크 따름 (기본)</string>
     <string name="theme_blurb_tech">다크 네온 · 프로페셔널 (기본)</string>
     <string name="theme_blurb_cute">크림 캔디 · 어린이용</string>
     <string name="theme_blurb_anime">비비드 글로우 · 청소년용</string>
@@ -72,7 +72,6 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="lang_ko">한국어</string>
-    <string name="language_note">(구조 구축 완료 · 기존 화면 문자열은 순차 이전 중)</string>
     <string name="tts_rate_slow">느림 (0.5x)</string>
     <string name="tts_rate_fast">빠름 (1.5x)</string>
     <string name="other_autosave_label">재활 로그 자동 저장</string>
@@ -105,7 +104,6 @@
     <string name="rehab_stop">중지</string>
     <string name="rehab_scoring">채점 중...</string>
     <string name="rehab_start">시작</string>
-    <string name="rehab_preparing">준비 중...</string>
     <string name="rehab_score_suffix">점</string>
     <string name="rehab_score_excellent">훌륭해요! 발음이 명확합니다</string>
     <string name="rehab_score_good">좋아요, 다시 한번</string>
@@ -122,19 +120,9 @@
     <string name="main_dl_downloading">Qwen2.5-1.5B 다운로드 중...</string>
     <string name="main_dl_cancel">취소</string>
     <string name="main_dl_failed">다운로드 실패</string>
-    <string name="main_dl_adb_title">PC 명령어로 설치 (계정 불필요)</string>
     <string name="main_dl_retry">재시도</string>
     <string name="main_rule_engine_running">규칙 엔진 실행 중</string>
-    <string name="main_upgrade_llm">LLM 업그레이드 ↓</string>
-    <string name="main_dl_blurb">Qwen2.5-1.5B INT8 자동 다운로드 (~1.6 GB)\n공개 모델 · 계정 불필요 · Wi-Fi만 필요</string>
     <string name="main_dl_button">AI 모델 다운로드 (~1.6 GB)</string>
-    <string name="main_llm_ready">LLM 모델 준비 완료 (Qwen2.5-1.5B INT8)</string>
-    <string name="main_strategy_high_ready">메모리 충분 (>=8GB). MediaPipe LLM 로드됨, 기기에서 고정밀 재구성.</string>
-    <string name="main_strategy_high_fallback">메모리 충분 (>=8GB). AICore 사용 불가, MediaPipe 모델로 업그레이드 가능. 현재 규칙 엔진 사용.</string>
-    <string name="main_strategy_mid_ready">중급 하드웨어 (>=4GB). MediaPipe Qwen2.5-1.5B INT8 준비됨, CPU에서 오프라인 추론.</string>
-    <string name="main_strategy_mid_fallback">중급 하드웨어 (>=4GB). MediaPipe 모델을 설치하여 LLM 활성화. 현재 규칙 엔진 사용.</string>
-    <string name="main_strategy_low">메모리 부족 (&lt;4GB). OOM 방지를 위해 규칙 엔진만 사용.</string>
-    <string name="main_tier_simulator">하드웨어 등급 시뮬레이터 (진단용):</string>
     <string name="main_sec_context">▌ 스마트 상황 융합</string>
     <string name="main_gps_section">1. 현재 GPS 위치 감지</string>
     <string name="main_gps_loading">고속 측위 및 역지오코딩 중...</string>
@@ -177,19 +165,4 @@
     <string name="main_btn_tts">읽어주기 (TTS)</string>
     <string name="main_btn_practice">이 문장으로 발음 연습 →</string>
 
-    <string-array name="main_quick_home">
-        <item>목말라요</item><item>물 주세요</item><item>배고파요</item><item>졸려요</item><item>약 필요해요</item>
-    </string-array>
-    <string-array name="main_quick_hospital">
-        <item>의사</item><item>불편해요</item><item>가슴 통증</item><item>어지러워요</item><item>몇 알?</item>
-    </string-array>
-    <string-array name="main_quick_market">
-        <item>우유 사기</item><item>계산</item><item>장바구니</item><item>지갑 놓고 옴</item>
-    </string-array>
-    <string-array name="main_quick_restaurant">
-        <item>배고파요</item><item>밥 주문</item><item>물 주세요</item><item>뜨거워요</item><item>계산서</item>
-    </string-array>
-    <string-array name="main_quick_default">
-        <item>목말라요</item><item>불편해요</item><item>도와주세요</item>
-    </string-array>
 </resources>

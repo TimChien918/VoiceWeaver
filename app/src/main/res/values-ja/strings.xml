@@ -5,10 +5,8 @@
     <string name="nav_rehab">リハビリ</string>
     <string name="nav_history">履歴</string>
     <string name="nav_settings">設定</string>
-    <string name="nav_aac">AAC</string>
     <string name="nav_report">レポート</string>
 
-    <string name="aac_title">▌ AAC 会話ボード</string>
     <string name="aac_cat_products">商品</string>
     <string name="aac_cat_food_drink">飲食</string>
     <string name="aac_cat_money">金額</string>
@@ -43,10 +41,12 @@
     <string name="section_tts_rate">読み上げ速度</string>
     <string name="section_font_size">文字サイズ</string>
     <string name="section_other">その他</string>
+    <string name="theme_brand">Speak My Life</string>
     <string name="theme_tech">テック</string>
     <string name="theme_cute">かわいい</string>
     <string name="theme_anime">アニメ</string>
     <string name="theme_minimal">ミニマル</string>
+    <string name="theme_blurb_brand">深緑と暖かい黄・システムの明暗に追従（既定）</string>
     <string name="theme_blurb_tech">ダークネオン・プロ仕様（既定）</string>
     <string name="theme_blurb_cute">クリームキャンディ・お子様向け</string>
     <string name="theme_blurb_anime">鮮やかな夜光・若者向け</string>
@@ -72,7 +72,6 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="lang_ko">한국어</string>
-    <string name="language_note">（基盤構築済み・既存画面の文字列は順次移行中）</string>
     <string name="tts_rate_slow">遅い (0.5x)</string>
     <string name="tts_rate_fast">速い (1.5x)</string>
     <string name="other_autosave_label">リハビリログを自動保存</string>
@@ -105,7 +104,6 @@
     <string name="rehab_stop">停止</string>
     <string name="rehab_scoring">採点中...</string>
     <string name="rehab_start">開始</string>
-    <string name="rehab_preparing">準備中...</string>
     <string name="rehab_score_suffix">点</string>
     <string name="rehab_score_excellent">素晴らしい！発音がクリアです</string>
     <string name="rehab_score_good">いいですね、もう一度</string>
@@ -122,19 +120,9 @@
     <string name="main_dl_downloading">Qwen2.5-1.5B をダウンロード中...</string>
     <string name="main_dl_cancel">キャンセル</string>
     <string name="main_dl_failed">ダウンロード失敗</string>
-    <string name="main_dl_adb_title">PC コマンドでインストール（アカウント不要）</string>
     <string name="main_dl_retry">再試行</string>
     <string name="main_rule_engine_running">ルールエンジン稼働中</string>
-    <string name="main_upgrade_llm">LLM にアップグレード ↓</string>
-    <string name="main_dl_blurb">Qwen2.5-1.5B INT8 を自動ダウンロード（約 1.6 GB）\n公開モデル・アカウント不要・Wi-Fi のみ必要</string>
     <string name="main_dl_button">AI モデルをダウンロード（~1.6 GB）</string>
-    <string name="main_llm_ready">LLM モデル準備完了（Qwen2.5-1.5B INT8）</string>
-    <string name="main_strategy_high_ready">メモリ十分 (>=8GB)・MediaPipe LLM 読み込み済み、端末上で高精度再構成。</string>
-    <string name="main_strategy_high_fallback">メモリ十分 (>=8GB)・AICore 利用不可・MediaPipe モデル配置で拡張可能。現在はルールエンジン。</string>
-    <string name="main_strategy_mid_ready">中位ハードウェア (>=4GB)・MediaPipe Qwen2.5-1.5B INT8 準備完了、CPU でオフライン推論。</string>
-    <string name="main_strategy_mid_fallback">中位ハードウェア (>=4GB)・MediaPipe モデルを配置して LLM を有効化。現在はルールエンジン。</string>
-    <string name="main_strategy_low">このデバイスはメモリが少なめ (&lt;4GB)・OOM 防止のためルールエンジン専用。</string>
-    <string name="main_tier_simulator">ハードウェア階層シミュレータ（診断用）：</string>
     <string name="main_sec_context">▌ スマートコンテキスト融合</string>
     <string name="main_gps_section">1. 現在の GPS 位置を取得</string>
     <string name="main_gps_loading">高速測位・逆ジオコーディング中...</string>
@@ -177,19 +165,4 @@
     <string name="main_btn_tts">読み上げ (TTS)</string>
     <string name="main_btn_practice">この文で発音練習 →</string>
 
-    <string-array name="main_quick_home">
-        <item>のど渇いた</item><item>水ください</item><item>お腹すいた</item><item>眠い</item><item>薬が必要</item>
-    </string-array>
-    <string-array name="main_quick_hospital">
-        <item>先生</item><item>具合が悪い</item><item>胸が痛い</item><item>めまい</item><item>何錠？</item>
-    </string-array>
-    <string-array name="main_quick_market">
-        <item>牛乳を買う</item><item>支払い</item><item>袋ください</item><item>財布忘れた</item>
-    </string-array>
-    <string-array name="main_quick_restaurant">
-        <item>お腹すいた</item><item>ご飯を注文</item><item>水ください</item><item>熱い</item><item>会計</item>
-    </string-array>
-    <string-array name="main_quick_default">
-        <item>のど渇いた</item><item>具合が悪い</item><item>助けて</item>
-    </string-array>
 </resources>
