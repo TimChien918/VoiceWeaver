@@ -115,7 +115,7 @@ class I18nCoverageTest {
      */
     @Test
     fun `翻譯表不能有重複的鍵`() {
-        val src = java.io.File("src/main/java/com/example/ui/I18n.kt").readText()
+        val src = java.io.File("src/main/java/com/speakmylife/app/ui/I18n.kt").readText()
         val keys = Regex("""^\s*"((?:[^"\\]|\\.)*)"\s+to\s+arrayOf\(""", RegexOption.MULTILINE)
             .findAll(src).map { it.groupValues[1] }.toList()
         val dup = keys.groupingBy { it }.eachCount().filter { it.value > 1 }.keys
