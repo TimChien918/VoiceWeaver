@@ -1,0 +1,103 @@
+# 在 GitHub 的雲端機器上編譯 Android App、跑單元測試、產出 APK。
+#
+# 為什麼要有：開發用的雲端環境下載不到 Android SDK，App 只能在這裡真的編譯。
+# 每次推送都會編一次，編不過就是紅燈，不必等到有人在 Android Studio 打開才發現。
+#
+# google-services.json 不進版控（含 OAuth client）。兩種情況：
+#   • 有設 repo secret `GOOGLE_SERVICES_JSON`（整份檔案內容）→ 用真的，產出的 APK 可以直接安裝使用，
+#     推 v* 標籤時會自動發布到 GitHub Releases。
+#   • 沒設 → 放一份只有套件名對得上的假檔，**只為了檢查能不能編譯**。這種 APK 的 Firebase
+#     登入／同步不能用，所以不會發布，只會掛在這次執行的 Artifacts 裡。
+name: Android build
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HAS_GS: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: google-services.json
+        env:
+          GS: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GS" ]; then
+            printf '%s' "$GS" > app/google-services.json
+            echo "使用 repo secret 的 google-services.json"
+          else
+            echo "::warning::沒有設定 GOOGLE_SERVICES_JSON secret，改用假檔只做編譯檢查（這個 APK 的 Firebase 不能用）"
+            cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "build-check-placeholder",
+              "storage_bucket": "build-check-placeholder.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                "android_client_info": { "package_name": "com.speakmylife.app" }
+              },
+              "oauth_client": [],
+              "api_key": [{ "current_key": "AIzaSyPlaceholderPlaceholderPlaceholder00" }],
+              "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: debug 簽章金鑰
+        run: |
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -v -keystore debug.keystore -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: 編譯 debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: 單元測試
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: 測試報告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+
+      - name: 上傳 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Speak-My-Life-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: 發布到 Releases（只在 v* 標籤且有真的 google-services.json 時）
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_GS == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/*.apk
+          generate_release_notes: true
