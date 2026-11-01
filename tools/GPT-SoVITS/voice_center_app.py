@@ -181,7 +181,11 @@ except Exception:
 # 不該放在使用者看得到、可能移動/移除的位置（外接硬碟拔掉快取就消失了）。
 DEFAULT_LIBRARY_ROOT = os.path.join(APPSUP, "library")
 
-VOICE_CFG = "GPT_SoVITS/configs/speakmylife_tts_infer.yaml"   # 舊 voiceweaver_tts_infer.yaml 由 model_setup_server 自動改名
+VOICE_CFG = "GPT_SoVITS/configs/speakmylife_tts_infer.yaml"
+# 舊名 voiceweaver_tts_infer.yaml 由 model_setup_server 自動改名；改名失敗才會走到這個退路
+if (not os.path.isfile(os.path.join(ROOT, VOICE_CFG))
+        and os.path.isfile(os.path.join(ROOT, "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"))):
+    VOICE_CFG = "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
 
 # Python 直譯器（非凍結版直接用 sys.executable；凍結版啟動時背景搜尋）
 _PY_LOCK = threading.Lock()

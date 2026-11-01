@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 本機生圖伺服器（Mac 端，免金鑰）。
+"""拾語者 Speak My Life 本機生圖伺服器（Mac 端，免金鑰）。
 
 跟 GPT-SoVITS 一樣在「電腦本機」運算：手機透過 USB(adb reverse) 或 Wi-Fi 連到 :9881，
 不需要任何雲端 API 金鑰。用 diffusers + Apple MPS 跑 SD-Turbo（快、512px、適合 AAC 圖卡）。
@@ -185,7 +185,7 @@ def main() -> None:
     # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 SML_BIND=127.0.0.1 鎖本機。
     bind = os.environ.get("SML_BIND", "0.0.0.0")
     server = ThreadingHTTPServer((bind, PORT), Handler)
-    print(f"VoiceWeaver image server: http://{bind}:{PORT} (model {MODEL})", flush=True)
+    print(f"Speak My Life image server: http://{bind}:{PORT} (model {MODEL})", flush=True)
     server.serve_forever()
 
 

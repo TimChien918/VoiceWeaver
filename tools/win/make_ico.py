@@ -1,4 +1,4 @@
-"""產生 VoiceWeaver 語音中心的 Windows 圖示（聲波長條，藍青漸層）。"""
+"""產生拾語者 Speak My Life 語音中心的 Windows 圖示（聲波長條，藍青漸層）。"""
 import sys
 from pathlib import Path
 

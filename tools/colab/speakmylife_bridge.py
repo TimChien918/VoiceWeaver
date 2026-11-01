@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 雲端橋接（Colab / 任何有 GPU 的機器）。
+"""拾語者 Speak My Life 雲端橋接（Colab / 任何有 GPU 的機器）。
 
 一個埠同時服務兩種客戶端，共用一條 ngrok/Cloudflare 通道：
 
@@ -36,7 +36,7 @@ BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "9879"))
 
 # 「已預載」標記：Colab 上 Drive 是掛載的，/prepare 把角色整包讀一遍＝抓進本地快取。
 # 成功後記在這份 json，/catalog 靠它回 downloaded → 網頁才能亮綠燈「已下載」。
-_MARKS_PATH = os.environ.get("PREFETCH_MARKS", "/tmp/vw_prefetched.json")
+_MARKS_PATH = os.environ.get("PREFETCH_MARKS", "/tmp/sml_prefetched.json")
 
 def _load_marks():
     try:
@@ -128,7 +128,7 @@ def _models_dir():
     """語音模型實際所在的層。
 
     與 emotion_models.models_root 同一套規則（這支刻意不 import 那邊，
-    因為 Colab 上只有上游 GPT-SoVITS，VoiceWeaver repo 不在）：
+    因為 Colab 上只有上游 GPT-SoVITS，Speak-My-Life repo 不在）：
     有 Models/ 就用，否則舊版面沿用根目錄，全新曲庫走 Models/。
     改這裡就要一起改 emotion_models。
     """
@@ -399,7 +399,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path in ("/", "/health"):
             m = _find(_current["name"]) if _current["name"] else None
             return self._json(200, {
-                "ok": True, "service": "voiceweaver-cloud-bridge",
+                "ok": True, "service": "speakmylife-cloud-bridge",
+                "aliases": ["voiceweaver-cloud-bridge"],   # 更名前的服務名，舊版 App／網頁比對用
                 "current": _current["name"], "emotion": _current["emotion"],
                 "voice": _port_up(API_BASE), "image": _port_up(IMAGE_BASE), "text": _port_up(TEXT_BASE),
                 "t2s_weights_path": (m or {}).get("gpt", ""),
@@ -530,7 +531,7 @@ class ThreadingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 def main():
     n = len(load_models())
     srv = ThreadingServer(("0.0.0.0", BRIDGE_PORT), Handler)
-    print(f"[bridge] VoiceWeaver 雲端橋接 :{BRIDGE_PORT} → api_v2 {API_BASE}｜掃到 {n} 個角色", flush=True)
+    print(f"[bridge] 拾語者雲端橋接 :{BRIDGE_PORT} → api_v2 {API_BASE}｜掃到 {n} 個角色", flush=True)
     srv.serve_forever()
 
 

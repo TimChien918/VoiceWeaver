@@ -1,5 +1,5 @@
 ﻿<#
-  打包 VoiceWeaver 語音中心為「單一可執行檔」(.exe) — 自我引導安裝版。
+  打包拾語者 Speak My Life 語音中心為「單一可執行檔」(.exe) — 自我引導安裝版。
 
   與舊的 build_win.ps1（自帶 conda-pack 環境的 .zip）不同，這個產物是一顆小小的
   PyInstaller exe（約 11MB）：使用者雙擊後，第一次會自動從公開來源下載並安裝 AI 環境
@@ -13,7 +13,7 @@
       pwsh tools\win\build_win_exe.ps1                 # 用 PATH 上的 python
       $env:SML_BUILD_PY = 'C:\path\to\python.exe'; tools\win\build_win_exe.ps1
 
-  產出：dist\VoiceWeaver語音中心.exe
+  產出：dist\Speak-My-Life語音中心.exe
 #>
 $ErrorActionPreference = 'Stop'
 
@@ -39,11 +39,12 @@ $addData = @(
   "$GS\image_gen_server.py;backend",
   "$GS\text_infer_server.py;backend",
   "$GS\sync_voice_models.py;backend",
+  "$GS\sml_migrate.py;backend",          # 更名搬遷（同步腳本以子程序執行時要 import）
   "$GS\GPT_SoVITS\configs;backend\GPT_SoVITS\configs"
 )
 $args = @(
   '-m','PyInstaller','--onefile','--windowed',
-  '--name','VoiceWeaver語音中心',
+  '--name','Speak-My-Life語音中心',
   "--icon=$Icon",
   '--distpath',$Dist,
   '--workpath',"$env:TEMP\pyi_build",
@@ -53,7 +54,7 @@ $args = @(
   '--noupx'
 )
 # 內嵌版本/產品資訊：未簽章 exe 仍可能被 SmartScreen 攔，但「其他資訊」會顯示
-# 「VoiceWeaver 語音中心」產品名而非空白檔名，看起來正常許多（詳見 README_WINDOWS.md）。
+# 「拾語者 語音中心」產品名而非空白檔名，看起來正常許多（詳見 README_WINDOWS.md）。
 $verFile = Join-Path $WinDir 'version_info.txt'
 if (Test-Path $verFile) { $args += @('--version-file', $verFile) }
 foreach ($d in $addData) { $args += @('--add-data', $d) }
@@ -62,5 +63,5 @@ $args += "$GS\voice_center_app.py"
 & $Py @args
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller 打包失敗' }
 
-$exe = Join-Path $Dist 'VoiceWeaver語音中心.exe'
+$exe = Join-Path $Dist 'Speak-My-Life語音中心.exe'
 Write-Host ('==> 完成：{0}  ({1:N1} MB)' -f $exe, ((Get-Item $exe).Length / 1MB))

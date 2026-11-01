@@ -77,7 +77,7 @@ EOF
   local size=0
   for ep in "${ENDPOINTS[@]}"; do
     echo "  trying $ep …"
-    if curl -s -A "VoiceWeaver-Build/1.0" --connect-timeout 10 --max-time 300 \
+    if curl -s -A "SpeakMyLife-Build/1.0" --connect-timeout 10 --max-time 300 \
         --data-urlencode "data@$TMP/query.txt" "$ep" > "$TMP/raw.json"; then
       size=$(wc -c < "$TMP/raw.json")
       if [[ "$size" -gt 100000 ]]; then

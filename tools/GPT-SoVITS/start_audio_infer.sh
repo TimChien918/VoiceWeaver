@@ -7,6 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+[ -f "$ROOT/sml_migrate.sh" ] && . "$ROOT/sml_migrate.sh"   # ~/VoiceWeaver-電腦端 → ~/Speak-My-Life-電腦端
 PORT="${SML_AUDIO_PORT:-9883}"
 VENV="${SML_AUDIO_VENV:-$ROOT/../audio-understand-env}"
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 本機文字推論伺服器（Mac 端，免金鑰）。
+"""拾語者 Speak My Life 本機文字推論伺服器（Mac 端，免金鑰）。
 
-當手機與電腦連線夠快（有線 USB 或高速 Wi-Fi）時，VoiceWeaver 會把「句子重組」這項
+當手機與電腦連線夠快（有線 USB 或高速 Wi-Fi）時，拾語者會把「句子重組」這項
 文字運算也交給電腦（tier-FULL），盡量減少手機負擔。這支伺服器就是電腦端的文字大腦：
 用 transformers 在 Apple MPS 上跑一個小型 instruct 模型（預設 Qwen2.5-1.5B-Instruct，
 多語：中／英／日／韓），首次執行會自動下載（免金鑰）。
@@ -154,7 +154,7 @@ def main() -> None:
     # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 SML_BIND=127.0.0.1 鎖本機。
     bind = os.environ.get("SML_BIND", "0.0.0.0")
     server = ThreadingHTTPServer((bind, PORT), Handler)
-    print(f"VoiceWeaver text server: http://{bind}:{PORT} (model {MODEL})", flush=True)
+    print(f"Speak My Life text server: http://{bind}:{PORT} (model {MODEL})", flush=True)
     server.serve_forever()
 
 

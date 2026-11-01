@@ -2,7 +2,7 @@
 """情緒感知語音模型：共用掃描器 + 情緒偵測。
 
 api_v2.py（/models）與 voice_center_app.py（web 橋接合成）共用這支，
-與 Colab 端 voiceweaver_bridge.py 同一套邏輯（換參考音＝換語氣）。
+與 Colab 端 speakmylife_bridge.py 同一套邏輯（換參考音＝換語氣）。
 
 資料夾結構（依語言分，每角色一組情緒參考音）：
     <root>/Models/<LANG>/<角色>/

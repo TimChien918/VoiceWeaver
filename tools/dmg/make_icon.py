@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""產生 VoiceWeaver 語音中心 App 圖示（AppIcon.icns）。
+"""產生拾語者 Speak My Life 語音中心 App 圖示（AppIcon.icns）。
 用法：python make_icon.py /輸出/AppIcon.icns
 設計：藍青漸層圓角方塊 + 白色聲波長條（代表「語音」）。
 """

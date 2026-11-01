@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 本機音訊理解伺服器（Mac 端，免金鑰）。
+"""拾語者 Speak My Life 本機音訊理解伺服器（Mac 端，免金鑰）。
 
 「AI 直接聽」原本只能走雲端（Gemini）。那條路有兩個問題：免費層額度很容易爆
 （實測一次「直接聽」會平行打 3 次 API，連續用幾次就 HTTP 429），而且病人的語音

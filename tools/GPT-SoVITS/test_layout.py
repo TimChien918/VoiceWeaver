@@ -34,7 +34,7 @@ def make_char(base, lang, char, refs=("【開心】太好了.wav", "【中立】
 class LayoutTest(unittest.TestCase):
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix="vw_layout_")
+        self.root = tempfile.mkdtemp(prefix="sml_layout_")
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -187,7 +187,7 @@ class AcousticFolderTest(unittest.TestCase):
     """聲波模型資料夾：只驗路徑與 JSON 往返，Drive 的部分要真帳號才測得到。"""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix="vw_ac_")
+        self.root = tempfile.mkdtemp(prefix="sml_ac_")
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)

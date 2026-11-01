@@ -1,5 +1,5 @@
 #!/bin/bash
-# 拾語者 Speak My Life 語音中心（發行版 / .dmg 安裝；bundle 檔名仍是 VoiceWeaver語音中心.app）— 雙擊即用。
+# 拾語者 Speak My Life 語音中心（發行版 / .dmg 安裝；Speak-My-Life語音中心.app）— 雙擊即用。
 #
 # 這個版本是「自帶環境」的：.app 內含 conda-pack 打包好的 Python 環境與全部
 # 後端程式碼。第一次開啟時會自動把環境解壓到使用者資料夾並完成重定位，之後
@@ -16,9 +16,19 @@ set -u
 TITLE="拾語者 語音中心"
 
 # ---- 路徑 --------------------------------------------------------------------
-BUNDLE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"           # …/VoiceWeaver語音中心.app
+BUNDLE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"           # …/Speak-My-Life語音中心.app
 RES="$BUNDLE_DIR/Contents/Resources"                        # 內含 env tar 與 payload
-APPSUP="$HOME/Library/Application Support/VoiceWeaver"
+APPSUP="$HOME/Library/Application Support/Speak-My-Life"
+# 更名搬遷（原名 VoiceWeaver）：只有舊的 …/VoiceWeaver 就改名，並在舊位置留捷徑
+# （解壓過的 Python 環境裡寫死了舊路徑，留捷徑就不必重裝）；任何一步失敗都沿用舊資料夾。
+OLD_APPSUP="$HOME/Library/Application Support/VoiceWeaver"
+if [ ! -e "$APPSUP" ] && [ -d "$OLD_APPSUP" ] && [ ! -L "$OLD_APPSUP" ]; then
+  if mv "$OLD_APPSUP" "$APPSUP" 2>/dev/null; then
+    ln -s "$APPSUP" "$OLD_APPSUP" 2>/dev/null || { mv "$APPSUP" "$OLD_APPSUP" 2>/dev/null; APPSUP="$OLD_APPSUP"; }
+  else
+    APPSUP="$OLD_APPSUP"
+  fi
+fi
 TOOLS="$APPSUP/tools"
 ENV_DIR="$TOOLS/gpt-sovits-env"
 GS="$TOOLS/GPT-SoVITS"

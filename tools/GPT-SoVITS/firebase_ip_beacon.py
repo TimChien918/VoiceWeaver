@@ -2,8 +2,8 @@
 寫到 Firestore devices/{uid}，讓手機 App 不需手動填 IP。
 
 認證策略：匿名 Firebase Auth（REST API，只需 Web API Key）。
-uid 與 refresh token 存在 ~/.speakmylife/beacon_token.json（Windows：%APPDATA%\Speak-My-Life）；
-更名前的 ~/.voiceweaver（%APPDATA%\VoiceWeaver）第一次啟動時自動搬過來。
+uid 與 refresh token 存在 ~/.speakmylife/beacon_token.json（Windows：%APPDATA%/Speak-My-Life）；
+更名前的 ~/.voiceweaver（%APPDATA%/VoiceWeaver）第一次啟動時自動搬過來。
 首次執行讀不到 Web API Key 時，會從 SML_FIREBASE_WEB_API_KEY 環境變數或設定檔讀取。
 """
 from __future__ import annotations

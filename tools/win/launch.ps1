@@ -1,5 +1,5 @@
 ﻿<#
-  VoiceWeaver 語音中心（Windows）— 首次開啟自我引導安裝，之後秒開。
+  拾語者 Speak My Life 語音中心（Windows）— 首次開啟自我引導安裝，之後秒開。
 
   設計理念：使用者「打開急用」。所以這個啟動器是「小安裝包 + 首次自動下載」——
   雙擊後若偵測到本機還沒有 AI 環境，會自動從公開來源把所有東西裝好：
@@ -12,7 +12,8 @@
   「快速路徑」：若安裝包自帶 gpt-sovits-env.tar.gz，或設定了 $env:SML_ENV_URL
   指向預先 conda-pack 好的環境壓縮檔，就改用「下載/解壓既成環境」（最快最穩）。
 
-  全程有進度視窗，安裝紀錄寫在 %LOCALAPPDATA%\VoiceWeaver\logs\install.log。
+  全程有進度視窗，安裝紀錄寫在 %LOCALAPPDATA%\Speak-My-Life\logs\install.log。
+  （更名前的 %LOCALAPPDATA%\VoiceWeaver 第一次啟動時自動改名過來，舊位置留 junction。）
 #>
 $ErrorActionPreference = 'Stop'
 $Title = '拾語者 語音中心'
@@ -180,7 +181,7 @@ try {
     else {
       # ── 自建：python-build-standalone（解壓即用）→ pip 裝依賴（全自動，無需任何人預打包）──
       if (-not (Test-Path $PY)) {
-        $tgz = Join-Path $env:TEMP 'vw_python.tar.gz'
+        $tgz = Join-Path $env:TEMP 'sml_python.tar.gz'
         Download $PBS_URL $tgz 'Python 執行環境（約 38MB）'
         Set-Step '解壓 Python 執行環境…'
         $extractTmp = Join-Path $TOOLS '_pyextract'

@@ -1,29 +1,33 @@
 #!/usr/bin/env bash
-# 打包 VoiceWeaver 語音中心為可下載的 .dmg（自帶 Python 環境 + 後端程式碼）。
+# 打包拾語者 Speak My Life 語音中心為可下載的 .dmg（自帶 Python 環境 + 後端程式碼）。
 #
 # 用法：
 #   tools/dmg/build_dmg.sh
 #
-# 前置：先用 conda-pack 產生 /tmp/vwdmg/gpt-sovits-env.tar.gz，且
-#       /tmp/vwdmg/payload/GPT-SoVITS/ 已備妥精簡後端程式碼。
+# 前置：先用 conda-pack 產生 /tmp/smldmg/gpt-sovits-env.tar.gz，且
+#       /tmp/smldmg/payload/GPT-SoVITS/ 已備妥精簡後端程式碼。
 #
-# 產出：~/Downloads/VoiceWeaver-語音中心.dmg
+# 產出：~/Speak-My-Life-安裝檔/Speak-My-Life-語音中心.dmg
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-STAGE="/tmp/vwdmg"
+STAGE="/tmp/smldmg"
 ENV_TAR="$STAGE/gpt-sovits-env.tar.gz"
 PAYLOAD="$STAGE/payload"
-APP_NAME="VoiceWeaver語音中心"
+APP_NAME="Speak-My-Life語音中心"
 VERSION="${SML_VERSION:-$(date +%Y%m%d%H%M%S)}"     # 每次打包唯一 → 安裝端一定會更新程式碼
 
 BUILD="$STAGE/build"
 APP="$BUILD/$APP_NAME.app"
 DMG_ROOT="$STAGE/dmgroot"
 # 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 SML_DIST 覆寫。
-DIST="${SML_DIST:-$HOME/VoiceWeaver-安裝檔}"
+DIST="${SML_DIST:-$HOME/Speak-My-Life-安裝檔}"
+# 更名搬遷：只有舊的 ~/VoiceWeaver-安裝檔 就改名（失敗沿用舊的）
+if [ -z "${SML_DIST:-}" ] && [ ! -e "$DIST" ] && [ -d "$HOME/VoiceWeaver-安裝檔" ]; then
+  mv "$HOME/VoiceWeaver-安裝檔" "$DIST" 2>/dev/null || DIST="$HOME/VoiceWeaver-安裝檔"
+fi
 mkdir -p "$DIST"
-OUT_DMG="$DIST/VoiceWeaver-語音中心.dmg"
+OUT_DMG="$DIST/Speak-My-Life-語音中心.dmg"
 
 echo "==> 檢查素材"
 [ -f "$ENV_TAR" ] || { echo "缺少 $ENV_TAR（請先跑 conda-pack）"; exit 1; }
@@ -43,7 +47,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleName</key><string>拾語者 語音中心</string>
     <key>CFBundleDisplayName</key><string>拾語者 語音中心</string>
-    <key>CFBundleIdentifier</key><string>com.example.voiceweaver.voicecenter</string>
+    <key>CFBundleIdentifier</key><string>com.speakmylife.voicecenter</string>
     <key>CFBundleVersion</key><string>1.0</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>CFBundlePackageType</key><string>APPL</string>
@@ -61,7 +65,10 @@ cp "$PROJECT_ROOT/tools/dmg/launch.sh" "$APP/Contents/MacOS/launch"
 chmod +x "$APP/Contents/MacOS/launch"
 
 # 圖示：用產生器做一個 AppIcon.icns 放進 App（聲波長條，藍青漸層）
-PY="${SML_ENV_PY:-$HOME/VoiceWeaver-電腦端/gpt-sovits-env/bin/python}"
+# 電腦端資料夾：~/Speak-My-Life-電腦端（只有舊的 ~/VoiceWeaver-電腦端 就改名並留捷徑）
+. "$PROJECT_ROOT/tools/GPT-SoVITS/sml_migrate.sh"
+GS_HOME="$HOME/Speak-My-Life-電腦端"; [ -d "$GS_HOME" ] || GS_HOME="$HOME/VoiceWeaver-電腦端"
+PY="${SML_ENV_PY:-$GS_HOME/gpt-sovits-env/bin/python}"
 DMGDIR="$PROJECT_ROOT/tools/dmg"
 ICON="$APP/Contents/Resources/AppIcon.icns"
 if "$PY" "$DMGDIR/make_icon.py" "$ICON" >/dev/null 2>&1; then

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 聲音模型「真雙向」同步（電腦 ↔ 手機固定資料夾）。
+"""拾語者 Speak My Life 聲音模型「真雙向」同步（電腦 ↔ 手機固定資料夾）。
 
 概念：聲音模型同時備份在手機與電腦；USB 連接時自動同步：
   - 某一邊「缺少」檔案（新增）→ 自動複製到另一邊。
@@ -64,7 +64,7 @@ def _t(key: str, **kw) -> str:
     return tmpl.format(**kw) if tmpl else None
 
 LOCAL_ROOT = os.path.dirname(os.path.abspath(__file__))
-PHONE_ROOT = "/sdcard/VoiceWeaver/voice_models"
+PHONE_ROOT = "/sdcard/Speak-My-Life/voice_models"   # 舊 /sdcard/VoiceWeaver/voice_models 首次同步時自動搬過來
 STATE_FILE = os.path.join(LOCAL_ROOT, ".sync_state.json")   # 本機基準快照（每台電腦各自一份）
 
 IS_WIN = (os.name == "nt")
@@ -281,6 +281,7 @@ def adb_connect(adb: str, target: str) -> str:
 
 
 def main() -> int:
+    global PHONE_ROOT
     override = None
     if "-s" in sys.argv:
         i = sys.argv.index("-s")
@@ -311,6 +312,13 @@ def main() -> int:
     if not phone_reachable(adb, serial):
         print(_t("no_resp") or "[sync] 手機無回應，略過（不刪除）", flush=True)
         return 0
+    # 更名搬遷：手機上只有舊的 /sdcard/VoiceWeaver/voice_models → mv 成新的（失敗沿用舊的）
+    try:
+        sys.path.insert(0, LOCAL_ROOT)
+        import sml_migrate
+        PHONE_ROOT = sml_migrate.migrate_phone_dir(lambda c: adb_sh(adb, serial, c))
+    except Exception:
+        pass
     print(_t("start", s=serial, r=PHONE_ROOT) or f"[sync] 裝置 {serial}：開始雙向同步 ↔ {PHONE_ROOT}", flush=True)
     adb_sh(adb, serial, f"mkdir -p '{PHONE_ROOT}'")
 

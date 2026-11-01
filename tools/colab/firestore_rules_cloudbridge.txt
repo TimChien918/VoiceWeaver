@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// VoiceWeaver — Firestore 安全規則：ngrok 雲端配對（cloudbridge）
+// 拾語者 Speak My Life — Firestore 安全規則：ngrok 雲端配對（cloudbridge）
 // ─────────────────────────────────────────────────────────────
 // 把「cloudbridge」這一段加進你現有的規則裡（Firebase Console → Firestore → 規則）。
 // 不要動到既有的 users/{uid} 那段；只是多加 match /cloudbridge/{code}。
