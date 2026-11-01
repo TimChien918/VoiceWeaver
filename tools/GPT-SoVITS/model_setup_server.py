@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local GPT-SoVITS model setup page for VoiceWeaver.
+"""Local GPT-SoVITS model setup page for Speak My Life (formerly VoiceWeaver).
 
 Run from the project root:
     ./tools/GPT-SoVITS/start_model_setup_page.sh
@@ -39,14 +39,33 @@ _NOWIN = {"creationflags": 0x08000000} if _IS_WIN else {}   # CREATE_NO_WINDOW
 # 凍結版(PyInstaller)時，本檔被解壓到暫存目錄，__file__ 不是真正的安裝根目錄。
 # 由控制程式透過 SML_ROOT 指定真正的根（含 user_models / 設定 / 權重）。
 ROOT = Path(os.environ.get("SML_ROOT") or Path(__file__).resolve().parent).resolve()
+def _migrate_legacy_names():
+    """更名搬遷（原名 VoiceWeaver）：舊設定檔 voiceweaver_tts_infer.yaml、舊參考音資料夾
+    voiceweaver_custom/ 只有舊的就改名成新的。參考音資料夾在舊位置留捷徑——
+    model_history.json 記的是絕對路徑，舊路徑要照樣解得開。改名失敗就沿用舊的。"""
+    global CONFIG_PATH, REF_DIR
+    try:
+        import sml_migrate as _mig
+    except Exception:
+        return
+    try:
+        CONFIG_PATH = Path(_mig.migrate_path(
+            str(CONFIG_PATH), str(CONFIG_PATH.with_name("voiceweaver_tts_infer.yaml"))))
+        REF_DIR = Path(_mig.migrate_path(
+            str(REF_DIR), str(REF_DIR.with_name("voiceweaver_custom")), link_old=True))
+    except Exception:
+        pass
+
+
 def _derive_paths():
     global PROJECT_ROOT, CONFIG_PATH, REF_DIR, HISTORY_PATH
     try:
         PROJECT_ROOT = ROOT.parents[1]
     except IndexError:
         PROJECT_ROOT = ROOT
-    CONFIG_PATH = ROOT / "GPT_SoVITS/configs/voiceweaver_tts_infer.yaml"
-    REF_DIR = ROOT / "ref_audio/voiceweaver_custom"
+    CONFIG_PATH = ROOT / "GPT_SoVITS/configs/speakmylife_tts_infer.yaml"
+    REF_DIR = ROOT / "ref_audio/speakmylife_custom"
+    _migrate_legacy_names()
     HISTORY_PATH = ROOT / "user_models/model_history.json"
 _derive_paths()
 
@@ -57,9 +76,9 @@ def set_root(path) -> None:
     _derive_paths()
 # Windows 用 %TEMP%；macOS 用 /private/tmp（afplay 需要真實路徑，不能用 symlink）
 TEST_WAV_PATH = (
-    Path(tempfile.gettempdir()) / "voiceweaver_model_setup_test.wav"
+    Path(tempfile.gettempdir()) / "speakmylife_model_setup_test.wav"
     if _IS_WIN
-    else Path("/private/tmp/voiceweaver_model_setup_test.wav")
+    else Path("/private/tmp/speakmylife_model_setup_test.wav")
 )
 PORT = int(os.environ.get("SML_MODEL_SETUP_PORT", "9890"))
 API_BASE = os.environ.get("GPT_SOVITS_API", "http://127.0.0.1:9880").rstrip("/")
@@ -452,7 +471,7 @@ def update_config(version: str, gpt_rel: str, sovits_rel: str) -> None:
         flags=re.S,
     )
     if count != 1:
-        raise RuntimeError("找不到 voiceweaver_tts_infer.yaml 的 custom 區塊")
+        raise RuntimeError("找不到 speakmylife_tts_infer.yaml 的 custom 區塊")
     CONFIG_PATH.write_text(updated, encoding="utf-8")
 
 
@@ -852,4 +871,4 @@ def conn_state() -> dict:
 # ── 網頁控制中心已移除（2026-06-20）────────────────────────────────────────
 # 本檔現在只當「後端函式庫」供 voice_center_app.py import 重用。
 if __name__ == "__main__":
-    print("此檔已改為後端函式庫；請改用 VoiceWeaver 語音中心 App（voice_center_app.py）。")
+    print("此檔已改為後端函式庫；請改用拾語者語音中心 App（voice_center_app.py）。")

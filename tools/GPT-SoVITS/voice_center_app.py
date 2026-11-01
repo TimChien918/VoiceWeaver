@@ -3225,6 +3225,8 @@ class App:
                 path = f.read().strip()
         except Exception:
             path = ""
+        if path:
+            path = self._remap_legacy_library(path)
         if not path:                       # 沒設定過 → 自動用預設曲庫
             path = DEFAULT_LIBRARY_ROOT
             try:
@@ -3246,6 +3248,32 @@ class App:
             os.environ.pop("SML_EMOTION_ROOT", None)
             path = ""
         return path
+
+    def _remap_legacy_library(self, path: str) -> str:
+        """更名搬遷：記住的曲庫路徑若是舊位置，換成新位置並寫回記憶檔。
+
+        - …/Application Support/VoiceWeaver/…、~/VoiceWeaver-電腦端/… → 對應的新資料夾
+        - Drive for Desktop 掛載的「我的雲端硬碟/VoiceWeaver」→ 改名成 Speak-My-Life
+          （等同在 Drive 上改名，與 Android／網頁同一條規則；失敗就沿用舊的）
+        """
+        if _mig is None:
+            return path
+        new = path
+        try:
+            base = os.path.dirname(APPSUP)
+            home = os.path.expanduser("~")
+            new = _mig.remap_legacy_path(path, [
+                (os.path.join(base, _mig.OLD_NAME), APPSUP),
+                (os.path.join(home, _mig.DESKTOP_HOME_OLD), os.path.join(home, _mig.DESKTOP_HOME_NEW)),
+            ])
+            if new == path and os.path.basename(os.path.normpath(path)) == _mig.OLD_NAME:
+                new = _mig.mount_root(os.path.dirname(os.path.normpath(path)))
+            if new != path:
+                with open(self.EMOTION_ROOT_FILE, "w", encoding="utf-8") as f:
+                    f.write(new)
+        except Exception:
+            return path
+        return new
 
     def migrate_library_layout(self) -> str:
         """把曲庫（本機＋Drive）從舊版面搬成 Models/ 版面。回給使用者看的一行字。
