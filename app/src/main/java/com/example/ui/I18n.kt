@@ -648,8 +648,8 @@ object I18n {
         "全選" to arrayOf("Select all", "すべて選択", "전체 선택"),
         "清除" to arrayOf("Clear", "クリア", "지우기"),
         "個單元" to arrayOf("sections", "セクション", "섹션"),
-        "英文旁白與字幕" to arrayOf(
-            "Narration + subtitles (English)", "英語ナレーションと字幕", "영어 내레이션 및 자막"),
+        "旁白與字幕（跟著目前的介面語言）" to arrayOf(
+            "Narration + subtitles (in the current interface language)", "ナレーションと字幕（現在の表示言語）", "내레이션 및 자막 (현재 인터페이스 언어)"),
         "每一句都在開始錄影前先合成好，影片裡不會有等待。電腦用 CPU 跑 GPT-SoVITS 時，第一次每句約 10～30 秒；合成過的會留著，第二次幾乎不用等。" to arrayOf(
             "Every line is synthesised before recording starts, so the video has no waiting in it. With GPT-SoVITS on a computer CPU that takes roughly 10–30 s per line the first time; lines are cached, so a second run starts almost immediately.",
             "各行は録画開始前に合成されるため、動画に待ち時間は入りません。GPT-SoVITSをCPUで動かす場合、初回は1行あたり約10〜30秒。合成済みは保持されるので2回目はほぼ待ちません。",
@@ -691,10 +691,10 @@ object I18n {
             "Could not record the narration ({n} of {total} lines) even after retries. A USB connection is the most reliable; over Wi-Fi, Tailscale or Colab, check that the computer or Colab session has not gone to sleep and that the port is 9880 (not 9879), then try again — lines already recorded are kept, so you do not start over.",
             "ナレーションを録音できません（{n}/{total} 行）：再試行しても失敗しました。USB 直結が最も安定します。Wi-Fi／Tailscale／Colab の場合は、PC や Colab がスリープしていないか、ポートが 9880（9879 ではない）かを確認して再試行してください。録音済みの行は保持されるのでやり直しにはなりません。",
             "내레이션을 녹음할 수 없습니다({n}/{total} 문장): 재시도해도 실패했습니다. USB 직결이 가장 안정적입니다. Wi-Fi／Tailscale／Colab을 쓸 때는 컴퓨터나 Colab 세션이 절전에 들어가지 않았는지, 포트가 9880(9879 아님)인지 확인한 뒤 다시 시도하세요. 이미 녹음된 문장은 유지되므로 처음부터 다시 하지 않아도 됩니다."),
-        "電腦端語音（GPT-SoVITS）沒有啟用，旁白會用手機的系統語音唸。要用你自己的角色語音，請先到設定把電腦端語音打開並連上。" to arrayOf(
-            "Computer voice (GPT-SoVITS) is off, so the narration will use the phone's system voice. To hear your own voice, turn on the computer voice in Settings and connect first.",
-            "PC音声（GPT-SoVITS）が無効なため、ナレーションは端末のシステム音声になります。自分の声を使うには設定でPC音声を有効にして接続してください。",
-            "컴퓨터 음성(GPT-SoVITS)이 꺼져 있어 내레이션은 휴대폰 시스템 음성으로 재생됩니다. 본인 목소리를 쓰려면 설정에서 컴퓨터 음성을 켜고 연결하세요."),
+        "電腦端語音（GPT-SoVITS）沒有啟用，旁白合不出來，按下開始會直接中止。請先到設定把電腦端語音打開並連上，或把「旁白與字幕」關掉改錄無旁白版。" to arrayOf(
+            "Computer voice (GPT-SoVITS) is off, so the narration can't be synthesised and the demo will stop as soon as you press Start. Turn on and connect the computer voice in Settings first, or switch off “Narration + subtitles” to record without narration.",
+            "PC音声（GPT-SoVITS）が無効なため、ナレーションを合成できず、開始を押すとすぐに中止されます。先に設定でPC音声を有効にして接続するか、「ナレーションと字幕」をオフにしてナレーションなしで録画してください。",
+            "컴퓨터 음성(GPT-SoVITS)이 꺼져 있어 내레이션을 합성할 수 없으므로 시작을 누르면 바로 중단됩니다. 먼저 설정에서 컴퓨터 음성을 켜고 연결하거나, “내레이션 및 자막”을 끄고 내레이션 없이 녹화하세요."),
         "開始" to arrayOf("Start", "開始", "시작"),
         "常用" to arrayOf("For you", "よく使う", "자주 사용"),
         "語音復健" to arrayOf("Rehab", "発話リハビリ", "언어 재활"),

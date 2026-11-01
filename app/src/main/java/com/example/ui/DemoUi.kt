@@ -48,9 +48,9 @@ import com.example.demo.DemoController
 /**
  * 演示挑選面板。
  *
- * 面板本身跟著介面語言走（中／英／日／韓）；影片裡的旁白與字幕一律英文，
- * 因為這支影片是要拿去做報告的。單元名稱也保持英文——那是影片的段落名稱，
- * 會出現在畫面上的進度列裡，跟旁白同一種語言才不會一句中文一句英文。
+ * 面板、單元名稱、影片裡的旁白與字幕都跟著**按下開始時的介面語言**（中／英／日／韓）。
+ * 單元名稱會出現在進度列裡，跟旁白同一種語言才不會一句中文一句英文；
+ * 要錄給國外評審看，就先把介面切成英文再開始。七段與網頁版演示一致。
  */
 @Composable
 fun DemoPickerDialog(
@@ -115,7 +115,7 @@ fun DemoPickerDialog(
                     }
                 }
                 Spacer(Modifier.size(8.dp))
-                ToggleLine(I18n.tr("英文旁白與字幕"), narrate) { narrate = it }
+                ToggleLine(I18n.tr("旁白與字幕（跟著目前的介面語言）"), narrate) { narrate = it }
                 if (narrate) {
                     Text(
                         I18n.tr("每一句都在開始錄影前先合成好，影片裡不會有等待。電腦用 CPU 跑 GPT-SoVITS 時，第一次每句約 10～30 秒；合成過的會留著，第二次幾乎不用等。"),
@@ -131,7 +131,7 @@ fun DemoPickerDialog(
                     // 只跳一個 Toast。照舊文字理解的人會以為「音色差一點但還是能錄」，
                     // 按下開始卻什麼都沒發生。
                     Text(
-                        "⚠️  " + I18n.tr("電腦端語音（GPT-SoVITS）沒有啟用，旁白合不出來，按下開始會直接中止。請先到設定把電腦端語音打開並連上，或把「英文旁白與字幕」關掉改錄無旁白版。"),
+                        "⚠️  " + I18n.tr("電腦端語音（GPT-SoVITS）沒有啟用，旁白合不出來，按下開始會直接中止。請先到設定把電腦端語音打開並連上，或把「旁白與字幕」關掉改錄無旁白版。"),
                         color = Color(0xFFFFB020), fontSize = 11.sp,
                         modifier = Modifier.padding(start = 44.dp, bottom = 6.dp)
                     )
