@@ -130,9 +130,10 @@ private fun materialSchemeFor(palette: AppPalette, isLight: Boolean): androidx.c
 val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small      = RoundedCornerShape(10.dp),
-    medium     = RoundedCornerShape(16.dp),
-    large      = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    // 卡片 24dp（同網頁 --r-lg），對話框 32dp（同 --r-xl）
+    medium     = RoundedCornerShape(24.dp),
+    large      = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
 
 /** 把 [AppTheme] 設定值對應到具體 [AppPalette]（品牌風取淺色版；要跟隨系統深淺用 [MyApplicationTheme]）。 */

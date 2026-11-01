@@ -1706,5 +1706,27 @@ object I18n {
         "第 2 級・詞組與招呼語" to arrayOf("Level 2 · Phrases & greetings", "レベル 2・フレーズとあいさつ", "2단계 · 구문과 인사말"),
         "第 3 級・日常短句" to arrayOf("Level 3 · Everyday short sentences", "レベル 3・日常の短文", "3단계 · 일상 짧은 문장"),
         "第 4 級・情境長句" to arrayOf("Level 4 · Situational sentences", "レベル 4・場面のある長文", "4단계 · 상황 문장"),
+
+        // ── 首頁主控台（與網頁版 i18n-ui.js 同一套文案）──
+        "早安" to arrayOf("Good morning", "おはようございます", "좋은 아침이에요"),
+        "午安" to arrayOf("Good afternoon", "こんにちは", "좋은 오후예요"),
+        "晚安" to arrayOf("Good evening", "こんばんは", "좋은 저녁이에요"),
+        "今天想說什麼？慢慢來，我們一起把話拾起來。" to arrayOf(
+            "What would you like to say today? Take your time — we'll gather the words together.",
+            "今日は何を伝えたいですか？ゆっくりで大丈夫、一緒に言葉を拾いましょう。",
+            "오늘은 무슨 말을 하고 싶으세요? 천천히, 함께 말을 모아 봐요."),
+        "✨ 開始說話" to arrayOf("✨ Start speaking", "✨ 話し始める", "✨ 말하기 시작"),
+        "功能" to arrayOf("Features", "機能", "기능"),
+        "句子重組" to arrayOf("Sentence rebuild", "文の再構成", "문장 재구성"),
+        "AI 將零散詞語重組為自然語句" to arrayOf("AI turns scattered words into natural sentences", "AIがばらばらの言葉を自然な文に", "AI가 흩어진 단어를 자연스러운 문장으로"),
+        "AI 評分、錯誤標示與連續發音追蹤" to arrayOf("AI scoring, error marks and practice tracking", "AI採点・誤りの表示・継続練習の記録", "AI 채점, 오류 표시, 연속 발음 추적"),
+        "AAC 符號卡" to arrayOf("AAC symbol cards", "AAC シンボルカード", "AAC 기호 카드"),
+        "依類別點選圖卡溝通" to arrayOf("Communicate by tapping cards by category", "カテゴリ別のカードで伝える", "범주별 카드를 눌러 소통"),
+        "進度報告" to arrayOf("Progress report", "進捗レポート", "진행 보고서"),
+        "趨勢圖、CSV 匯出、Telegram 推送" to arrayOf("Trend charts, CSV export, Telegram push", "推移グラフ・CSV出力・Telegram送信", "추세 그래프, CSV 내보내기, 텔레그램 전송"),
+        "多語言 TTS/STT" to arrayOf("Multilingual TTS/STT", "多言語 TTS/STT", "다국어 TTS/STT"),
+        "中英日韓語音輸入與朗讀" to arrayOf("Speak and listen in 中文 · English · 日本語 · 한국어", "中・英・日・韓の音声入力と読み上げ", "중·영·일·한 음성 입력과 읽기"),
+        "雲端同步" to arrayOf("Cloud sync", "クラウド同期", "클라우드 동기화"),
+        "Firebase 跨裝置同步" to arrayOf("Firebase sync across devices", "Firebase で端末間同期", "Firebase 기기 간 동기화"),
     )
 }

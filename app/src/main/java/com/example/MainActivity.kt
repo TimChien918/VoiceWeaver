@@ -330,7 +330,8 @@ class MainActivity : ComponentActivity() {
                                         viewModel.startRehab(sentence)
                                         navController.go("rehab")
                                     },
-                                    onOpenAacFull = { navController.go("aac") }
+                                    onOpenAacFull = { navController.go("aac") },
+                                    onNavigate = { route -> navController.go(route) }
                                 )
                             }
                             composable("rehab") {
@@ -491,13 +492,14 @@ class MainActivity : ComponentActivity() {
                                             override fun aacCategory(key: String?) = viewModel.demoAacCategory(key)
                                             override fun aacSentence(ids: List<String>) = viewModel.demoAacSentence(ids)
                                             override fun rehabTarget(sentence: String) = viewModel.demoRehabTarget(sentence)
+                                            override fun rehabResult(score: Int, feedback: String, fluency: Int, prosody: Int, heard: String, wrong: List<String>) =
+                                                viewModel.demoRehabResult(score, feedback, fluency, prosody, heard, wrong)
+                                            override fun context(place: String, seen: List<String>) = viewModel.demoContext(place, seen)
                                             override fun fontScale(scale: Float) { viewModel.demoFontScale(scale) }
-                                            override fun language(tag: String) { viewModel.demoLanguage(tag) }
-                                            override fun restoreLanguage() { viewModel.demoRestoreLanguage() }
+                                            override fun highContrast(on: Boolean) { viewModel.demoHighContrast(on) }
+                                            override fun restoreDisplay() = viewModel.demoRestoreDisplay()
                                             override fun severity(name: String) { viewModel.demoSeverity(name) }
                                             override fun scrollToResult() = viewModel.demoScrollToResult()
-                                            override fun scrollToTop() = viewModel.demoScrollToTop()
-                                            override fun scrollToInput() = viewModel.demoScrollToInput()
                                             override fun focusOn(target: String) = viewModel.demoFocusOn(target)
                                             override fun focusWasVisible(target: String) = viewModel.demoFocusWasVisible(target)
                                             override fun reconstructing() = viewModel.demoReconstructing()
@@ -506,14 +508,12 @@ class MainActivity : ComponentActivity() {
                                             override fun speakAloud(text: String, done: () -> Unit) {
                                                 viewModel.demoSpeakAloud(text, done)
                                             }
-                                            override fun speakAloudEnglish(text: String, done: () -> Unit) {
-                                                viewModel.demoSpeakAloudEnglish(text, done)
-                                            }
                                             override fun crisisOpen(status: String) = viewModel.demoCrisisOpen(status)
                                             override fun crisisSay(who: String, text: String) = viewModel.demoCrisisSay(who, text)
                                             override fun crisisStatus(status: String) = viewModel.demoCrisisStatus(status)
                                             override fun crisisClose() = viewModel.demoCrisisClose()
                                             override fun safetyLock(message: String?) = viewModel.demoSafetyLock(message)
+                                            override fun safetyConfirm(text: String?) = viewModel.demoSafetyConfirm(text)
                                             override fun openPanel(key: String?) = viewModel.demoOpenPanel(key)
                                             override fun snapshotSettings() = viewModel.demoSnapshotSettings()
                                             override fun restoreSettings() = viewModel.demoRestoreSettings()

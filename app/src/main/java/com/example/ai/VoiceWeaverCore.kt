@@ -1853,51 +1853,73 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 演示：復健畫面帶一句目標句進去。 */
     fun demoRehabTarget(sentence: String) = startRehab(sentence)
 
+    /**
+     * 演示：把一次評分結果放上評分卡（總分、流暢度／語調分項、AI 回饋、錯誤內容）。
+     *
+     * 跟 demoShowCandidates 同一個原則：內容是固定樣本，元件是真的評分卡。
+     * 不錄音、不呼叫評分 AI、**不寫 RehabLog**——演示一次就多一筆假成績，
+     * 治療師看到的復健軌跡就被汙染了。
+     */
+    fun demoRehabResult(score: Int, feedback: String, fluency: Int, prosody: Int, heard: String, wrong: List<String>) {
+        _rehabState.value = _rehabState.value.copy(
+            lastRecognized = heard, lastScore = score, aiFeedback = feedback,
+            wrongChars = wrong, isRecording = false,
+            lastFluency = fluency, lastProsody = prosody,
+        )
+    }
+
+    /**
+     * 演示：情境感知補位——主畫面情境卡的地點與鏡頭標籤。
+     *
+     * 只改 _globalTagsVault（畫面狀態），**不走 onLocationChanged**（那支會把地點寫進設定），
+     * 也不開定位、不開相機。演示前的地點與標籤在快照裡，結束時放回去。
+     */
+    fun demoContext(place: String, seen: List<String>) {
+        _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = place, visionTags = seen)
+    }
+
     // ── 演示會動到的「會存檔」設定：先快照，結束一定還原 ──
     // 字級、語言、嚴重度都是寫進 DataStore 的。演示為了好看去改它們沒問題，
     // 但不能改完就留在那裡——使用者的 App 不該因為看了一次演示就變成韓文特大字。
     private data class DemoSettingsSnapshot(
         val fontScale: Float,
-        val language: com.example.data.AppLanguage,
         val severity: com.example.data.SeverityMode,
+        val highContrast: Boolean,
+        // 情境卡（不存檔的畫面狀態，但演示會換成樣本地點，結束要放回使用者原本的情境）
+        val locationTag: String,
+        val visionTags: List<String>,
     )
     private var demoSnapshot: DemoSettingsSnapshot? = null
 
     fun demoSnapshotSettings() {
         val s = settings.value
-        demoSnapshot = DemoSettingsSnapshot(s.fontScale, s.language, s.severityMode)
+        val v = _globalTagsVault.value
+        demoSnapshot = DemoSettingsSnapshot(s.fontScale, s.severityMode, s.highContrast, v.locationTag, v.visionTags)
     }
 
     fun demoRestoreSettings() {
         val snap = demoSnapshot ?: return
         demoSnapshot = null
+        _globalTagsVault.value = _globalTagsVault.value.copy(locationTag = snap.locationTag, visionTags = snap.visionTags)
         viewModelScope.launch {
             settingsRepo.setFontScale(snap.fontScale)
             settingsRepo.setSeverityMode(snap.severity)
-            settingsRepo.setLanguage(snap.language)
+            settingsRepo.setHighContrast(snap.highContrast)
         }
     }
 
-    /** 演示：把介面語言放回演示開始前的那一個。**快照留著不動**——
-     *
-     *  多語言那一段輪播完不能寫死切回中文：使用者的介面本來可能是英日韓，
-     *  寫死的話影片剩下的單元全部變成中文畫面配英文旁白。
-     *  真正的還原（含字級／嚴重度）仍然是結束時的 demoRestoreSettings()。 */
-    fun demoRestoreLanguage() {
-        val lang = demoSnapshot?.language ?: return
-        viewModelScope.launch { settingsRepo.setLanguage(lang) }
+    /** 演示：字級與高對比放回演示開始前的值。**快照留著不動**——
+     *  無障礙段落演完、下一段開始前用；真正的還原仍是結束時的 demoRestoreSettings()。 */
+    fun demoRestoreDisplay() {
+        val snap = demoSnapshot ?: return
+        viewModelScope.launch {
+            settingsRepo.setFontScale(snap.fontScale)
+            settingsRepo.setHighContrast(snap.highContrast)
+        }
     }
 
     fun demoFontScale(scale: Float) = viewModelScope.launch { settingsRepo.setFontScale(scale) }
-    fun demoLanguage(tag: String) = viewModelScope.launch {
-        val lang = when (tag) {
-            "en" -> com.example.data.AppLanguage.En
-            "ja" -> com.example.data.AppLanguage.Ja
-            "ko" -> com.example.data.AppLanguage.Ko
-            else -> com.example.data.AppLanguage.ZhTW
-        }
-        settingsRepo.setLanguage(lang)
-    }
+    fun demoHighContrast(on: Boolean) = viewModelScope.launch { settingsRepo.setHighContrast(on) }
     fun demoSeverity(name: String) = viewModelScope.launch {
         val mode = runCatching { com.example.data.SeverityMode.valueOf(name) }
             .getOrDefault(com.example.data.SeverityMode.Mild)
@@ -1908,19 +1930,14 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     // 不捲下去觀眾根本看不到，影片就會變成「旁白在講看不到的東西」。
     // 用遞增的計數當事件，畫面那邊 LaunchedEffect 收到就捲。
     // 帶序號是因為連續兩次捲到同一個地方也要各觸發一次（值不變 collect 不會動）。
-    // target: "top" 最上面／"input" 輸入框／"result" 結果與候選句。
+    // target: "top" 最上面／"sos" 快速求救／"context" 情境卡／"input" 輸入框／"result" 結果與候選句。
     private val _demoScroll = MutableStateFlow(0 to "")
     val demoScroll: StateFlow<Pair<Int, String>> = _demoScroll.asStateFlow()
     private var demoScrollSeq = 0
     private fun demoScrollTo(target: String) { demoScrollSeq++; _demoScroll.value = demoScrollSeq to target }
     /** 演示：把主畫面捲到底（結果／候選句所在的位置）。 */
     fun demoScrollToResult() = demoScrollTo("result")
-    /** 演示：把主畫面捲回最上面（緊急片語那張卡是第一個 item）。 */
-    fun demoScrollToTop() = demoScrollTo("top")
-    /** 演示：捲到輸入框。打字那一步不捲的話，錄影裡看得到的是情境卡，
-     *  旁白說「使用者把想得到的字打進去」，而畫面上根本沒有輸入框。 */
-    fun demoScrollToInput() = demoScrollTo("input")
-    /** 演示：把某個位置露出來（"top"／"input"／"result"）。 */
+    /** 演示：把某個位置露出來（"top"／"sos"／"context"／"input"／"result"，見 VoiceWeaverScreen 的捲動對照）。 */
     fun demoFocusOn(target: String) {
         // 捲之前先把上一次的回報作廢。不清的話，同一個 target 連著好幾步時
         // （主畫面那幾步就是這樣），後面的步驟即使畫面根本沒回報，也會讀到
@@ -1963,10 +1980,6 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
     /** 演示：讓 App 把這句話唸出來，唸完才回呼。固定用系統 TTS（要即時）。 */
     fun demoSpeakAloud(text: String, onDone: () -> Unit) = ttsModule.speakInstant(text, onDone)
 
-    /** 演示：唸英文樣本句。示範句是英文的（字幕與旁白一律英文），不能照介面語言
-     *  挑語音——中文介面會用中文嗓音硬唸英文，錄進影片裡沒人聽得懂。 */
-    fun demoSpeakAloudEnglish(text: String, onDone: () -> Unit) =
-        ttsModule.speakInstantIn(text, java.util.Locale.US, onDone)
 
     /**
      * 演示：把畫面切成「正在重組」的等待狀態。
@@ -2009,6 +2022,12 @@ class VoiceWeaverViewModel(application: Application) : AndroidViewModel(applicat
      *  傳 null 收起來。 */
     fun demoSafetyLock(message: String?) {
         _speakGate.value = if (message == null) SpeakGate.Idle else SpeakGate.Locked(message)
+    }
+
+    /** 演示：醫療／疼痛內容的確認卡（真的 SpeakGate.NeedConfirm 對話框）。
+     *  只改狀態，演示不按它的按鈕——不會唸出、不寫歷史。傳 null 收起來。 */
+    fun demoSafetyConfirm(text: String?) {
+        _speakGate.value = if (text == null) SpeakGate.Idle else SpeakGate.NeedConfirm(text)
     }
 
     /** 演示：把畫面上的東西清乾淨（不影響使用者原本的資料）。

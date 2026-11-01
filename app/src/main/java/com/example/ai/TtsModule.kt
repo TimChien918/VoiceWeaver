@@ -538,16 +538,21 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
-     * 自動演示的旁白：**強制**用 GPT-SoVITS 的英文角色唸，不走自動語言判斷。
-     * 旁白全是英文，讓 detectLang 自己猜的話，挑不到英文角色就會掉回系統機器音。
+     * 演示旁白的語音模式。旁白跟著演示語言（中英日韓），英文句子**強制**走 GPT-SoVITS 的
+     * 英文角色——讓自動判斷去猜的話，挑不到英文角色就會掉回系統機器音；
+     * 中日韓交給 null（依字元判語言：tryGptSovitApiSynthesis 的 detectLang）。
      */
+    private fun demoNarrationMode(text: String): GptSovitVoiceMode? =
+        if (LocalSovitsHelper.detectLang(text) == LocalSovitsHelper.VoiceLang.EN) GptSovitVoiceMode.English else null
+
+    /** 自動演示的旁白（沒有預錄檔時的退路）。 */
     fun speakDemo(text: String, onComplete: () -> Unit = {}) {
-        speakInternal(text = text, forcedGptSovitMode = GptSovitVoiceMode.English,
+        speakInternal(text = text, forcedGptSovitMode = demoNarrationMode(text),
             expressiveTest = false, onComplete = onComplete)
     }
 
     /**
-     * 演示旁白「預錄」：用 GPT-SoVITS 英文角色合成一句，**存成檔案**，回報檔案位置。
+     * 演示旁白「預錄」：用 GPT-SoVITS 合成一句（語言依句子，見 [demoNarrationMode]），**存成檔案**，回報檔案位置。
      *
      * 演示播放時直接播這個檔，不再走一次 TTS 管線——那條路會重新判語言、可能切模型、
      * 也可能在任何一步掉回系統機器音。預錄好的檔案沒有這些變數，而且第二次跑完全免合成。
@@ -563,7 +568,7 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         demoNarration = true
         demoVoiceOverride = character
         speakInternal(
-            text = text, forcedGptSovitMode = GptSovitVoiceMode.English,
+            text = text, forcedGptSovitMode = demoNarrationMode(text),
             expressiveTest = false, prewarmOnly = true,
             onAudioFile = { file = it },
             onComplete = { demoNarration = false; demoVoiceOverride = ""; onDone(file) },
@@ -589,37 +594,6 @@ class TtsModule(private val context: Context) : TextToSpeech.OnInitListener {
         if (engine == null) { onComplete(); return }
         runCatching {
             applyInterfaceLocale(engine)
-            speakTracked(engine, text, onComplete)
-        }.onFailure { onComplete() }
-    }
-
-    /**
-     * 同 speakInstant，但**用指定語言唸**。
-     *
-     * 演示裡「App 把句子唸出來」的那幾句是英文樣本句（字幕與旁白一律英文，
-     * 這支影片是要拿去做報告的）。走 speakInstant 會照**介面語言**挑語音——
-     * 中文介面就變成用中文嗓音硬唸英文句子，錄進影片裡是一段沒人聽得懂的東西，
-     * 而且觀眾會以為這個 App 的發音就是這樣。
-     *
-     * 沒有那個語音包才退回介面語言（至少發得出聲音）。唸完 appliedTtsLocale
-     * 留在 null，下一句一般朗讀會自己重新套回介面語言。
-     */
-    fun speakInstantIn(text: String, locale: Locale, onComplete: () -> Unit = {}) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post { speakInstantIn(text, locale, onComplete) }
-            return
-        }
-        val engine = tts
-        if (engine == null) { onComplete(); return }
-        runCatching {
-            appliedTtsLocale = null          // 底下不管走哪條，快取都不再有效
-            val r = engine.setLanguage(locale)
-            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.w("TtsModule", "裝置沒有 ${locale.language} 語音包，演示發聲退回介面語言")
-                applyInterfaceLocale(engine)
-            } else {
-                selectBestVoice(engine, locale)
-            }
             speakTracked(engine, text, onComplete)
         }.onFailure { onComplete() }
     }

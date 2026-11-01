@@ -282,7 +282,7 @@ private fun TargetPicker(
     val inactiveBorder = textMuted.copy(alpha = 0.45f)
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = BrandCardShape,
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = BorderStroke(1.dp, inactiveBorder),
         modifier = Modifier.fillMaxWidth()
@@ -521,7 +521,7 @@ private fun PracticeCard(
     textMuted: Color
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = BrandCardShape,
         colors = CardDefaults.cardColors(containerColor = surfaceColor),
         border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.3f)),
         modifier = Modifier.fillMaxWidth()

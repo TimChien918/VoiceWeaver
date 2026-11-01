@@ -39,37 +39,42 @@ val HighContrastPalette = AppPalette(
 )
 
 /**
- * 拾語者品牌風（淺色，預設）：暖紙底 + logo 深綠為主色、暖黃為 AI／提示色。
+ * 拾語者品牌風（淺色，預設）：暖米紙底 + 暖白卡片 + logo 深綠為主色、暖黃為 AI／提示色。
+ * 色值與網頁版 style.css 的 :root 對齊（--bg #f7f1e6、--card #fffdf8、--accent #2f6f5e），
+ * 兩邊看起來要是同一個產品。
  *
- * 每個前景色都對底色與白卡驗過 ≥ 4.5:1（WCAG AA 一般文字）——使用者多是中高齡、
- * 視力退化，品牌色再好看，讀不到就沒有意義。暖黃原色（[BrandThread]）在淺底上
- * 只有約 1.4:1，所以這裡用壓暗的 [BrandThreadDeep]；原色留給 logo 與裝飾線。
- * Material 的 onPrimary 取 darkBg（紙色），綠/紅按鈕上的字也都 ≥ 4.5:1。
+ * 每個前景色都對底色與卡片驗過 ≥ 4.5:1（WCAG AA 一般文字）——使用者多是中高齡、
+ * 視力退化，品牌色再好看，讀不到就沒有意義。因此有三處刻意比網頁「深一階」：
+ *  · 成功綠用 #237A55（網頁 #2a9a6c 在米底上只有 3.2:1，App 裡它常當小字顏色）；
+ *  · 求救紅用 #C0392B（網頁 #d33a2f 上的米色字只有 4.2:1，App 按鈕字是 onPrimary＝底色）；
+ *  · 暖黃當「文字」時用壓暗的 [BrandThreadDeep]；填色用的暖黃 [BrandGold] 只用在
+ *    問候卡的「開始說話」這種大按鈕上，上面配深棕字。
  */
 val BrandDayPalette = AppPalette(
     darkBg     = BrandPaper,
-    surface    = Color(0xFFFFFFFF),
+    surface    = BrandCard,
     neonCyan   = BrandForest,         // 主色：logo 深綠
-    neonGreen  = Color(0xFF2E7D50),   // 成功：葉綠，比主色亮一階、仍可當按鈕底
+    neonGreen  = Color(0xFF237A55),   // 成功：葉綠
     auraAmber  = BrandThreadDeep,     // AI／推薦：壓暗的暖黃
     dangerRose = Color(0xFFC0392B),
-    textLight  = Color(0xFF1C2B26),   // 帶綠的墨色，比純黑柔和
-    textMuted  = Color(0xFF56655F)
+    textLight  = Color(0xFF1C2925),   // 帶綠的墨色，比純黑柔和
+    textMuted  = Color(0xFF58665F)
 )
 
 /**
- * 拾語者品牌風（深色）：森林夜色底 + 提亮的玉綠主色、logo 原色暖黃。
+ * 拾語者品牌風（深色）：深綠黑底（不是純黑——純黑配白字在老花眼裡會暈）+ 玉綠主色、暖黃。
+ * 與網頁版深色模式同色（--bg #0d1512、--card #15201c、--accent-ink #7fcdb3）。
  * 系統切到深色模式時自動換上，見 [MyApplicationTheme]。
  */
 val BrandNightPalette = AppPalette(
     darkBg     = BrandNight,
-    surface    = Color(0xFF17302A),
-    neonCyan   = Color(0xFF7FCFB2),   // 深綠提亮成玉綠：深底上 9:1
-    neonGreen  = Color(0xFF86D69A),
-    auraAmber  = BrandThread,         // 深底上直接用 logo 暖黃
-    dangerRose = Color(0xFFFF7B6E),
-    textLight  = Color(0xFFEEF4EF),
-    textMuted  = Color(0xFFA9BBB3)
+    surface    = Color(0xFF15201C),
+    neonCyan   = Color(0xFF7FCDB3),   // 深綠提亮成玉綠：深底上約 10:1
+    neonGreen  = Color(0xFF3CC08A),
+    auraAmber  = Color(0xFFF2C063),
+    dangerRose = Color(0xFFFF6B5E),   // 比網頁 #e5483c 亮一階：深色卡片上才有 4.5:1
+    textLight  = Color(0xFFE8EFEB),
+    textMuted  = Color(0xFF9FB0A8)
 )
 
 /** 科技風（深色）：近黑底 + iOS 系統色（藍/綠/橙/紅），沉穩專業。 */

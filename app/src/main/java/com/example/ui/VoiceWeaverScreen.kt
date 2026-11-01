@@ -64,7 +64,9 @@ fun VoiceWeaverScreen(
     viewModel: VoiceWeaverViewModel,
     onPracticeSentence: (String) -> Unit = {},
     /** 開啟沉浸式 AAC 大圖卡畫面（含 ✔/✖ 意圖確認卡，適合不識字使用者）*/
-    onOpenAacFull: () -> Unit = {}
+    onOpenAacFull: () -> Unit = {},
+    /** 首頁主控台的功能卡要切到其他一級分頁（"rehab"、"report"、"settings"）。 */
+    onNavigate: (String) -> Unit = {}
 ) {
 
     // UI flow states
@@ -163,20 +165,27 @@ fun VoiceWeaverScreen(
         SpeakGateDialogs(viewModel = viewModel, p = p)
         // 自動演示要能把畫面捲到結果那一段——候選句在螢幕下方，不捲就等於沒演。
         val demoListState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val consoleScope = rememberCoroutineScope()
         val demoScroll by viewModel.demoScroll.collectAsState()
         val demoPressed by viewModel.demoPressed.collectAsState()
         // 我的最愛那一格是條件式的（沒有收藏就不存在），會讓後面每個 item 的
         // 索引整個位移一格。所以在這裡算一次，下面 LazyColumn 用同一個值——
         // 兩邊各自算的話，只要有人改了其中一邊，演示就會捲到隔壁那張卡。
         val favorites = settings.favoriteSentences.split("\n").map { it.trim() }.filter { it.isNotBlank() }
-        // 實際順序：0=快速求救 [1=最愛] → 情境 → 輸入 → 結果 → 底部留白
-        val inputItemIndex = if (favorites.isEmpty()) 2 else 3
+        // 實際順序：0=問候卡 → 1=快速求救 → 2=功能卡 [3=最愛] → 情境 → 輸入 → 結果 → 底部留白
+        // （前兩格是首頁主控台，見 HomeConsole.kt；增減主控台的格子要同步改 consoleItems）
+        val consoleItems = 2
+        val inputItemIndex = consoleItems + if (favorites.isEmpty()) 2 else 3
         val resultItemIndex = inputItemIndex + 1
         LaunchedEffect(demoScroll) {
             val (seq, target) = demoScroll
             if (seq == 0) return@LaunchedEffect
             val idx = when (target) {
                 "top" -> 0
+                // 演示的「快速求救」與「情境卡」段落：主控台插在最前面之後，"top" 只露出問候卡，
+                // 求救列與情境卡不一定在畫面上，所以各給一個目標（索引見上面的實際順序）。
+                "sos" -> 1
+                "context" -> inputItemIndex - 1
                 "input" -> inputItemIndex
                 // ⚠️ 這裡本來是 totalItemsCount - 1，那是**底部留白的 Spacer**，不是結果卡。
                 // 捲到它等於捲到最底，結果區被推到視窗上緣外；更糟的是下面的可見性
@@ -206,6 +215,17 @@ fun VoiceWeaverScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
+            // ── 首頁主控台：深綠問候卡（對齊網頁版首頁）──
+            // 「開始說話」直接捲到輸入區：這是最常做的事，不該還要自己找。
+            item {
+                HomeHeroCard(
+                    palette = p,
+                    onStartSpeaking = {
+                        consoleScope.launch { runCatching { demoListState.animateScrollToItem(inputItemIndex) } }
+                    }
+                )
+            }
+
             // ── 臨床高頻置頂面板：一鍵把最常需要的三句話唸出來 ──
             //
             // 以前這張卡只在「GPS 判定人在醫療場所」時才出現。但需要一鍵說出
@@ -214,9 +234,9 @@ fun VoiceWeaverScreen(
             // 現在固定顯示；地點資訊仍然會跟著通報一起送出去。
             item {
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = dangerRose.copy(alpha = 0.12f)),
-                    border = BorderStroke(1.5.dp, dangerRose.copy(alpha = 0.5f)),
+                    shape = BrandCardShape,   // 24dp，同網頁卡片
+                    colors = CardDefaults.cardColors(containerColor = dangerRose.copy(alpha = 0.08f)),
+                    border = BorderStroke(1.5.dp, dangerRose.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -232,7 +252,7 @@ fun VoiceWeaverScreen(
                                 Button(
                                     onClick = { viewModel.speakClinicalPhrase(phrase) },
                                     colors = ButtonDefaults.buttonColors(containerColor = dangerRose),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(20.dp),   // 大圓角膠囊（同網頁求救鈕）
                                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 14.dp),
                                     // 演示要看得到「按下去」這件事。旁白說「按一下，手機就唸出來」，
                                     // 畫面上卻沒有任何按鈕動過——觀眾會以為是自己播的。
@@ -248,11 +268,29 @@ fun VoiceWeaverScreen(
                 }
             }
 
+            // ── 首頁主控台：六張功能卡入口（設計書的功能卡，與網頁同一套）──
+            item {
+                HomeFeatureGrid(
+                    palette = p,
+                    onFeature = { f ->
+                        when (f) {
+                            HomeFeature.Compose -> consoleScope.launch {
+                                runCatching { demoListState.animateScrollToItem(inputItemIndex) }
+                            }
+                            HomeFeature.Rehab -> onNavigate("rehab")
+                            HomeFeature.Aac -> onOpenAacFull()
+                            HomeFeature.Report -> onNavigate("report")
+                            HomeFeature.Languages, HomeFeature.Sync -> onNavigate("settings")
+                        }
+                    }
+                )
+            }
+
             // ── 我的最愛：收藏的常用句，一鍵朗讀 ──
             if (favorites.isNotEmpty()) {
                 item {
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = BrandCardShape,
                         colors = CardDefaults.cardColors(containerColor = surfaceColor),
                         border = BorderStroke(1.dp, auraAmber.copy(alpha = 0.4f)),
                         modifier = Modifier.fillMaxWidth()
@@ -288,7 +326,7 @@ fun VoiceWeaverScreen(
                 )
 
                 Card(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = BrandCardShape,
                     colors = CardDefaults.cardColors(containerColor = surfaceColor),
                     border = BorderStroke(1.dp, faintBorder),
                     modifier = Modifier.fillMaxWidth()
@@ -682,7 +720,7 @@ fun VoiceWeaverScreen(
                 )
 
                 Card(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = BrandCardShape,
                     colors = CardDefaults.cardColors(containerColor = surfaceColor),
                     border = BorderStroke(1.dp, faintBorder),
                     modifier = Modifier.fillMaxWidth()
@@ -1077,7 +1115,7 @@ fun VoiceWeaverScreen(
                 when (val state = targetState) {
                         is ReconstructionUiState.Idle -> {
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = BrandCardShape,
                                 colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.6f)),
                                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.04f)),
                                 modifier = Modifier
@@ -1109,7 +1147,7 @@ fun VoiceWeaverScreen(
 
                         is ReconstructionUiState.Loading -> {
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = BrandCardShape,
                                 colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.8f)),
                                 border = BorderStroke(1.dp, neonCyan.copy(alpha = 0.3f)),
                                 modifier = Modifier
@@ -1156,7 +1194,7 @@ fun VoiceWeaverScreen(
 
                         is ReconstructionUiState.Error -> {
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = BrandCardShape,
                                 colors = CardDefaults.cardColors(containerColor = surfaceColor),
                                 border = BorderStroke(1.dp, dangerRose.copy(alpha = 0.4f)),
                                 modifier = Modifier
@@ -1182,7 +1220,7 @@ fun VoiceWeaverScreen(
                         is ReconstructionUiState.Success -> {
                             val data = state.data
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = BrandCardShape,
                                 colors = CardDefaults.cardColors(containerColor = surfaceColor),
                                 border = BorderStroke(1.dp, neonGreen.copy(alpha = 0.3f)),
                                 modifier = Modifier
@@ -1361,7 +1399,7 @@ fun VoiceWeaverScreen(
                                         },
                                         contentPadding = PaddingValues(0.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = CircleShape,   // 膠囊（同網頁主要按鈕）
                                         modifier = Modifier.fillMaxWidth().height(56.dp)   // 最終動作：最大目標
                                     ) {
                                         Box(
