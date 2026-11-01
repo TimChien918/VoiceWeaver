@@ -1,5 +1,5 @@
 ﻿<#
-  打包 VoiceWeaver 語音中心為可下載的 Windows 安裝包（自帶 Python 環境 + 後端程式碼）。
+  打包拾語者 Speak My Life 語音中心為可下載的 Windows 安裝包（自帶 Python 環境 + 後端程式碼）。
   與 macOS 的 tools/dmg/build_dmg.sh 同邏輯，只是產物是 .zip 資料夾而非 .dmg。
 
   用法（在 Windows PowerShell）：
@@ -8,26 +8,30 @@
   前置：先在「Windows」上用 conda-pack 產生環境壓縮檔，且備妥精簡後端程式碼——
     1) $Stage\gpt-sovits-env.tar.gz          ← Windows 版 conda 環境（conda-pack 產出）
     2) $Stage\payload\GPT-SoVITS\            ← 後端程式碼（不含權重）
-  （$Stage 預設 %TEMP%\vwwin，可用環境變數 VW_WIN_STAGE 覆寫。）
+  （$Stage 預設 %TEMP%\smlwin，可用環境變數 SML_WIN_STAGE 覆寫。）
 
-  產出：%USERPROFILE%\Downloads\VoiceWeaver-語音中心-Windows.zip
+  產出：%USERPROFILE%\Speak-My-Life-安裝檔\Speak-My-Life-語音中心-Windows.zip
 #>
 $ErrorActionPreference = 'Stop'
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$Stage   = if ($env:VW_WIN_STAGE) { $env:VW_WIN_STAGE } else { Join-Path $env:TEMP 'vwwin' }
+$Stage   = if ($env:SML_WIN_STAGE) { $env:SML_WIN_STAGE } else { Join-Path $env:TEMP 'smlwin' }
 $EnvTar  = Join-Path $Stage 'gpt-sovits-env.tar.gz'
 $Payload = Join-Path $Stage 'payload'
-$AppName = 'VoiceWeaver語音中心'
-$Version = if ($env:VW_VERSION) { $env:VW_VERSION } else { Get-Date -Format 'yyyyMMddHHmmss' }
+$AppName = 'Speak-My-Life語音中心'
+$Version = if ($env:SML_VERSION) { $env:SML_VERSION } else { Get-Date -Format 'yyyyMMddHHmmss' }
 
 $Build   = Join-Path $Stage 'build'
 $Dist    = Join-Path $Build $AppName
-# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 VW_DIST 覆寫。
-$DistDir = if ($env:VW_DIST) { $env:VW_DIST } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-安裝檔' }
-$OutZip  = Join-Path $DistDir 'VoiceWeaver-語音中心-Windows.zip'
+# 所有安裝檔（.dmg / .apk / .exe）集中在同一個資料夾，可用 SML_DIST 覆寫。
+$DistDir = if ($env:SML_DIST) { $env:SML_DIST } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Speak-My-Life-安裝檔' }
+$OutZip  = Join-Path $DistDir 'Speak-My-Life-語音中心-Windows.zip'
 $WinDir  = $PSScriptRoot
-$EnvPy   = if ($env:VW_ENV_PY) { $env:VW_ENV_PY } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VoiceWeaver-電腦端\gpt-sovits-env\python.exe' }
+$UserHome = [Environment]::GetFolderPath('UserProfile')
+# 電腦端資料夾：~\Speak-My-Life-電腦端（還沒改名就用舊的 ~\VoiceWeaver-電腦端；改名由語音中心啟動時處理）
+$GsHome  = Join-Path $UserHome 'Speak-My-Life-電腦端'
+if (-not (Test-Path $GsHome)) { $GsHome = Join-Path $UserHome 'VoiceWeaver-電腦端' }
+$EnvPy   = if ($env:SML_ENV_PY) { $env:SML_ENV_PY } else { Join-Path $GsHome 'gpt-sovits-env\python.exe' }
 
 Write-Host '==> 檢查素材'
 if (-not (Test-Path $EnvTar))                       { throw "缺少 $EnvTar（請先在 Windows 跑 conda-pack）" }
@@ -40,7 +44,7 @@ New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 
 # 啟動器
 Copy-Item (Join-Path $WinDir 'launch.ps1')              -Destination $Dist
-Copy-Item (Join-Path $WinDir 'VoiceWeaver語音中心.cmd') -Destination $Dist
+Copy-Item (Join-Path $WinDir 'Speak-My-Life語音中心.cmd') -Destination $Dist
 
 # 圖示（聲波長條，藍青漸層）— 失敗就略過
 $Icon = Join-Path $Dist 'AppIcon.ico'

@@ -1,16 +1,14 @@
 <resources>
-    <string name="app_name">VoiceWeaver</string>
+    <string name="app_name">拾語者</string>
 
     <!-- 底部導覽（6 tab 同時顯示，故壓在 2 字內避免 label 截斷） -->
     <string name="nav_main">重組</string>
     <string name="nav_rehab">復健</string>
     <string name="nav_history">歷史</string>
     <string name="nav_settings">設定</string>
-    <string name="nav_aac">AAC</string>
     <string name="nav_report">報表</string>
 
     <!-- AAC 溝通板 -->
-    <string name="aac_title">▌ AAC 溝通板</string>
     <string name="aac_cat_products">商品</string>
     <string name="aac_cat_food_drink">飲食</string>
     <string name="aac_cat_money">金額</string>
@@ -46,11 +44,13 @@
     <string name="section_tts_rate">朗讀語速</string>
     <string name="section_font_size">字體大小</string>
     <string name="section_other">其他</string>
+    <string name="theme_brand">拾語者</string>
     <string name="theme_tech">科技風</string>
     <string name="theme_cute">可愛風</string>
     <string name="theme_anime">動漫風</string>
     <string name="theme_minimal">簡約風</string>
-    <string name="theme_blurb_tech">深色霓虹．專業沉穩（預設）</string>
+    <string name="theme_blurb_brand">深綠暖黃．跟隨系統深淺色（預設）</string>
+    <string name="theme_blurb_tech">深色霓虹．專業沉穩</string>
     <string name="theme_blurb_cute">奶油糖果色．適合兒童使用</string>
     <string name="theme_blurb_anime">高彩夜光．適合青少年</string>
     <string name="theme_blurb_minimal">白底單色．高對比、低干擾</string>
@@ -75,7 +75,6 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="lang_ko">한국어</string>
-    <string name="language_note">（架構已建立；既有畫面字串外移中，新切換值會優先套用到後續新增的畫面）</string>
     <string name="tts_rate_slow">慢 (0.5x)</string>
     <string name="tts_rate_fast">快 (1.5x)</string>
     <string name="other_autosave_label">復健自動寫日誌</string>
@@ -110,7 +109,6 @@
     <string name="rehab_stop">停止跟讀</string>
     <string name="rehab_scoring">評分中...</string>
     <string name="rehab_start">開始跟讀</string>
-    <string name="rehab_preparing">準備中...</string>
     <string name="rehab_score_suffix">分</string>
     <string name="rehab_score_excellent">很棒！發音清晰</string>
     <string name="rehab_score_good">不錯，再來一次</string>
@@ -128,19 +126,9 @@
     <string name="main_dl_downloading">正在下載 Qwen2.5-1.5B...</string>
     <string name="main_dl_cancel">取消下載</string>
     <string name="main_dl_failed">下載失敗</string>
-    <string name="main_dl_adb_title">以電腦指令安裝（無需帳號）</string>
     <string name="main_dl_retry">重試下載</string>
     <string name="main_rule_engine_running">規則引擎運作中</string>
-    <string name="main_upgrade_llm">升級 LLM ↓</string>
-    <string name="main_dl_blurb">自動下載 Qwen2.5-1.5B INT8（約 1.6 GB）\n公開模型・不需帳號，有 Wi-Fi 即可開始</string>
     <string name="main_dl_button">下載 AI 模型（~1.6 GB）</string>
-    <string name="main_llm_ready">LLM 模型已就緒（Qwen2.5-1.5B INT8）</string>
-    <string name="main_strategy_high_ready">系統記憶體充足 (>=8GB)，已載入 MediaPipe LLM 進行端側高精度對話重組。</string>
-    <string name="main_strategy_high_fallback">系統記憶體充足 (>=8GB)。AICore (Gemini Nano) 不可用，可放置 MediaPipe 模型升級推理能力；目前以規則引擎運作。</string>
-    <string name="main_strategy_mid_ready">偵測到中階硬體 (>=4GB)，MediaPipe Qwen2.5-1.5B INT8 已就緒，端側 CPU 離線推理中。</string>
-    <string name="main_strategy_mid_fallback">偵測到中階硬體 (>=4GB)。請放置 MediaPipe 模型以啟用 LLM 推理；目前以規則引擎運作。</string>
-    <string name="main_strategy_low">此設備記憶體較為吃緊 (&lt;4GB)。已開啟零 LLM 安全規則引擎，防止 OOM 異常。</string>
-    <string name="main_tier_simulator">硬體分流動態模擬（診斷調試專用）：</string>
     <string name="main_sec_context">▌ 現在的情境</string>
     <string name="main_gps_section">📍 我在哪裡</string>
     <string name="main_gps_loading">正在定位…</string>
@@ -183,19 +171,4 @@
     <string name="main_btn_tts">🔊 唸出這句</string>
     <string name="main_btn_practice">🎯 用這句練習發音</string>
 
-    <string-array name="main_quick_home">
-        <item>渴</item><item>倒杯水</item><item>餓了</item><item>想睡覺</item><item>要吃藥</item>
-    </string-array>
-    <string-array name="main_quick_hospital">
-        <item>醫生</item><item>不舒服</item><item>胸口痛</item><item>頭暈</item><item>吃幾顆</item>
-    </string-array>
-    <string-array name="main_quick_market">
-        <item>買牛奶</item><item>付錢</item><item>要購物袋</item><item>忘帶皮夾</item>
-    </string-array>
-    <string-array name="main_quick_restaurant">
-        <item>肚子餓</item><item>點飯</item><item>要喝水</item><item>很燙</item><item>買單</item>
-    </string-array>
-    <string-array name="main_quick_default">
-        <item>渴</item><item>不舒服</item><item>要幫忙</item>
-    </string-array>
 </resources>

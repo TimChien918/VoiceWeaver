@@ -2,8 +2,9 @@
 寫到 Firestore devices/{uid}，讓手機 App 不需手動填 IP。
 
 認證策略：匿名 Firebase Auth（REST API，只需 Web API Key）。
-uid 與 refresh token 存在 ~/.voiceweaver/beacon_token.json。
-首次執行讀不到 Web API Key 時，會從 VW_FIREBASE_WEB_API_KEY 環境變數或設定檔讀取。
+uid 與 refresh token 存在 ~/.speakmylife/beacon_token.json（Windows：%APPDATA%/Speak-My-Life）；
+更名前的 ~/.voiceweaver（%APPDATA%/VoiceWeaver）第一次啟動時自動搬過來。
+首次執行讀不到 Web API Key 時，會從 SML_FIREBASE_WEB_API_KEY 環境變數或設定檔讀取。
 """
 from __future__ import annotations
 
@@ -18,10 +19,16 @@ import urllib.request
 import urllib.error
 
 # ── 設定檔路徑（跨平台）────────────────────────────────────────────────────
-if platform.system() == "Windows":
-    _BASE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "VoiceWeaver")
-else:
-    _BASE = os.path.join(os.path.expanduser("~"), ".voiceweaver")
+try:
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import sml_migrate as _mig
+    _BASE = _mig.dot_dir()           # 新 ~/.speakmylife；只有舊的就改名搬過來，失敗沿用舊的
+except Exception:  # noqa: BLE001
+    if platform.system() == "Windows":
+        _BASE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Speak-My-Life")
+    else:
+        _BASE = os.path.join(os.path.expanduser("~"), ".speakmylife")
 
 TOKEN_FILE  = os.path.join(_BASE, "beacon_token.json")
 CONFIG_FILE = os.path.join(_BASE, "firebase_config.json")
@@ -53,8 +60,8 @@ def _patch(url: str, body: dict, id_token: str) -> dict:
 def load_firebase_config() -> dict:
     """讀取 Web API Key + Project ID。
     來源優先順序：
-      1. ~/.voiceweaver/firebase_config.json
-      2. 環境變數 VW_FIREBASE_WEB_API_KEY / VW_FIREBASE_PROJECT_ID
+      1. ~/.speakmylife/firebase_config.json
+      2. 環境變數 SML_FIREBASE_WEB_API_KEY / SML_FIREBASE_PROJECT_ID
     """
     cfg: dict = {}
     if os.path.isfile(CONFIG_FILE):
@@ -62,8 +69,8 @@ def load_firebase_config() -> dict:
             cfg = json.loads(open(CONFIG_FILE).read())
         except Exception:
             pass
-    cfg.setdefault("apiKey",     os.environ.get("VW_FIREBASE_WEB_API_KEY", ""))
-    cfg.setdefault("projectId",  os.environ.get("VW_FIREBASE_PROJECT_ID", ""))
+    cfg.setdefault("apiKey",     os.environ.get("SML_FIREBASE_WEB_API_KEY", ""))
+    cfg.setdefault("projectId",  os.environ.get("SML_FIREBASE_PROJECT_ID", ""))
     return cfg
 
 def save_firebase_config(api_key: str, project_id: str):

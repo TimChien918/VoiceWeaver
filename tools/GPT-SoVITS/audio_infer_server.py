@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 本機音訊理解伺服器（Mac 端，免金鑰）。
+"""拾語者 Speak My Life 本機音訊理解伺服器（Mac 端，免金鑰）。
 
 「AI 直接聽」原本只能走雲端（Gemini）。那條路有兩個問題：免費層額度很容易爆
 （實測一次「直接聽」會平行打 3 次 API，連續用幾次就 HTTP 429），而且病人的語音
@@ -15,12 +15,12 @@
                            "system": "...", "user": "..."} -> {"text": "..."}
 
 環境變數：
-    VOICEWEAVER_AUDIO_MODEL（預設 lmstudio-community/gemma-4-E4B-it-MLX-8bit）
+    SML_AUDIO_MODEL（預設 lmstudio-community/gemma-4-E4B-it-MLX-8bit）
         實測 4-bit 會把「我牙齒痛」聽成「我餓肚子了」——對這個 App 是危險的錯法，
         所以預設用 8-bit。記憶體吃緊時可改 E2B，但要自己確認品質。
-    VOICEWEAVER_AUDIO_PORT（預設 9883）
-    VOICEWEAVER_AUDIO_MAX_TOKENS（預設 320）
-    VOICEWEAVER_AUDIO_KEEPWARM_SEC（預設 180；設 0 以外的值調整保溫間隔）
+    SML_AUDIO_PORT（預設 9883）
+    SML_AUDIO_MAX_TOKENS（預設 320）
+    SML_AUDIO_KEEPWARM_SEC（預設 180；設 0 以外的值調整保溫間隔）
 """
 from __future__ import annotations
 
@@ -61,12 +61,12 @@ def _ensure_ffmpeg_on_path() -> str:
 
 FFMPEG = _ensure_ffmpeg_on_path()
 
-PORT = int(os.environ.get("VOICEWEAVER_AUDIO_PORT", "9883"))
+PORT = int(os.environ.get("SML_AUDIO_PORT", "9883"))
 MODEL = os.environ.get(
-    "VOICEWEAVER_AUDIO_MODEL", "lmstudio-community/gemma-4-E4B-it-MLX-8bit"
+    "SML_AUDIO_MODEL", "lmstudio-community/gemma-4-E4B-it-MLX-8bit"
 )
 # 3 個候選 + heard 塞不進 200 token，會被截斷成壞掉的 JSON
-MAX_NEW_TOKENS = int(os.environ.get("VOICEWEAVER_AUDIO_MAX_TOKENS", "320"))
+MAX_NEW_TOKENS = int(os.environ.get("SML_AUDIO_MAX_TOKENS", "320"))
 
 _model = None
 _processor = None
@@ -133,7 +133,7 @@ def understand(audio_path: str, system: str, user: str) -> str:
 # 而且他多半是偶爾用一次，正好每次都踩在冷啟動上。
 # 定期跑一個極短的推論把權重留在記憶體裡，代價很低。
 _last_used = time.time()
-KEEPWARM_INTERVAL = float(os.environ.get("VOICEWEAVER_AUDIO_KEEPWARM_SEC", "180"))
+KEEPWARM_INTERVAL = float(os.environ.get("SML_AUDIO_KEEPWARM_SEC", "180"))
 
 
 def _keep_warm_loop() -> None:

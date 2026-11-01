@@ -7,8 +7,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-PORT="${VOICEWEAVER_AUDIO_PORT:-9883}"
-VENV="${VOICEWEAVER_AUDIO_VENV:-$ROOT/../audio-understand-env}"
+[ -f "$ROOT/sml_migrate.sh" ] && . "$ROOT/sml_migrate.sh"   # ~/VoiceWeaver-電腦端 → ~/Speak-My-Life-電腦端
+PORT="${SML_AUDIO_PORT:-9883}"
+VENV="${SML_AUDIO_VENV:-$ROOT/../audio-understand-env}"
 
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"
 mkdir -p "$HF_HOME"

@@ -12,10 +12,10 @@
           實際把關是 TestHooks 的每次啟動隨機權杖（只出現在 logcat，其他 App 讀不到）。
         -->
         <receiver
-            android:name="com.example.testing.TestCommandReceiver"
+            android:name="com.speakmylife.app.testing.TestCommandReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.example.TEST_COMMAND" />
+                <action android:name="com.speakmylife.app.TEST_COMMAND" />
             </intent-filter>
         </receiver>
     </application>

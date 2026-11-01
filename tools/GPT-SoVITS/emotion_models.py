@@ -2,7 +2,7 @@
 """情緒感知語音模型：共用掃描器 + 情緒偵測。
 
 api_v2.py（/models）與 voice_center_app.py（web 橋接合成）共用這支，
-與 Colab 端 voiceweaver_bridge.py 同一套邏輯（換參考音＝換語氣）。
+與 Colab 端 speakmylife_bridge.py 同一套邏輯（換參考音＝換語氣）。
 
 資料夾結構（依語言分，每角色一組情緒參考音）：
     <root>/Models/<LANG>/<角色>/
@@ -17,7 +17,7 @@ api_v2.py（/models）與 voice_center_app.py（web 橋接合成）共用這支�
 [models_root] 負責這件事的相容：有 Models/ 就用，沒有就當舊版直接用 <root>——
 所以既有使用者不搬家也不會壞，搬了也照樣運作。
 
-情緒根目錄：環境變數 VOICEWEAVER_EMOTION_ROOT（沒設就沒有情緒模型，呼叫端退回舊 model_history）。
+情緒根目錄：環境變數 SML_EMOTION_ROOT（沒設就沒有情緒模型，呼叫端退回舊 model_history）。
 """
 import json
 import os
@@ -80,7 +80,7 @@ def parse_ref_filename(fname):
 
 
 def emotion_root():
-    return (os.environ.get("VOICEWEAVER_EMOTION_ROOT") or "").rstrip("/")
+    return (os.environ.get("SML_EMOTION_ROOT") or "").rstrip("/")
 
 
 def models_root(root=None):
@@ -275,7 +275,7 @@ def scan_report(root=None):
 def format_report(rep):
     """把 scan_report 的結果轉成好讀的多行文字（給 notebook / 控制中心印）。"""
     if not rep.get("root"):
-        return "（未設定情緒資料夾 VOICEWEAVER_EMOTION_ROOT；改用舊 model_history）"
+        return "（未設定情緒資料夾 SML_EMOTION_ROOT；改用舊 model_history）"
     if not rep.get("exists"):
         return f"❌ 找不到資料夾：{rep['root']}"
     s = rep["summary"]

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-PORT="${VOICEWEAVER_IMAGE_PORT:-9881}"
+[ -f "$ROOT/sml_migrate.sh" ] && . "$ROOT/sml_migrate.sh"   # ~/VoiceWeaver-電腦端 → ~/Speak-My-Life-電腦端
+PORT="${SML_IMAGE_PORT:-9881}"
 
 export MPLCONFIGDIR="$ROOT/.cache/matplotlib"
 export HF_HOME="${HF_HOME:-$ROOT/.cache/huggingface}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VoiceWeaver 本機生圖伺服器（Mac 端，免金鑰）。
+"""拾語者 Speak My Life 本機生圖伺服器（Mac 端，免金鑰）。
 
 跟 GPT-SoVITS 一樣在「電腦本機」運算：手機透過 USB(adb reverse) 或 Wi-Fi 連到 :9881，
 不需要任何雲端 API 金鑰。用 diffusers + Apple MPS 跑 SD-Turbo（快、512px、適合 AAC 圖卡）。
@@ -11,7 +11,7 @@
 模型可用環境變數覆蓋：
     IMAGE_GEN_MODEL（預設 stabilityai/sd-turbo；想更精緻可用 stabilityai/sdxl-turbo）
     IMAGE_GEN_STEPS（預設 2）
-    VOICEWEAVER_IMAGE_PORT（預設 9881）
+    SML_IMAGE_PORT（預設 9881）
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def self_info() -> dict:
         pass
     return {"ok": True, "hostname": host, "tailscale_ip": tsip}
 
-PORT = int(os.environ.get("VOICEWEAVER_IMAGE_PORT", "9881"))
+PORT = int(os.environ.get("SML_IMAGE_PORT", "9881"))
 MODEL = os.environ.get("IMAGE_GEN_MODEL", "stabilityai/sd-turbo")
 DEFAULT_STEPS = int(os.environ.get("IMAGE_GEN_STEPS", "2"))
 
@@ -182,10 +182,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     threading.Thread(target=load_pipe, daemon=True).start()
-    # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 VOICEWEAVER_BIND=127.0.0.1 鎖本機。
-    bind = os.environ.get("VOICEWEAVER_BIND", "0.0.0.0")
+    # 預設 0.0.0.0（手機 Wi-Fi 需要）；只用 USB(adb reverse) 的人可設 SML_BIND=127.0.0.1 鎖本機。
+    bind = os.environ.get("SML_BIND", "0.0.0.0")
     server = ThreadingHTTPServer((bind, PORT), Handler)
-    print(f"VoiceWeaver image server: http://{bind}:{PORT} (model {MODEL})", flush=True)
+    print(f"Speak My Life image server: http://{bind}:{PORT} (model {MODEL})", flush=True)
     server.serve_forever()
 
 

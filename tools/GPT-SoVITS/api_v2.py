@@ -170,7 +170,7 @@ async def health():
 async def models():
     """回傳已登錄的模型清單，給 App 動態顯示角色清單。
 
-    情緒資料夾結構（VOICEWEAVER_EMOTION_ROOT）優先，否則退回 model_history.json。
+    情緒資料夾結構（SML_EMOTION_ROOT）優先，否則退回 model_history.json。
     每筆都含 emotions:{情緒:{ref_path,prompt}}，與 Colab 橋接同一份合約
     （App 端自行依偵測到的情緒挑參考音，見 LocalSovitsHelper.refForEmotion）。
     """
@@ -239,7 +239,7 @@ def _load_emotion_models_module():
 async def catalog():
     """雲端曲庫目錄索引（給手機 Apple Music 式瀏覽整個曲庫）。
 
-    優先讀曲庫根的 catalog.json（Mac/Colab 掃描時寫），沒有就即時掃 VOICEWEAVER_EMOTION_ROOT。
+    優先讀曲庫根的 catalog.json（Mac/Colab 掃描時寫），沒有就即時掃 SML_EMOTION_ROOT。
     """
     _em = _load_emotion_models_module()
     if not _em:

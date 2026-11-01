@@ -1,0 +1,297 @@
+package com.speakmylife.app.ai
+
+/**
+ * ML Kit 影像標籤 → 繁體中文對照。
+ *
+ * ML Kit 基礎模型的 400+ 標籤**全部是英文**，而且是通用生活場景詞彙
+ * （Bonfire、Circus、Safari 這種），**沒有任何醫療／照護詞彙**——
+ * 查不到「藥」「輪椅」「拐杖」「病床」。這是基礎模型的先天限制，
+ * 不是設定問題；真要認這些東西必須另外訓練自訂模型（ML Kit 支援 custom model）。
+ *
+ * 這裡只翻「日常照護場景真的會出現」的標籤，而且**這張表就是白名單**：
+ * 沒收錄的標籤一律不顯示（見 [isUseful]）。不亂猜、不硬湊中文，
+ * 也不讓英文原文外漏到病人與照護者的畫面上。
+ */
+object VisionLabelZh {
+
+    /**
+     * 對 AAC 沒有意義的標籤：影像屬性（Monochrome）、材質／地面（Asphalt）、
+     * 抽象概念（Muscle、Fun、Cool）之類。病人不會想說「我看到柏油」，
+     * 留著只會稀釋重組 prompt 裡真正有用的物品線索。
+     */
+    private val NOISE = setOf(
+        "Monochrome", "Asphalt", "Muscle", "Fun", "Cool", "Leisure", "Interaction",
+        "Product", "Pattern", "Icon", "Model", "Fiction", "Event", "Community",
+        "Competition", "Balance", "Love", "Class", "Crew", "Team", "Miniature",
+        "Flesh", "Skin", "Neon", "Glitter", "Metal", "Textile", "Denim", "Cotton",
+        "Wool", "Leather", "Porcelain", "Brick", "Tile", "Sand", "Soil", "Space"
+    )
+
+    /**
+     * 這個標籤值不值得講給病人／照護者看。
+     *
+     * 用白名單（必須在 [MAP] 裡）而不是黑名單。原本只要不在 NOISE 就放行，
+     * 結果沒收錄的標籤會以英文原樣出現在畫面上——像拍到人卻跳出「Bumper (69%)」，
+     * 照護者看不懂，對重組也是雜訊。ML Kit 基礎模型那 400+ 標籤大多是
+     * Bonfire／Circus／Safari 這類跟照護無關的通用詞，沒收進表裡就代表
+     * 「這個詞對溝通沒用」，不顯示比顯示英文好。
+     *
+     * 要讓某個標籤出現，就把它加進 [MAP]——一個動作同時決定「顯示」與「怎麼翻」。
+     */
+    fun isUseful(label: String): Boolean = label !in NOISE && label in MAP
+
+    private val MAP: Map<String, String> = mapOf(
+        // ML Kit 物件偵測的 5 個粗類（跟影像標籤不同來源，會一起出現）
+        "Home good" to "居家用品",
+        "Fashion good" to "衣物配件",
+        "Place" to "場所",
+        "Good" to "物品",
+        // 餐飲（AAC 最常用：吃、喝）
+        "Cup" to "杯子",
+        "Coffee" to "咖啡",
+        "Cappuccino" to "咖啡",
+        "Juice" to "果汁",
+        "Cola" to "汽水",
+        "Wine" to "酒",
+        "Alcohol" to "酒",
+        "Food" to "食物",
+        "Meal" to "餐點",
+        "Lunch" to "午餐",
+        "Supper" to "晚餐",
+        "Bento" to "便當",
+        "Cuisine" to "菜餚",
+        "Fast food" to "速食",
+        "Fruit" to "水果",
+        "Vegetable" to "蔬菜",
+        "Bread" to "麵包",
+        "Cake" to "蛋糕",
+        "Cookie" to "餅乾",
+        "Pizza" to "披薩",
+        "Sushi" to "壽司",
+        "Hot dog" to "熱狗",
+        "Cheeseburger" to "漢堡",
+        "Pie" to "派",
+        "Gelato" to "冰淇淋",
+        "Icing" to "糖霜",
+        "Pho" to "河粉",
+        "Cutlery" to "餐具",
+        "Tableware" to "餐具",
+        "Cookware and bakeware" to "鍋具",
+        "Saucer" to "碟子",
+        "Sink" to "水槽",
+        "Menu" to "菜單",
+        "Placemat" to "餐墊",
+        "Tablecloth" to "桌巾",
+
+        // 隨身物品
+        "Glasses" to "眼鏡",
+        "Sunglasses" to "太陽眼鏡",
+        "Goggles" to "護目鏡",
+        "Bag" to "包包",
+        "Handbag" to "手提包",
+        "Backpacking" to "背包",
+        "Money" to "錢",
+        "Receipt" to "收據",
+        "Passport" to "護照",
+        "Mobile phone" to "手機",
+        "Computer" to "電腦",
+        "Clock" to "時鐘",
+        "Necklace" to "項鍊",
+        "Bracelet" to "手環",
+        "Bangle" to "手鐲",
+        "Ring" to "戒指",
+        "Jewellery" to "首飾",
+        "Umbrella" to "雨傘",
+        "Paper" to "紙",
+        "Newspaper" to "報紙",
+        "Poster" to "海報",
+        "Book" to "書",
+
+        // 衣物
+        "Shoe" to "鞋子",
+        "Sneakers" to "運動鞋",
+        "Hat" to "帽子",
+        "Cap" to "帽子",
+        "Beanie" to "毛帽",
+        "Scarf" to "圍巾",
+        "Jacket" to "外套",
+        "Outerwear" to "外套",
+        "Dress" to "洋裝",
+        "Shorts" to "短褲",
+        "Jeans" to "牛仔褲",
+        "Leggings" to "內搭褲",
+        "Tights" to "褲襪",
+        "Jersey" to "球衣",
+        "Blazer" to "西裝外套",
+        "Tuxedo" to "禮服",
+        "Tie" to "領帶",
+        "Gown" to "長袍",
+        "Swimwear" to "泳衣",
+        "Denim" to "牛仔布",
+        "Leather" to "皮革",
+        "Wool" to "羊毛",
+        "Cotton" to "棉",
+        "Textile" to "布料",
+        "Helmet" to "安全帽",
+
+        // 居家環境
+        "Room" to "房間",
+        "Bedroom" to "臥室",
+        "Bathroom" to "浴室",
+        "Kitchen" to "廚房",
+        "Chair" to "椅子",
+        "Couch" to "沙發",
+        "Loveseat" to "沙發",
+        "Desk" to "書桌",
+        "Countertop" to "檯面",
+        "Cabinetry" to "櫥櫃",
+        "Drawer" to "抽屜",
+        "Shelf" to "架子",
+        "Curtain" to "窗簾",
+        "Pillow" to "枕頭",
+        "Cushion" to "抱枕",
+        "Quilting" to "被子",
+        "Bunk bed" to "上下舖",
+        "Armrest" to "扶手",
+        "Handrail" to "扶手",
+        "Stairs" to "樓梯",
+        "Tile" to "磁磚",
+        "Wall" to "牆壁",
+        "Roof" to "屋頂",
+        "Door" to "門",
+        "Lampshade" to "燈罩",
+        "Whiteboard" to "白板",
+        "Blackboard" to "黑板",
+        "Television" to "電視",
+        "Flowerpot" to "花盆",
+        "Toy" to "玩具",
+        "Stuffed toy" to "娃娃",
+        "Plush" to "絨毛玩具",
+        "Cage" to "籠子",
+        "Balloon" to "氣球",
+
+        // 人與身體（照護判讀常用）
+        "Person" to "人",
+        "Baby" to "嬰兒",
+        "Grandparent" to "長輩",
+        "Crowd" to "人群",
+        "Hand" to "手",
+        "Foot" to "腳",
+        "Toe" to "腳趾",
+        "Mouth" to "嘴巴",
+        "Ear" to "耳朵",
+        "Hair" to "頭髮",
+        "Skin" to "皮膚",
+        "Beard" to "鬍子",
+        "Moustache" to "鬍子",
+        "Smile" to "微笑",
+        "Laugh" to "笑",
+        "Sleep" to "睡覺",
+        "Standing" to "站著",
+        "Sitting" to "坐著",
+        "Eating" to "吃東西",
+        "Selfie" to "自拍",
+
+        // 場所
+        "Building" to "建築物",
+        "Hospital" to "醫院",
+        "School" to "學校",
+        "Church" to "教堂",
+        "Temple" to "廟宇",
+        "Museum" to "博物館",
+        "Park" to "公園",
+        "Garden" to "花園",
+        "Beach" to "海邊",
+        "Road" to "馬路",
+        "Bridge" to "橋",
+        "Playground" to "遊樂場",
+        "Bar" to "酒吧",
+        "Stadium" to "體育場",
+        "Farm" to "農場",
+        "Barn" to "穀倉",
+
+        // 交通
+        "Car" to "汽車",
+        "Vehicle" to "車輛",
+        "Bus" to "公車",
+        "Train" to "火車",
+        "Bicycle" to "腳踏車",
+        "Motorcycle" to "機車",
+        "Van" to "廂型車",
+        "Airplane" to "飛機",
+        "Aircraft" to "飛機",
+        "Boat" to "船",
+        "Wheel" to "輪子",
+        "Tire" to "輪胎",
+        "Windshield" to "擋風玻璃",
+        "Rickshaw" to "人力車",
+        "Wheelbarrow" to "手推車",
+
+        // 自然與天氣
+        "Sky" to "天空",
+        "Sunset" to "夕陽",
+        "Moon" to "月亮",
+        "Star" to "星星",
+        "Rainbow" to "彩虹",
+        "Fog" to "霧",
+        "Storm" to "暴風雨",
+        "Lightning" to "閃電",
+        "Ice" to "冰",
+        "Snow" to "雪",
+        "Fire" to "火",
+        "Water" to "水",
+        "Lake" to "湖",
+        "River" to "河",
+        "Mountain" to "山",
+        "Forest" to "森林",
+        "Flower" to "花",
+        "Plant" to "植物",
+        "Flora" to "植物",
+        "Petal" to "花瓣",
+        "Branch" to "樹枝",
+        "Twig" to "樹枝",
+        "Soil" to "泥土",
+        "Sand" to "沙",
+        "Rock" to "石頭",
+        "Insect" to "昆蟲",
+        "Butterfly" to "蝴蝶",
+        "Bird" to "鳥",
+        "Dog" to "狗",
+        "Cat" to "貓",
+        "Pet" to "寵物",
+        "Horse" to "馬",
+        "Cattle" to "牛",
+        "Duck" to "鴨",
+        "Turtle" to "烏龜",
+
+        // 其他常見
+        "Musical instrument" to "樂器",
+        "Piano" to "鋼琴",
+        "Party" to "派對",
+        "Christmas" to "聖誕節",
+        "Marriage" to "婚禮",
+        "Bride" to "新娘",
+        "Groom" to "新郎",
+        "Concert" to "演唱會",
+        "Dance" to "跳舞",
+        "Sports" to "運動",
+        "Swimming" to "游泳",
+        "Running" to "跑步",
+        "Cycling" to "騎車",
+        "Fishing" to "釣魚",
+        "Camping" to "露營",
+        "Picnic" to "野餐",
+        "Vacation" to "度假",
+        "Flag" to "旗子",
+        "Metal" to "金屬",
+        "Brick" to "磚",
+        "Glitter" to "亮片",
+        "Pattern" to "圖案",
+        "Screenshot" to "螢幕截圖",
+        "Web page" to "網頁",
+        "Heart" to "愛心"
+    )
+
+    /** 查不到就回原文（英文）——不亂翻。 */
+    fun toZh(label: String): String = MAP[label] ?: label
+}

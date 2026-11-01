@@ -1,4 +1,8 @@
-# VoiceWeaver 語音中心 — Windows 版
+# 拾語者 Speak My Life 語音中心 — Windows 版
+
+> 產品已全面更名為「拾語者 Speak My Life」（原名 VoiceWeaver）：exe 檔名 `Speak-My-Life語音中心.exe`、
+> 資料夾 `%LOCALAPPDATA%\Speak-My-Life`。已安裝過舊版的電腦，第一次開新版時會把
+> `%LOCALAPPDATA%\VoiceWeaver` 自動改名過來（舊位置留 junction，不必重裝）；改名失敗就沿用舊資料夾。
 
 macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制視窗本體
 （`tools/GPT-SoVITS/voice_center_app.py`）與後端（`model_setup_server.py`、`sync_voice_models.py`）
@@ -18,9 +22,9 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 
 | | 單一 exe（推薦） | 小 zip 安裝包 |
 | --- | --- | --- |
-| 產物 | `VoiceWeaver語音中心.exe`（約 11 MB） | `VoiceWeaver-語音中心-安裝包.zip`（約 60 KB） |
+| 產物 | `Speak-My-Life語音中心.exe`（約 11 MB） | `Speak-My-Life-語音中心-安裝包.zip`（約 60 KB） |
 | 打包腳本 | `tools/win/build_win_exe.ps1` | 把 `tools/win/*` ＋ 控制程式壓成 zip |
-| 使用者操作 | 雙擊 `.exe` | 解壓 → 雙擊 `VoiceWeaver語音中心.cmd` |
+| 使用者操作 | 雙擊 `.exe` | 解壓 → 雙擊 `Speak-My-Life語音中心.cmd` |
 | 首次安裝畫面 | 內建 tkinter 進度視窗 | WinForms 進度視窗（`launch.ps1`） |
 
 兩者首次安裝的內容完全一樣，只是進入點不同。exe 自帶後端程式碼；zip 由 `launch.ps1`
@@ -30,9 +34,9 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 
 ## 首次安裝會自動做什麼
 
-全程有進度視窗，安裝紀錄寫在 `%LOCALAPPDATA%\VoiceWeaver\logs\install.log`。
+全程有進度視窗，安裝紀錄寫在 `%LOCALAPPDATA%\Speak-My-Life\logs\install.log`。
 
-1. **Miniforge**（官方 conda-forge 發行版，含 Python 3.10）→ `%LOCALAPPDATA%\VoiceWeaver\tools\miniforge3`
+1. **Miniforge**（官方 conda-forge 發行版，含 Python 3.10）→ `%LOCALAPPDATA%\Speak-My-Life\tools\miniforge3`
 2. **建立 `gpt-sovits-env` 環境**並 pip 安裝依賴（見下方「相依版本」）
 3. **後端程式碼**（`api_v2.py` / `image_gen_server.py` / `text_infer_server.py` / 設定）— 自帶在安裝包內
 4. **GPT-SoVITS 推論引擎**（`GPT_SoVITS/` + `tools/`）— 取自官方上游 `RVC-Boss/GPT-SoVITS`
@@ -45,7 +49,7 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 若想跳過 pip、直接解壓一份 conda-pack 好的環境（最快最穩）：
 
 - 安裝包資料夾放一份 `gpt-sovits-env.tar.gz`，或
-- 設定環境變數 `VW_ENV_URL` 指向該檔的下載網址。
+- 設定環境變數 `SML_ENV_URL` 指向該檔的下載網址。
 
 `launch.ps1` / exe 偵測到就會改用「下載／解壓既成環境 + `conda-unpack` 重定位」，而非 pip 自建。
 （conda 環境平台相依，此檔必須在 **Windows** 上用 `conda pack` 產生。）
@@ -74,7 +78,7 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
   > 直接跑不起來，所以門檻會讓它們正確退回 CPU。
 
 生圖／文字服務以 `torch.cuda.is_available()` 自動選裝置；語音(9880) 需在設定檔寫入 `device: cuda`，
-控制視窗啟動時會偵測並設定 `VOICEWEAVER_DEVICE=cuda`，切換模型時 `update_config` 即寫成 GPU（半精度）。
+控制視窗啟動時會偵測並設定 `SML_DEVICE=cuda`，切換模型時 `update_config` 即寫成 GPU（半精度）。
 
 ---
 
@@ -87,7 +91,7 @@ macOS 版「語音中心」（`tools/dmg/`）的 Windows 對應實作。控制�
 python -m pip install pyinstaller pillow
 # 打包：
 pwsh tools\win\build_win_exe.ps1
-# 產出：dist\VoiceWeaver語音中心.exe
+# 產出：dist\Speak-My-Life語音中心.exe
 ```
 
 `build_win_exe.ps1` 會即時把正規的後端檔（`api_v2.py`、各 server、`GPT_SoVITS/configs`）塞進 exe，
@@ -102,7 +106,7 @@ pwsh tools\win\build_win_exe.ps1
 
 ## 使用者端安裝與啟動
 
-1. 取得 `VoiceWeaver語音中心.exe`（或解壓 zip）。
+1. 取得 `Speak-My-Life語音中心.exe`（或解壓 zip）。
 2. 雙擊執行。第一次會跳出安裝進度視窗，自動下載安裝 AI 環境（約 2GB，視網速 10–30 分鐘），
    完成後自動開啟控制台；**之後秒開**。
 3. 想要桌面捷徑：直接把 exe 放桌面即可（zip 版可對 `.cmd` 右鍵 →「傳送到」→「桌面（建立捷徑）」）。
@@ -112,13 +116,13 @@ pwsh tools\win\build_win_exe.ps1
 ### 關於 SmartScreen「Windows 已保護您的電腦」
 
 第一次執行時可能跳出藍色的 **Microsoft Defender SmartScreen**「已防止某個無法辨識的應用程式啟動」。
-這**不是病毒警告**，而是 Windows 對「**未經程式碼簽章 + 從網路下載**」的 exe 一律先攔。VoiceWeaver
+這**不是病毒警告**，而是 Windows 對「**未經程式碼簽章 + 從網路下載**」的 exe 一律先攔。本專案
 未購買程式碼簽章憑證，所以會被歸類為「無法辨識」。exe 已內嵌產品資訊，按「其他資訊」會看到
-發行者顯示 **VoiceWeaver 語音中心**。處理方式（任選）：
+產品名稱顯示 **拾語者 語音中心**。處理方式（任選）：
 
 1. **點過去（一次性）**：按「**其他資訊**」→「**仍要執行**」。
 2. **解除封鎖（讓它不再跳）**：對 exe 按右鍵 →「**內容**」→ 最下面勾「**解除封鎖 (Unblock)**」→ 確定。
-   或 PowerShell：`Unblock-File "路徑\VoiceWeaver語音中心.exe"`。這會移除「來自網路」標記，之後不再攔。
+   或 PowerShell：`Unblock-File "路徑\Speak-My-Life語音中心.exe"`。這會移除「來自網路」標記，之後不再攔。
 3. **本機自行打包**：用 `build_win_exe.ps1` 在自己電腦打包出的 exe 屬「本機產生」、沒有網路標記，
    SmartScreen 不會攔（別放進 OneDrive 同步資料夾，雲端回抓會重新加上網路標記）。
 4. **改用 zip 安裝包**：入口是 `.cmd` 啟動器而非 exe，不會觸發這個「無法辨識的應用程式」攔截。
@@ -146,11 +150,11 @@ pwsh tools\win\build_win_exe.ps1
 
 | 項目 | 路徑 |
 | --- | --- |
-| AI 環境 / 後端 / 引擎 | `%LOCALAPPDATA%\VoiceWeaver\tools\` |
-| 安裝紀錄 | `%LOCALAPPDATA%\VoiceWeaver\logs\install.log` |
-| 模型快取（HF） | `%LOCALAPPDATA%\VoiceWeaver\.cache\huggingface` |
+| AI 環境 / 後端 / 引擎 | `%LOCALAPPDATA%\Speak-My-Life\tools\` |
+| 安裝紀錄 | `%LOCALAPPDATA%\Speak-My-Life\logs\install.log` |
+| 模型快取（HF） | `%LOCALAPPDATA%\Speak-My-Life\.cache\huggingface` |
 
 - **語音 9880 起不來**：先確認「模型 / 進階」分頁看得到聲音模型（USB 同步後應有）。看 `install.log`
   確認 GPT-SoVITS 引擎與依賴是否裝好；引擎若上次安裝缺漏，控制視窗下次開啟會背景自動補裝。
-- **想重裝**：刪掉整個 `%LOCALAPPDATA%\VoiceWeaver` 資料夾，再開一次即可全新安裝。
+- **想重裝**：刪掉整個 `%LOCALAPPDATA%\Speak-My-Life` 資料夾，再開一次即可全新安裝。
 - **`.ps1` 中文亂碼 / 解析失敗**：PowerShell 5.1 需 UTF-8 **with BOM** 才能正確解析含中文的 `.ps1`。

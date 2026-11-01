@@ -1,9 +1,17 @@
-# VoiceWeaver Agent Guide
+# Speak My Life Agent Guide
+
+> 🏷 **Fully renamed to 「拾語者 Speak My Life」** (2026-11; formerly VoiceWeaver). All names use the new one:
+> package/applicationId `com.speakmylife.app`, classes `SpeakMyLifeCore`/`SpeakMyLifeScreen`, Drive library folder
+> `Speak-My-Life/…`, repos `TimChien918/Speak-My-Life` and `TimChien918/Speak-My-Life-Web`, `~/Speak-My-Life-電腦端/`,
+> desktop bundle `Speak-My-Life語音中心.app/.exe`, prefixes `sml_`/`SML_`. Old VoiceWeaver data is migrated automatically
+> (find new → else rename old → rename fails → keep using old; same rule on Android, web, desktop and Colab — desktop/Colab
+> logic lives in `tools/GPT-SoVITS/sml_migrate.py`, tests in `test_sml_migrate.py`). Remaining old names are intentional:
+> Firebase project ID `voiceweaver-af4da` (cannot be changed) and the legacy names the migration code looks for.
 
 > 📦 **Computer-side runtime moved out of this project** (2026-06): GPT-SoVITS, the conda
-> env, and miniforge now live in `~/VoiceWeaver-電腦端/` (separate from the Android code).
+> env, and miniforge now live in `~/Speak-My-Life-電腦端/` (separate from the Android code).
 > The `tools/GPT-SoVITS/`, `tools/gpt-sovits-env/`, `tools/miniforge3/` paths below now map
-> to `~/VoiceWeaver-電腦端/`. The Android app only talks to those servers over HTTP, so the
+> to `~/Speak-My-Life-電腦端/`. The Android app only talks to those servers over HTTP, so the
 > move does not affect the app build. See `tools/電腦端已搬移.md`.
 
 Purpose: keep AI coding agents fast and focused. Read this file first, then use `rg` from the repo root. The repo has large local model/runtime folders; do not browse them unless the task explicitly asks for model internals.
@@ -24,28 +32,28 @@ Purpose: keep AI coding agents fast and focused. Read this file first, then use 
 ## Main App Map
 
 - App entry/core:
-  - `app/src/main/java/com/example/MainActivity.kt`
-  - `app/src/main/java/com/example/ai/VoiceWeaverCore.kt`
+  - `app/src/main/java/com/speakmylife/app/MainActivity.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/SpeakMyLifeCore.kt`
 - TTS / GPT-SoVITS:
-  - `app/src/main/java/com/example/ai/TtsModule.kt`
-  - `app/src/main/java/com/example/ai/LocalSovitsHelper.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/TtsModule.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/LocalSovitsHelper.kt`
   - `tools/GPT-SoVITS/model_setup_server.py`
   - `tools/GPT-SoVITS/api_v2.py`
 - AAC UI:
-  - `app/src/main/java/com/example/ui/AacScreen.kt`
-  - `app/src/main/java/com/example/data/AacData.kt`
+  - `app/src/main/java/com/speakmylife/app/ui/AacScreen.kt`
+  - `app/src/main/java/com/speakmylife/app/data/AacData.kt`
 - Main UI/settings:
-  - `app/src/main/java/com/example/ui/VoiceWeaverScreen.kt`
-  - `app/src/main/java/com/example/ui/SettingsScreen.kt`
-  - `app/src/main/java/com/example/ui/theme/AppPalette.kt`
+  - `app/src/main/java/com/speakmylife/app/ui/SpeakMyLifeScreen.kt`
+  - `app/src/main/java/com/speakmylife/app/ui/SettingsScreen.kt`
+  - `app/src/main/java/com/speakmylife/app/ui/theme/AppPalette.kt`
 - Location/POI:
-  - `app/src/main/java/com/example/ai/LocationTracker.kt`
-  - `app/src/main/java/com/example/ai/GooglePlacesClient.kt`
-  - `app/src/main/java/com/example/ai/OverpassPoiClient.kt`
-  - `app/src/main/java/com/example/ai/OfflinePoiIndex.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/LocationTracker.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/GooglePlacesClient.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/OverpassPoiClient.kt`
+  - `app/src/main/java/com/speakmylife/app/ai/OfflinePoiIndex.kt`
 - Data:
-  - `app/src/main/java/com/example/data/AppDatabase.kt`
-  - `app/src/main/java/com/example/data/SettingsRepository.kt`
+  - `app/src/main/java/com/speakmylife/app/data/AppDatabase.kt`
+  - `app/src/main/java/com/speakmylife/app/data/SettingsRepository.kt`
 
 ## GPT-SoVITS Local Workflow
 
@@ -60,7 +68,8 @@ Purpose: keep AI coding agents fast and focused. Read this file first, then use 
 
 - Build debug APK: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug`
 - USB API bridge for phone: `/Users/timchien/Library/Android/sdk/platform-tools/adb reverse tcp:9880 tcp:9880`
-- Install debug APK: `/Users/timchien/Library/Android/sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk`
+- Install debug APK: `/Users/timchien/Library/Android/sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk` (package `com.speakmylife.app`)
+- Launch: `adb shell am start -n com.speakmylife.app/.MainActivity`; debug test hooks: `./tools/sml-test.sh` (see `docs/TESTING_HOOKS.md`)
 
 ## Editing Rules
 

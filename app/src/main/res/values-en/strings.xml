@@ -1,14 +1,12 @@
 <resources>
-    <string name="app_name">VoiceWeaver</string>
+    <string name="app_name">Speak My Life</string>
 
     <string name="nav_main">Compose</string>
     <string name="nav_rehab">Rehab</string>
     <string name="nav_history">History</string>
     <string name="nav_settings">Settings</string>
-    <string name="nav_aac">AAC</string>
     <string name="nav_report">Report</string>
 
-    <string name="aac_title">▌ AAC Board</string>
     <string name="aac_cat_products">Products</string>
     <string name="aac_cat_food_drink">Food</string>
     <string name="aac_cat_money">Money</string>
@@ -43,11 +41,13 @@
     <string name="section_tts_rate">Speech Rate</string>
     <string name="section_font_size">Font Size</string>
     <string name="section_other">Other</string>
+    <string name="theme_brand">Speak My Life</string>
     <string name="theme_tech">Tech</string>
     <string name="theme_cute">Cute</string>
     <string name="theme_anime">Anime</string>
     <string name="theme_minimal">Minimal</string>
-    <string name="theme_blurb_tech">Dark neon · Professional (default)</string>
+    <string name="theme_blurb_brand">Forest green &amp; warm yellow · follows system light/dark (default)</string>
+    <string name="theme_blurb_tech">Dark neon · Professional</string>
     <string name="theme_blurb_cute">Cream candy · For children</string>
     <string name="theme_blurb_anime">Vibrant glow · For teens</string>
     <string name="theme_blurb_minimal">Clean white · High contrast</string>
@@ -72,7 +72,6 @@
     <string name="lang_en">English</string>
     <string name="lang_ja">日本語</string>
     <string name="lang_ko">한국어</string>
-    <string name="language_note">(Architecture in place · Legacy screens migrating gradually)</string>
     <string name="tts_rate_slow">Slow (0.5x)</string>
     <string name="tts_rate_fast">Fast (1.5x)</string>
     <string name="other_autosave_label">Auto-save rehab logs</string>
@@ -105,7 +104,6 @@
     <string name="rehab_stop">Stop</string>
     <string name="rehab_scoring">Scoring...</string>
     <string name="rehab_start">Start</string>
-    <string name="rehab_preparing">Preparing...</string>
     <string name="rehab_score_suffix">pts</string>
     <string name="rehab_score_excellent">Excellent! Clear pronunciation</string>
     <string name="rehab_score_good">Good, try again</string>
@@ -122,19 +120,9 @@
     <string name="main_dl_downloading">Downloading Qwen2.5-1.5B...</string>
     <string name="main_dl_cancel">Cancel</string>
     <string name="main_dl_failed">Download failed</string>
-    <string name="main_dl_adb_title">Install via desktop command (no account needed)</string>
     <string name="main_dl_retry">Retry</string>
     <string name="main_rule_engine_running">Rule engine active</string>
-    <string name="main_upgrade_llm">Upgrade to LLM ↓</string>
-    <string name="main_dl_blurb">Auto-download Qwen2.5-1.5B INT8 (~1.6 GB)\nPublic model · No account · Just need Wi-Fi</string>
     <string name="main_dl_button">Download AI model (~1.6 GB)</string>
-    <string name="main_llm_ready">LLM model ready (Qwen2.5-1.5B INT8)</string>
-    <string name="main_strategy_high_ready">Sufficient RAM (>=8GB). MediaPipe LLM loaded for high-accuracy on-device reconstruction.</string>
-    <string name="main_strategy_high_fallback">Sufficient RAM (>=8GB). AICore (Gemini Nano) unavailable; install a MediaPipe model to upgrade. Currently using rule engine.</string>
-    <string name="main_strategy_mid_ready">Mid-tier hardware (>=4GB). MediaPipe Qwen2.5-1.5B INT8 is ready, running offline on CPU.</string>
-    <string name="main_strategy_mid_fallback">Mid-tier hardware (>=4GB). Install a MediaPipe model to enable LLM inference. Currently using rule engine.</string>
-    <string name="main_strategy_low">This device has limited RAM (&lt;4GB). Zero-LLM safety rule engine enabled to prevent OOM.</string>
-    <string name="main_tier_simulator">Hardware tier simulator (for diagnostics):</string>
     <string name="main_sec_context">▌ Your context</string>
     <string name="main_gps_section">📍 Where am I</string>
     <string name="main_gps_loading">Fast locating and reverse geocoding...</string>
@@ -177,19 +165,4 @@
     <string name="main_btn_tts">🔊 Say it</string>
     <string name="main_btn_practice">Practice with this sentence →</string>
 
-    <string-array name="main_quick_home">
-        <item>Thirsty</item><item>Water please</item><item>Hungry</item><item>Sleepy</item><item>Need medicine</item>
-    </string-array>
-    <string-array name="main_quick_hospital">
-        <item>Doctor</item><item>Unwell</item><item>Chest pain</item><item>Dizzy</item><item>How many pills?</item>
-    </string-array>
-    <string-array name="main_quick_market">
-        <item>Buy milk</item><item>Pay</item><item>Shopping bag</item><item>Forgot wallet</item>
-    </string-array>
-    <string-array name="main_quick_restaurant">
-        <item>Hungry</item><item>Order rice</item><item>Water please</item><item>Too hot</item><item>Check please</item>
-    </string-array>
-    <string-array name="main_quick_default">
-        <item>Thirsty</item><item>Unwell</item><item>Need help</item>
-    </string-array>
 </resources>
