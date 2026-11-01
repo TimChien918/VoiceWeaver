@@ -17,16 +17,17 @@
 ![i18n](https://img.shields.io/badge/介面語言-繁中%20%7C%20EN%20%7C%20日%20%7C%20한-ff9500)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 
-[🌐 網頁版 Live](https://timchien918.github.io/VoiceWeaver-Web/) ·
-[📦 下載安裝檔（Releases）](https://github.com/TimChien918/VoiceWeaver/releases) ·
-[網頁版原始碼](https://github.com/TimChien918/VoiceWeaver-Web) ·
+[🌐 網頁版 Live](https://timchien918.github.io/Speak-My-Life-Web/) ·
+[📦 下載安裝檔（Releases）](https://github.com/TimChien918/Speak-My-Life/releases) ·
+[網頁版原始碼](https://github.com/TimChien918/Speak-My-Life-Web) ·
 [GPT-SoVITS 模型手冊](docs/GPT_SOVITS_MODEL_GUIDE.md)
 
 </div>
 
-> **關於名稱**：本專案原名 **VoiceWeaver**，現更名為 **拾語者 Speak My Life**（繁中介面顯示「拾語者」，英／日／韓介面顯示「Speak My Life」）。
-> GitHub repo、Android 套件名／applicationId、程式類別名（如 `VoiceWeaverCore`）、Google Drive 雲端曲庫資料夾（`VoiceWeaver/…`）、
-> 網頁版網址與桌面安裝檔檔名**刻意沿用舊名**，以維持既有使用者的資料與更新相容性。
+> **關於名稱**：本專案**已全面更名**為 **拾語者 Speak My Life**（繁中介面顯示「拾語者」，英／日／韓介面顯示「Speak My Life」），原名 **VoiceWeaver**。
+> GitHub repo、Android 套件名／applicationId（`com.speakmylife.app`）、程式類別名（如 `SpeakMyLifeCore`）、Google Drive 雲端曲庫資料夾（`Speak-My-Life/…`）、
+> 網頁版網址與桌面安裝檔檔名都已換成新名字；舊資料會自動搬過去，見〈[從 VoiceWeaver 升級](#從-voiceweaver-升級)〉。
+> 唯一沒改的是 Firebase 專案 ID `voiceweaver-af4da`（Firebase 專案 ID 建立後無法更改，不影響使用）。
 
 ---
 
@@ -162,10 +163,10 @@ Firebase 認證 ＋ Firestore 同步層（身分驗證、資料儲存、手機�
 
 | 入口 | 說明 | 取得方式 |
 | --- | --- | --- |
-| **📱 Android App** | 完整功能：離線推理、相機、定位、鼻控／眼動、語音復健（含雲端多語跟讀）、GPT-SoVITS 角色語音、雲端曲庫瀏覽與下載 | [Releases](https://github.com/TimChien918/VoiceWeaver/releases) 或自行建置 |
-| **🌐 網頁輕量版** | 純瀏覽器免安裝；三段防呆介面（輕症／中症／重症全螢幕圖卡）；危機介入雙向通報與 App 對齊；可把語音／生圖／文字運算丟給電腦或 Colab 跑 | [直接開啟](https://timchien918.github.io/VoiceWeaver-Web/) |
-| **🖥 語音中心（macOS / Windows）** | 桌面 App：GPT-SoVITS 語音合成、SD-Turbo 生圖、Qwen 文字推論、**雲端曲庫管理（Google Drive）** | [Releases](https://github.com/TimChien918/VoiceWeaver/releases) |
-| **☁️ Colab GPU（免費算力）** | 免安裝的雲端運算：同一份 Google Drive 曲庫、免費 GPU 跑語音合成，手機／網頁走 ngrok 連線 | [notebook](tools/colab/VoiceWeaver_GPT_SoVITS_Colab.ipynb) |
+| **📱 Android App** | 完整功能：離線推理、相機、定位、鼻控／眼動、語音復健（含雲端多語跟讀）、GPT-SoVITS 角色語音、雲端曲庫瀏覽與下載 | [Releases](https://github.com/TimChien918/Speak-My-Life/releases) 或自行建置 |
+| **🌐 網頁輕量版** | 純瀏覽器免安裝；三段防呆介面（輕症／中症／重症全螢幕圖卡）；危機介入雙向通報與 App 對齊；可把語音／生圖／文字運算丟給電腦或 Colab 跑 | [直接開啟](https://timchien918.github.io/Speak-My-Life-Web/) |
+| **🖥 語音中心（macOS / Windows）** | 桌面 App：GPT-SoVITS 語音合成、SD-Turbo 生圖、Qwen 文字推論、**雲端曲庫管理（Google Drive）** | [Releases](https://github.com/TimChien918/Speak-My-Life/releases) |
+| **☁️ Colab GPU（免費算力）** | 免安裝的雲端運算：同一份 Google Drive 曲庫、免費 GPU 跑語音合成，手機／網頁走 ngrok 連線 | [notebook](tools/colab/Speak-My-Life_GPT_SoVITS_Colab.ipynb) |
 
 - 手機、網頁、電腦用**同一個 Google 帳號**登入即互通：API 金鑰／設定雙向同步（Firestore），語音曲庫共用同一個 Drive。
 - 四個入口的介面都支援**繁體中文／English／日本語／한국어**一鍵切換；切換語言會連動語音模型篩選、朗讀語言、以及跟讀練習用的語言。
@@ -235,8 +236,8 @@ App 與網頁版行為一致，三層防線：
 聲音模型不再各裝置各存一份。架構是：
 
 ```
-Google Drive（VoiceWeaver/<語言>/<角色>/）  ←── 唯一曲庫，登入哪個 Google 帳號就是哪份
-        │                                       （資料夾沿用舊名 VoiceWeaver，改名會讓既有曲庫消失）
+Google Drive（Speak-My-Life/<語言>/<角色>/）←── 唯一曲庫，登入哪個 Google 帳號就是哪份
+        │                                       （更名前的 VoiceWeaver/ 會自動改名成 Speak-My-Life/）
         │  電腦／Colab 用 Drive API／掛載讀取
         ▼
 運算端本機快取（沒有的角色會自動下載，下載完就是「已下載」）
@@ -256,9 +257,9 @@ Google Drive（VoiceWeaver/<語言>/<角色>/）  ←── 唯一曲庫，登�
 ## 快速開始（自行建置 Android App）
 
 ```bash
-# 1. 取得原始碼（repo 沿用原名 VoiceWeaver）
-git clone https://github.com/TimChien918/VoiceWeaver.git
-cd VoiceWeaver
+# 1. 取得原始碼
+git clone https://github.com/TimChien918/Speak-My-Life.git
+cd Speak-My-Life
 
 # 2. 金鑰：複製範例並填入（.env 已被 gitignore，切勿提交）
 cp .env.example .env
@@ -272,16 +273,50 @@ cp .env.example .env
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew :app:assembleDebug      # 打包 Debug APK
 ./gradlew :app:installDebug       # 安裝到已連線裝置
+# 產物：app/build/outputs/apk/debug/app-debug.apk（套件名 com.speakmylife.app）
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n com.speakmylife.app/.MainActivity
 ```
 
 > **需要 JDK 17+**。系統 JDK 8 會出現 `Gradle requires JVM 17 or later`，請改用 Android Studio 內建 JBR。
 >
-> **APK 用 debug 簽章發布**：本專案的 release 版本沿用同一把 debug key（非正式上架用金鑰），這樣才能對已安裝的使用者 `adb install -r` 直接覆蓋更新、保留資料，不必解除安裝。更名後 applicationId 不變，既有安裝會直接升級成「拾語者」。
+> **APK 用 debug 簽章發布**：本專案的 release 版本沿用同一把 debug key（非正式上架用金鑰），這樣才能對已安裝的使用者 `adb install -r` 直接覆蓋更新、保留資料，不必解除安裝。**更名後 applicationId 改成 `com.speakmylife.app`，對系統來說是一個全新的 App**：舊的 VoiceWeaver App 不會被覆蓋，兩者會並存（見〈從 VoiceWeaver 升級〉）。
+
+## 從 VoiceWeaver 升級
+
+本專案原名 VoiceWeaver，已全面更名為「拾語者 Speak My Life」。舊使用者要做的事：
+
+**需要你自己動手的**
+1. **GitHub repo 改名**（開發者）：到 GitHub 各 repo 的 Settings → General → Repository name，把
+   `TimChien918/VoiceWeaver` 改成 `Speak-My-Life`、`TimChien918/VoiceWeaver-Web` 改成 `Speak-My-Life-Web`
+   （GitHub 會自動把舊網址轉址；本機 clone 可用 `git remote set-url origin https://github.com/TimChien918/Speak-My-Life.git` 更新）。
+   網頁版改名後網址變成 https://timchien918.github.io/Speak-My-Life-Web/ （GitHub Pages 不會替舊網址轉址）。
+2. **Firebase 新增 Android App**（自行建置者）：Firebase Console → 專案設定 → 新增應用程式 → Android，
+   套件名填 `com.speakmylife.app`（並加上簽章 SHA-1，Google 登入需要），下載新的 `google-services.json` 換掉 `app/` 裡舊的。
+3. **新舊 App 並存，需手動移除舊版**：applicationId 從 `com.aistudio.aphasiaassist.pkztuv` 改成 `com.speakmylife.app`，
+   系統把它當成另一個 App，安裝新版不會覆蓋舊版。確認新版設定都回來後，到手機設定把舊的 VoiceWeaver App 解除安裝。
+4. **用同一個 Google 帳號登入新 App**：新 App 讀不到舊 App 的本機資料（Android 的資料夾以套件名區隔），
+   但設定、紀錄都存在 Firebase 雲端——登入同一個 Google 帳號就會同步回來。
+
+**會自動處理的**
+- **Google Drive 曲庫**：Android、網頁、電腦、Colab 四端同一條規則——先找 `Speak-My-Life/`；沒有但有舊的 `VoiceWeaver/`
+  就把它改名成 `Speak-My-Life/`（不重新上傳，只改名）；改名失敗（例如資料夾不是 App 建立的）就繼續使用舊資料夾；兩個都有則用新的、不動舊的。
+- **電腦端資料夾**：`~/VoiceWeaver-電腦端/` → `~/Speak-My-Life-電腦端/`，App 資料夾
+  `~/Library/Application Support/VoiceWeaver`（Windows `%LOCALAPPDATA%\VoiceWeaver`）→ `…/Speak-My-Life`，
+  `~/.voiceweaver` → `~/.speakmylife`，語音設定檔 `voiceweaver_tts_infer.yaml` → `speakmylife_tts_infer.yaml`。
+  資料夾在舊位置留捷徑，裡面寫死的舊路徑照樣能用，不必重裝；改名失敗就沿用舊路徑。
+- **手機同步資料夾**：USB 同步時把 `/sdcard/VoiceWeaver/voice_models` 搬到 `/sdcard/Speak-My-Life/voice_models`。
+- **Colab**：notebook 掛載 Drive 時同樣把 `MyDrive/VoiceWeaver` 改名；Colab Secret 請改名為 `SML_PAIR_CODE`（舊的 `VW_PAIR_CODE` 仍讀得到）。
+- **語音中心**：舊的 `VoiceWeaver語音中心.app`／`.exe` 不會被自動刪除，裝好新版後可自行移除。
+
+**無法改名、但不影響使用的**
+- Firebase 專案 ID `voiceweaver-af4da`：Firebase 專案 ID 建立後永遠不能改（顯示名稱可在 Console 改）。
+  它只出現在設定檔與網址裡，使用者看不到，也不影響任何功能。
 
 ## 🖥 語音中心（macOS / Windows 桌面 App）
 
 自帶 Python 環境的桌面應用（Tkinter），下載 `.dmg`／`.exe` 安裝即用，首次開啟自動解壓環境（約 2GB）。
-視窗標題顯示「拾語者 語音中心」；安裝檔與 App 檔名（`VoiceWeaver語音中心.app`／`.exe`）沿用舊名，方便既有使用者覆蓋更新。
+視窗標題顯示「拾語者 語音中心」；App 檔名為 `Speak-My-Life語音中心.app`／`Speak-My-Life語音中心.exe`（安裝檔 `Speak-My-Life-語音中心.dmg`）。
 一個視窗管理三個 AI 服務＋手機連線＋雲端曲庫：
 
 | 埠 | 服務 | 說明 |
@@ -306,10 +341,10 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 不想讓自己的電腦跑推論、或電腦效能不夠時，用 [Google Colab](https://colab.research.google.com) 的免費 GPU：
 
-1. 上傳 `tools/colab/VoiceWeaver_GPT_SoVITS_Colab.ipynb` 到 Colab，選 GPU（T4）執行階段。
+1. 上傳 [`tools/colab/Speak-My-Life_GPT_SoVITS_Colab.ipynb`](tools/colab/Speak-My-Life_GPT_SoVITS_Colab.ipynb) 到 Colab，選 GPU（T4）執行階段。
 2. 依序執行每個 cell：安裝相依 → 掛載 Drive（同一個帳號的曲庫，會自動建 ZH/EN/JA/KO 範本並印逐角色健檢報告）→ 啟動服務 → 開 ngrok 通道。
 3. 手機或網頁的「連接電腦」設定頁填入 ngrok 給的公開網址，或直接按「☁️ 用此 Colab 網址連線」。
-4. Colab 端的橋接（`voiceweaver_bridge.py`）與語音中心走同一套情緒偵測、同一份 `catalog.json` 格式，行為完全一致。
+4. Colab 端的橋接（`speakmylife_bridge.py`）與語音中心走同一套情緒偵測、同一份 `catalog.json` 格式，行為完全一致。
 
 > ngrok 授權碼透過配對碼從你的帳號雲端取用，不需要把授權碼貼進 notebook。
 
@@ -385,12 +420,10 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 ## 專案結構
 
-> 程式識別字沿用原名 VoiceWeaver（例如 `VoiceWeaverScreen.kt`、`VoiceWeaverCore.kt`），與產品名「拾語者」無衝突。
-
 ```text
-app/src/main/java/com/example/
+app/src/main/java/com/speakmylife/app/
 ├── ui/
-│   ├── VoiceWeaverScreen.kt      語音重組（3 候選句挑選、多語朗讀、最愛、複製分享）
+│   ├── SpeakMyLifeScreen.kt      語音重組（3 候選句挑選、多語朗讀、最愛、複製分享）
 │   ├── AacScreen.kt              AAC 圖卡（大圖卡模式、自訂圖卡、使用頻率排序）
 │   ├── RehabScreen.kt            語音復健（雲端多語跟讀、AI 評分、錯誤高亮、整段練習）
 │   ├── training/StoryTrainingScreen.kt  看圖說故事訓練
@@ -401,7 +434,7 @@ app/src/main/java/com/example/
 │   ├── LocaleProvider.kt         Compose 語言切換（含 Dialog 內容重新套用語言的修正）
 │   └── settings/ + theme/        進階設定、AppPalette
 ├── ai/
-│   ├── VoiceWeaverCore.kt        核心 ViewModel、危機通報流程、復健錄音路由
+│   ├── SpeakMyLifeCore.kt        核心 ViewModel、危機通報流程、復健錄音路由
 │   ├── CloudInferenceEngine.kt   雲端推理（電腦接手 → 雲端 → fallback）、自我一致性排序、Whisper 純轉寫
 │   ├── MediaPipeLLMEngine.kt     裝置端 Gemma/Qwen
 │   ├── OffloadManager.kt         電腦接手（連線分級、/reconstruct 代理）
@@ -432,10 +465,11 @@ tools/
 │   ├── model_setup_server.py   模型管理後端（掃描、匯入）
 │   ├── text_infer_server.py    Qwen 文字推論（9882）
 │   ├── image_gen_server.py     SD-Turbo 生圖（9881）
-│   └── sync_voice_models.py    USB 手機↔電腦模型同步（次要路徑，雲端曲庫為主）
+│   ├── sync_voice_models.py    USB 手機↔電腦模型同步（次要路徑，雲端曲庫為主）
+│   └── sml_migrate.py          更名搬遷（舊 VoiceWeaver 資料夾／Drive 曲庫自動改名；附 test_sml_migrate.py）
 ├── colab/
-│   ├── VoiceWeaver_GPT_SoVITS_Colab.ipynb   雲端算力 notebook（掛 Drive、健檢、起服務、開 ngrok）
-│   └── voiceweaver_bridge.py                Colab 端橋接（與語音中心同一套情緒/曲庫邏輯，內嵌於 notebook）
+│   ├── Speak-My-Life_GPT_SoVITS_Colab.ipynb 雲端算力 notebook（掛 Drive、健檢、起服務、開 ngrok）
+│   └── speakmylife_bridge.py                Colab 端橋接（與語音中心同一套情緒/曲庫邏輯，內嵌於 notebook）
 ├── dmg/build_dmg.sh    macOS .dmg 打包（權重安全網）
 └── win/build_win.ps1   Windows 打包
 ```

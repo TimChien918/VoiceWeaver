@@ -20,7 +20,8 @@ $Title = '拾語者 語音中心'
 
 # ── 路徑 ─────────────────────────────────────────────────────────────────
 $RES      = $PSScriptRoot                                  # 安裝包資料夾
-$APPSUP   = Join-Path $env:LOCALAPPDATA 'VoiceWeaver'
+$APPSUP   = Join-Path $env:LOCALAPPDATA 'Speak-My-Life'
+$OLD_APPSUP = Join-Path $env:LOCALAPPDATA 'VoiceWeaver'      # 更名前的位置
 $TOOLS    = Join-Path $APPSUP 'tools'
 $CONDA    = Join-Path $TOOLS 'miniforge3'                  # conda 安裝位置
 $ENV_DIR  = Join-Path $TOOLS 'gpt-sovits-env'             # 目標環境
@@ -45,6 +46,39 @@ $PBS_URL = "https://github.com/astral-sh/python-build-standalone/releases/downlo
 # Python / 依賴版本
 $PY_VERSION = '3.10'
 
+# ── 更名搬遷（原名 VoiceWeaver）：只有舊的 %LOCALAPPDATA%\VoiceWeaver 就改名成 Speak-My-Life，
+#    舊位置留 junction（一般權限即可；舊路徑照樣解得開）。任何一步失敗都退回、沿用舊資料夾。
+function Use-LegacyAppSup {
+  $script:APPSUP  = $OLD_APPSUP
+  $script:TOOLS   = Join-Path $OLD_APPSUP 'tools'
+  $script:CONDA   = Join-Path $script:TOOLS 'miniforge3'
+  $script:ENV_DIR = Join-Path $script:TOOLS 'gpt-sovits-env'
+  $script:GS      = Join-Path $script:TOOLS 'GPT-SoVITS'
+  $script:PY      = Join-Path $script:ENV_DIR 'python.exe'
+  $script:PYW     = Join-Path $script:ENV_DIR 'pythonw.exe'
+  $script:LOG_DIR = Join-Path $OLD_APPSUP 'logs'
+  $script:LOG     = Join-Path $script:LOG_DIR 'install.log'
+  $script:READY   = Join-Path $OLD_APPSUP '.ready'
+}
+$oldItem = Get-Item -LiteralPath $OLD_APPSUP -Force -ErrorAction SilentlyContinue
+$script:MigMsg = ''
+if ($oldItem -and -not ($oldItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -and -not (Test-Path -LiteralPath $APPSUP)) {
+  try {
+    Rename-Item -LiteralPath $OLD_APPSUP -NewName 'Speak-My-Life' -ErrorAction Stop
+    try {
+      New-Item -ItemType Junction -Path $OLD_APPSUP -Target $APPSUP -ErrorAction Stop | Out-Null
+      $script:MigMsg = "已把 $OLD_APPSUP 改名為 $APPSUP（舊位置留 junction）"
+    } catch {
+      Rename-Item -LiteralPath $APPSUP -NewName 'VoiceWeaver' -ErrorAction SilentlyContinue
+      Use-LegacyAppSup
+      $script:MigMsg = "無法在舊位置留 junction，沿用 $OLD_APPSUP：$_"
+    }
+  } catch {
+    Use-LegacyAppSup
+    $script:MigMsg = "改名失敗，沿用 $OLD_APPSUP：$_"
+  }
+}
+
 New-Item -ItemType Directory -Force -Path $LOG_DIR, $TOOLS | Out-Null
 
 function Log([string]$m) {
@@ -54,6 +88,7 @@ function Log([string]$m) {
 function Alert([string]$m) {
   try { (New-Object -ComObject Wscript.Shell).Popup($m, 0, $Title, 0x40) | Out-Null } catch {}
 }
+if ($script:MigMsg) { Log $script:MigMsg }
 
 # ── 進度視窗（WinForms；安裝時讓使用者看得到在動，而不是黑窗） ──────────────
 Add-Type -AssemblyName System.Windows.Forms | Out-Null
@@ -125,6 +160,7 @@ if (-not $running) {
              Where-Object { $_.CommandLine -like '*voice_center_app.py*' }
 }
 if ($running) { Log '控制視窗已在執行，結束。'; exit 0 }
+
 
 # ── 下載小工具（curl 優先，回退 BITS / WebClient） ──────────────────────
 function Download([string]$url, [string]$dest, [string]$label) {

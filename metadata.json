@@ -1,5 +1,5 @@
 {
-  "name": "VoiceWeaver",
+  "name": "Speak-My-Life",
   "description": "輔助失語症患者進行日常溝通的智慧助手，具備離線 AI 重組校對、GPS 與相機的情境融合，以及 TTS 本地語音播報。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="deploymentTargetSelector">
     <selectionStates>
-      <SelectionState runConfigName="VoiceWeaver">
+      <SelectionState runConfigName="Speak-My-Life">
         <option name="selectionMode" value="DROPDOWN" />
         <DropdownSelection timestamp="2026-05-26T13:17:31.885134Z">
           <Target type="DEFAULT_BOOT">

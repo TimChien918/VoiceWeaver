@@ -1447,11 +1447,11 @@ object I18n {
         // ── GPT-SoVITS 連線教學（SettingsScreen 的 USB／Wi-Fi 步驟）──
         // 「GPT-SoVITS 要 Python + PyTorch…」那句已在上面（約 338 行）有譯文，不重複加
         "① USB 線把手機接上 Mac，授權 USB 偵錯\n② Mac 雙擊「Speak-My-Life語音中心.app」(會自動 adb reverse 並啟動伺服器)\n③ 按「測試連線」綠燈 → 用「🎤 合成測試」確認授權角色音色" to arrayOf(
-            "① Connect the phone to the Mac with a USB cable and allow USB debugging\n② On the Mac, double-click “Speak-My-Life Voice Center.app” (it runs adb reverse and starts the server)\n③ Tap “Test connection” for a green light → use “🎤 Synthesis test” to check the licensed voice",
+            "① Connect the phone to the Mac with a USB cable and allow USB debugging\n② On the Mac, double-click “Speak-My-Life語音中心.app” (the Speak-My-Life voice center) (it runs adb reverse and starts the server)\n③ Tap “Test connection” for a green light → use “🎤 Synthesis test” to check the licensed voice",
             "① USB ケーブルでスマホを Mac に接続し、USB デバッグを許可\n② Mac で「Speak-My-Life語音中心.app」をダブルクリック（adb reverse とサーバー起動を自動実行）\n③「接続テスト」が緑になったら →「🎤 合成テスト」で許諾済みの音色を確認",
             "① USB 케이블로 휴대폰을 Mac에 연결하고 USB 디버깅 허용\n② Mac에서 ‘Speak-My-Life語音中心.app’ 더블클릭 (adb reverse 실행 및 서버 시작)\n③ ‘연결 테스트’ 초록불 확인 → ‘🎤 합성 테스트’로 라이선스 음색 확인"),
         "① 手機與 Mac 連同一個 Wi-Fi\n② Mac 雙擊「Speak-My-Life語音中心.app」啟動伺服器\n③ 看控制中心(自動開啟)顯示的區網 IP，上方 API URL 改成 http://<那個IP>:9880\n④ 按「測試連線」綠燈（外網可裝 Tailscale，改填 100.x IP）" to arrayOf(
-            "① Put the phone and the Mac on the same Wi-Fi\n② On the Mac, double-click “Speak-My-Life Voice Center.app” to start the server\n③ Read the LAN IP shown in the control center (it opens automatically) and set the API URL above to http://<that IP>:9880\n④ Tap “Test connection” for a green light (for remote access install Tailscale and use the 100.x IP)",
+            "① Put the phone and the Mac on the same Wi-Fi\n② On the Mac, double-click “Speak-My-Life語音中心.app” (the Speak-My-Life voice center) to start the server\n③ Read the LAN IP shown in the control center (it opens automatically) and set the API URL above to http://<that IP>:9880\n④ Tap “Test connection” for a green light (for remote access install Tailscale and use the 100.x IP)",
             "① スマホと Mac を同じ Wi-Fi に接続\n②  Mac で「Speak-My-Life語音中心.app」をダブルクリックしてサーバーを起動\n③ 自動で開くコントロールセンターに表示される LAN IP を確認し、上の API URL を http://<その IP>:9880 に変更\n④「接続テスト」が緑になれば完了（外出先からは Tailscale を入れて 100.x の IP を入力）",
             "① 휴대폰과 Mac을 같은 Wi-Fi에 연결\n② Mac에서 ‘Speak-My-Life語音中心.app’을 더블클릭해 서버 시작\n③ 자동으로 열리는 컨트롤 센터에 표시된 LAN IP를 확인하고, 위 API URL을 http://<그 IP>:9880 으로 변경\n④ ‘연결 테스트’ 초록불 확인 (외부에서는 Tailscale 설치 후 100.x IP 입력)"),
 

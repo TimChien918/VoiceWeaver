@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 #
-# VoiceWeaver 自動化測試操控台（只對 debug 版有效）
+# 拾語者 Speak My Life 自動化測試操控台（只對 debug 版有效）
 #
 # 用法：
-#   ./tools/vw-test.sh ping
-#   ./tools/vw-test.sh dump
-#   ./tools/vw-test.sh inject_usage itemId=p_cig score=8 ageDays=0
-#   ./tools/vw-test.sh inject_location tag=醫院
-#   ./tools/vw-test.sh nav route=aac
-#   ./tools/vw-test.sh reset_data confirm=true
+#   ./tools/sml-test.sh ping
+#   ./tools/sml-test.sh dump
+#   ./tools/sml-test.sh inject_usage itemId=p_cig score=8 ageDays=0
+#   ./tools/sml-test.sh inject_location tag=醫院
+#   ./tools/sml-test.sh nav route=aac
+#   ./tools/sml-test.sh reset_data confirm=true
 #
 # 結果走廣播的 resultData 回傳（`am broadcast` 會把它印出來），不依賴 logcat——
 # 部分機型（實測 ASUS ROG）會把一般 App 的 log 整個過濾掉，撈不到東西。
 set -euo pipefail
 
-PKG="com.aistudio.aphasiaassist.pkztuv"
-ACTION="com.example.TEST_COMMAND"
-TOKEN_FILE="files/vw_test_token"
+PKG="com.speakmylife.app"
+ACTION="com.speakmylife.app.TEST_COMMAND"
+TOKEN_FILE="files/sml_test_token"
 
 die() { echo "✗ $*" >&2; exit 1; }
 
@@ -32,7 +32,7 @@ fetch_token() {
 TOKEN="$(fetch_token)"
 if [ -z "$TOKEN" ]; then
   echo "· 沒有權杖檔，啟動 App 產生…" >&2
-  adb shell am start -n "$PKG/com.example.MainActivity" >/dev/null
+  adb shell am start -n "$PKG/com.speakmylife.app.MainActivity" >/dev/null
   sleep 3
   TOKEN="$(fetch_token)"
 fi

@@ -28,7 +28,7 @@ grep -c TestCommandReceiver app/build/intermediates/packaged_manifests/release/*
 ## 用法
 
 ```bash
-./tools/vw-test.sh <command> [key=value ...]
+./tools/sml-test.sh <command> [key=value ...]
 ```
 
 權杖由腳本自動取得。結果走廣播的 `resultData` 回傳（不依賴 logcat——
@@ -61,16 +61,16 @@ grep -c TestCommandReceiver app/build/intermediates/packaged_manifests/release/*
 ### 例：驗證推薦列的冷啟動門檻
 
 ```bash
-./tools/vw-test.sh nav route=aac
-./tools/vw-test.sh clear_usage
-./tools/vw-test.sh dump | python3 -c "import sys,json;print(json.load(sys.stdin)['aac_ui'])"
+./tools/sml-test.sh nav route=aac
+./tools/sml-test.sh clear_usage
+./tools/sml-test.sh dump | python3 -c "import sys,json;print(json.load(sys.stdin)['aac_ui'])"
 # feed_visible=False
 
-./tools/vw-test.sh inject_usage itemId=p_cig score=5
-./tools/vw-test.sh inject_usage itemId=p_bag score=4
+./tools/sml-test.sh inject_usage itemId=p_cig score=5
+./tools/sml-test.sh inject_usage itemId=p_bag score=4
 # 仍為 False——門檻是 3 張
 
-./tools/vw-test.sh inject_usage itemId=p_receipt score=6
+./tools/sml-test.sh inject_usage itemId=p_receipt score=6
 # feed_visible=True
 ```
 

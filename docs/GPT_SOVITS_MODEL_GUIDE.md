@@ -1,13 +1,16 @@
 # 拾語者 Speak My Life — GPT-SoVITS 換模型手冊
 
-> 產品已更名為「拾語者 Speak My Life」（原名 VoiceWeaver）。下文的資料夾、檔名與路徑
-> （`~/VoiceWeaver-電腦端/`、`voiceweaver_tts_infer.yaml`…）為維持相容性沿用舊名，照原樣使用即可。
+> 產品已全面更名為「拾語者 Speak My Life」（原名 VoiceWeaver）。舊的 `~/VoiceWeaver-電腦端/`、
+> `voiceweaver_tts_infer.yaml`、`ref_audio/voiceweaver_custom/` 會在第一次啟動新版時自動改名成
+> `~/Speak-My-Life-電腦端/`、`speakmylife_tts_infer.yaml`、`ref_audio/speakmylife_custom/`
+> （資料夾在舊位置留捷徑，舊路徑照樣能用；改名失敗就沿用舊名）。下文的 repo 路徑以
+> `/Users/timchien/AndroidStudioProjects/Speak-My-Life` 為例，請換成你自己 clone 的位置。
 
 > 📦 **電腦端已搬出本專案**（2026-06）：本手冊中的 `tools/GPT-SoVITS/` 一律改讀為
-> `~/VoiceWeaver-電腦端/GPT-SoVITS/`（conda 環境、miniforge 同樣在 `~/VoiceWeaver-電腦端/` 下）。
+> `~/Speak-My-Life-電腦端/GPT-SoVITS/`（conda 環境、miniforge 同樣在 `~/Speak-My-Life-電腦端/` 下）。
 > 你的聲音模型（user_models / *weights*）都已隨資料夾一起搬過去，內容不變。
 
-這份手冊說明如何在拾語者（VoiceWeaver 專案）中更換 GPT-SoVITS 模型。請只使用你自己錄製、取得明確授權，或 license 明確允許的模型與參考音檔。
+這份手冊說明如何在拾語者 Speak My Life 中更換 GPT-SoVITS 模型。請只使用你自己錄製、取得明確授權，或 license 明確允許的模型與參考音檔。
 
 ## 目前架構
 
@@ -26,7 +29,7 @@
 | --- | --- |
 | `tools/GPT-SoVITS/start_api.sh` | 啟動 GPT-SoVITS API |
 | `tools/GPT-SoVITS/stop_api.sh` | 停止 9880 port 上的 API |
-| `tools/GPT-SoVITS/GPT_SoVITS/configs/voiceweaver_tts_infer.yaml` | 拾語者預設載入模型 |
+| `tools/GPT-SoVITS/GPT_SoVITS/configs/speakmylife_tts_infer.yaml` | 拾語者預設載入模型 |
 | `tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav` | 中文參考音檔槽位 |
 | `tools/GPT-SoVITS/ref_audio/myvoice/ref_en.wav` | 英文參考音檔槽位 |
 | `app/src/main/java/com/example/ai/LocalSovitsHelper.kt` | App 端參考音檔路徑與 prompt 文字 |
@@ -111,14 +114,14 @@ curl http://127.0.0.1:9880/health
 先啟動 GPT-SoVITS API：
 
 ```bash
-cd /Users/timchien/AndroidStudioProjects/VoiceWeaver
+cd /Users/timchien/AndroidStudioProjects/Speak-My-Life
 ./tools/GPT-SoVITS/start_api.sh
 ```
 
 另開一個終端機啟動設定頁：
 
 ```bash
-cd /Users/timchien/AndroidStudioProjects/VoiceWeaver
+cd /Users/timchien/AndroidStudioProjects/Speak-My-Life
 ./tools/GPT-SoVITS/start_model_setup_page.sh
 ```
 
@@ -140,8 +143,8 @@ http://127.0.0.1:9890
 按「套用並測試模型」後，設定頁會自動：
 
 1. 複製模型到 `GPT_weights_<version>/` 與 `SoVITS_weights_<version>/`。
-2. 複製參考音檔到 `tools/GPT-SoVITS/ref_audio/voiceweaver_custom/`。
-3. 更新 `voiceweaver_tts_infer.yaml`。
+2. 複製參考音檔到 `tools/GPT-SoVITS/ref_audio/speakmylife_custom/`。
+3. 更新 `speakmylife_tts_infer.yaml`。
 4. 更新 App 端 `LocalSovitsHelper.kt` 的中文 ref 路徑與 prompt。
 5. 呼叫 `/set_sovits_weights` 與 `/set_gpt_weights` 熱切換目前 server。
 6. 呼叫 `/tts` 合成測試音檔。
@@ -149,19 +152,19 @@ http://127.0.0.1:9890
 測試輸出會在：
 
 ```text
-/private/tmp/voiceweaver_model_setup_test.wav
+/private/tmp/speakmylife_model_setup_test.wav
 ```
 
 播放：
 
 ```bash
-afplay /private/tmp/voiceweaver_model_setup_test.wav
+afplay /private/tmp/speakmylife_model_setup_test.wav
 ```
 
 建立資料夾：
 
 ```bash
-cd /Users/timchien/AndroidStudioProjects/VoiceWeaver
+cd /Users/timchien/AndroidStudioProjects/Speak-My-Life
 mkdir -p tools/GPT-SoVITS/user_models/MyVoice/GPT_weights_v2
 mkdir -p tools/GPT-SoVITS/user_models/MyVoice/SoVITS_weights_v2
 mkdir -p tools/GPT-SoVITS/user_models/MyVoice/ref_audio
@@ -219,7 +222,7 @@ cp path/to/my_voice_v4.pth tools/GPT-SoVITS/SoVITS_weights_v4/my_voice_v4.pth
 打開：
 
 ```text
-tools/GPT-SoVITS/GPT_SoVITS/configs/voiceweaver_tts_infer.yaml
+tools/GPT-SoVITS/GPT_SoVITS/configs/speakmylife_tts_infer.yaml
 ```
 
 v2 範例：
@@ -281,7 +284,7 @@ curl -G --data-urlencode "weights_path=GPT_weights_v2/my_voice.ckpt" \
 停止：
 
 ```bash
-cd /Users/timchien/AndroidStudioProjects/VoiceWeaver
+cd /Users/timchien/AndroidStudioProjects/Speak-My-Life
 ./tools/GPT-SoVITS/stop_api.sh
 ```
 
@@ -307,7 +310,7 @@ curl -sS -X POST http://127.0.0.1:9880/tts \
   -d '{
     "text": "你好，這是自訂模型測試。",
     "text_lang": "zh",
-    "ref_audio_path": "/Users/timchien/AndroidStudioProjects/VoiceWeaver/tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav",
+    "ref_audio_path": "/Users/timchien/AndroidStudioProjects/Speak-My-Life/tools/GPT-SoVITS/ref_audio/myvoice/ref_zh.wav",
     "prompt_text": "我的耳目曾经遍及整个大陆，为我探查情报。",
     "prompt_lang": "zh",
     "media_type": "wav",
@@ -321,14 +324,14 @@ curl -sS -X POST http://127.0.0.1:9880/tts \
     "parallel_infer": true,
     "speed_factor": 1.0
   }' \
-  -o /private/tmp/voiceweaver_model_test.wav
+  -o /private/tmp/speakmylife_model_test.wav
 ```
 
 確認音檔：
 
 ```bash
-file /private/tmp/voiceweaver_model_test.wav
-ls -lh /private/tmp/voiceweaver_model_test.wav
+file /private/tmp/speakmylife_model_test.wav
+ls -lh /private/tmp/speakmylife_model_test.wav
 ```
 
 ## 更換參考音檔
@@ -444,7 +447,7 @@ GPT-SoVITS v3/v4 對 streaming 和分桶處理有額外限制。測試時建議�
 
 1. 先用官方底模確認 server 正常。
 2. 放入自訂模型 `.ckpt` / `.pth`。
-3. 修改 `voiceweaver_tts_infer.yaml`。
+3. 修改 `speakmylife_tts_infer.yaml`。
 4. 重啟 server。
 5. 打 `/health`。
 6. 用 curl 直接合成 wav。
