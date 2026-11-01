@@ -76,10 +76,23 @@ jobs:
           fi
 
       - name: 編譯 debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --continue 2>&1 | tee build.log
 
       - name: 單元測試
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --continue 2>&1 | tee test.log
+
+      # 失敗時把編譯錯誤（e: 開頭）與失敗的測試整理在最後，不必在幾千行堆疊裡找。
+      - name: 錯誤摘要
+        if: failure()
+        run: |
+          echo "===== 編譯錯誤 ====="
+          grep -hE '^e: ' build.log test.log 2>/dev/null | sed 's|file:///home/runner/work/[^/]*/[^/]*/||' | sort -u | head -150 || true
+          echo "===== 其他失敗 ====="
+          grep -hE "What went wrong|FAILED|> Task .* FAILED|AAPT|error:" build.log test.log 2>/dev/null | sort -u | head -60 || true
 
       - name: 測試報告
         if: failure()
